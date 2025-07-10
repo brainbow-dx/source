@@ -1,0 +1,24 @@
+{
+    "deno.enable": true,
+    "deno.disablePaths": [
+        "./.cargo/target",
+        "./.output",
+        "./.scratch",
+    ],
+    "files.exclude": {
+        "**/.git": true,
+        // Flutter
+        "**/.dart_tool": true,
+        "**/.idea": true,
+        "apps/mobile/build": false,
+        "apps/mobile/.metadata": true,
+        "apps/mobile/.flutter-plugins": true,
+        "apps/mobile/.flutter-plugins-dependencies": true,
+        "apps/mobile/windows": true,
+        "apps/mobile/macos": true,
+        "apps/mobile/linux": true,
+        "apps/mobile/ios": true,
+        "apps/mobile/android": true,
+        "apps/mobile/web": true,
+    }
+}

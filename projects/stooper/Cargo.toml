@@ -1,0 +1,29 @@
+[package]
+name = "slate"
+version = "0.0.0"
+edition = "2024"
+
+[build-dependencies]
+#TODO
+
+[dev-dependencies]
+#TODO
+
+#---
+[workspace]
+members = [
+    "packages/core",
+    "packages/schema",
+    "packages/sdk",
+    "services/auth",
+    "services/content",
+    "services/location",
+    "services/map",
+]
+
+[workspace.dependencies]
+anyhow = { version = "1.0" }
+chrono = { version = "*" }
+clap = { version = "*", default-features = false, features = ["derive"] }
+oops = { git = "https://github.com/open-dx/oops-rs", version = "*", default-features = false }
+crwap = { git = "https://github.com/open-dx/oops-rs", version = "*", default-features = false }

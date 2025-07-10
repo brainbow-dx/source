@@ -1,0 +1,11 @@
+{
+    "deno.enable": true,
+    "deno.disablePaths": [
+        "./.cargo/target",
+        "./.output",
+        "./.scratch",
+    ],
+    "files.exclude": {
+        "**/.git": true,
+    }
+}

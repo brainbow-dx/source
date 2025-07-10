@@ -1,0 +1,16 @@
+[package]
+name = "eden"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
+#---
+[workspace]
+members = []
+
+[workspace.dependencies]
+
+[dev-dependencies]
+anyhow = { version = "1.0.98", features = ["backtrace"] }
+# TODO

@@ -1,0 +1,15 @@
+{
+    "name": "@brainbow/stooper",
+    "version": "0.0.0",
+    "tasks": {
+        "build": "echo 'TODO'",
+        "migrate": "deno run -A scripts/migrate.ts"
+    },
+    "exports": {
+        ".": "./src/mod.ts"
+    },
+    "imports": {
+        "@std/path": "jsr:@std/path",
+        "dzx": "https://deno.land/x/dzx@0.4.0/mod.ts"
+    }
+}

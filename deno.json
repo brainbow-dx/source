@@ -1,0 +1,15 @@
+{
+    "version": "0.0.0",
+    "workspace": [
+        "projects/stooper",
+        "projects/stooper/apps/mobile",
+        "projects/slate",
+        "projects/eden",
+        "projects/atlas",
+        "projects/ethos",
+        "tools/monitor"
+    ],
+    "imports": {
+        "dzx": "https://deno.land/x/dzx@0.4.0/mod.ts"
+    }
+}

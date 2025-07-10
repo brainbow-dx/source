@@ -1,0 +1,16 @@
+{
+    "name": "@brainbow/ethos",
+    "version": "0.0.0",
+    "tasks": {
+        "dev": "deno run -A --unstable-ffi scripts/dev.tsx"
+    },
+    "exports": {
+        ".": "./src/mod.ts",
+        "./dev": "./src/dev/mod.ts"
+    },
+    "imports": {
+        "@std/cli": "jsr:@std/cli",
+        "@david/which": "jsr:@david/which@^0.4.1",
+        "dzx": "https://deno.land/x/dzx@0.4.0/mod.ts"
+    }
+}
