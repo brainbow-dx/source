@@ -1,0 +1,10 @@
+[alias]
+dev = "run --features dev"
+
+[build]
+target-dir = ".cargo/target"
+
+[target.wasm32-unknown-unknown]
+rustflags = ["--cfg", "getrandom_backend=\"wasm_js\"", "-C", "linker-plugin-lto"]
+env = { CARGO_HOME = "~/.cargo/wasm-home" }
+runner = "wasm-pack"

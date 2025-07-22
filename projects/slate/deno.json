@@ -1,7 +1,33 @@
 {
     "name": "@brainbow/slate",
     "version": "0.0.0",
+    "tasks": {
+        "migrate": "deno run -A scripts/migrate.tsx",
+        "dev": "deno run -A --unstable-ffi scripts/dev.tsx",
+        "install": "deno run -A --unstable-ffi scripts/install.tsx"
+    },
     "exports": {
-        ".": "./src/mod.ts"
+        ".": "./src/mod.ts",
+        "./jsx": "./src/jsx/mod.ts",
+        "./jsx-runtime": "./src/jsx/runtime.ts"
+    },
+    "compilerOptions": {
+        "lib": [
+            "esnext",
+            "dom",
+            "dom.iterable",
+            "dom.asynciterable",
+            "deno.unstable",
+            "deno.worker",
+            "deno.ns"
+        ],
+        "types": [
+            "@types/node",
+            "@types/vscode",
+            "@types/react",
+            "@types/react-dom"
+        ],
+        "jsx": "react-jsx",
+        "jsxImportSource": "react"
     }
 }

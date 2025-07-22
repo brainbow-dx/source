@@ -1,0 +1,6 @@
+{
+    "name": "@brainbow/slate-hud",
+    "exports": {
+        ".": "./src/mod.ts"
+    }
+}

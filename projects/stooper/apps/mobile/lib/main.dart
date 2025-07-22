@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:stooper_mobile/providers/location.dart';
+import 'package:stooper_mobile/pages/settings/settings.dart';
 
 import 'package:window_manager/window_manager.dart';
 
@@ -8,15 +8,18 @@ import 'package:logging/logging.dart';
 
 import 'package:provider/provider.dart';
 
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+
+import 'package:stooper_mobile/providers/location.dart';
 import 'package:stooper_mobile/pages/feed/feed.dart';
 import 'package:stooper_mobile/pages/map.dart';
-import 'package:stooper_mobile/pages/user.dart';
+import 'package:stooper_mobile/pages/user/user.dart';
 import 'package:stooper_mobile/pages/messages.dart';
 import 'package:stooper_mobile/providers/user.dart';
 import 'package:stooper_mobile/services/user.dart';
 
 Future<void> main() async {
-  Logger.root.level = Level.ALL; // defaults to Level.INFO
+  Logger.root.level = Level.ALL;
   Logger.root.onRecord.listen((record) {
     if (kDebugMode) {
       print('${record.level.name}: ${record.time}: ${record.message}');
@@ -31,11 +34,8 @@ Future<void> main() async {
   runApp(MultiProvider(
     providers: [
       ChangeNotifierProvider(
-        create: (context) => UserProvider(store: UserStore()),
-      ),
-      ChangeNotifierProvider(
-        create: (context) => LocationProvider(),
-      ),
+          create: (context) => UserProvider(store: UserStore())),
+      ChangeNotifierProvider(create: (context) => LocationProvider()),
     ],
     child: const StooperMobileApp(),
   ));
@@ -99,7 +99,17 @@ class _StooperMobileAppState extends State<StooperMobileApp> {
                 nextPageIndex = 2;
                 break;
               case '/user':
+                // return PageRouteBuilder(
+                //   opaque: false,
+                //   barrierDismissible: true,
+                //   pageBuilder: (_, __, ___) => const UserScreen(),
+                //   settings: settings,
+                // );
                 nextPage = const UserScreen();
+                nextPageIndex = 3;
+                break;
+              case '/settings':
+                nextPage = const SettingsScreen();
                 nextPageIndex = 3;
                 break;
               default:
@@ -131,50 +141,56 @@ class _StooperMobileAppState extends State<StooperMobileApp> {
         // ),
         bottomNavigationBar: NavigationBar(
           selectedIndex: _currentPageIndex,
-          // indicatorColor: Colors.amber,
           onDestinationSelected: (int index) {
-            NavigatorState? rootNavigatorState = _rootNavigator.currentState;
+            NavigatorState? navigatorState = _rootNavigator.currentState;
 
-            if (rootNavigatorState == null) {
+            if (navigatorState == null) {
               throw 'Root navigator not found!';
             }
 
             switch (index) {
               case 0:
-                rootNavigatorState.pushNamed('/');
+                navigatorState.pushNamed('/');
                 break;
               case 1:
-                rootNavigatorState.pushNamed('/map');
+                navigatorState.pushNamed('/map');
                 break;
               case 2:
-                rootNavigatorState.pushNamed('/inbox');
+                navigatorState.pushNamed('/inbox');
                 break;
               case 3:
-                rootNavigatorState.pushNamed('/user');
+                navigatorState.pushNamed('/user');
+                break;
+              case 4:
+                navigatorState.pushNamed('/settings');
                 break;
             }
           },
           destinations: const [
             NavigationDestination(
               label: "Feed",
-              icon: Icon(Icons.storefront),
+              icon: Icon(LucideIcons.store200),
             ),
             NavigationDestination(
               label: "Map",
               icon: Badge(
-                child: Icon(Icons.map_outlined),
+                child: Icon(LucideIcons.map200),
               ),
             ),
             NavigationDestination(
               label: "Inbox",
               icon: Badge(
                 label: Text("2"),
-                child: Icon(Icons.messenger),
+                child: Icon(LucideIcons.inbox200),
               ),
             ),
             NavigationDestination(
               label: "User",
-              icon: Icon(Icons.person),
+              icon: Icon(LucideIcons.user200),
+            ),
+            NavigationDestination(
+              label: "Settings",
+              icon: Icon(LucideIcons.settings200),
             ),
           ],
         ),

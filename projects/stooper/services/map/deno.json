@@ -1,0 +1,6 @@
+{
+    "name": "@brainbow/stooper-map-service",
+    "exports": {
+        ".": "./src/mod.ts"
+    }
+}

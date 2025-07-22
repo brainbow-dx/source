@@ -1,15 +1,83 @@
 {
     "version": "0.0.0",
+    "tasks": {
+        "bootstrap": "sh scripts/bootstrap.sh",
+        "migrate": "deno run -A scripts/migrate.tsx",
+        "build": "deno run -A --unstable-ffi scripts/build.tsx",
+        "dev": "deno run -A --unstable-ffi scripts/dev.tsx",
+        "run": "deno run -A --unstable-ffi scripts/run.tsx"
+    },
     "workspace": [
         "projects/stooper",
         "projects/stooper/apps/mobile",
+        "projects/stooper/packages/core",
+        "projects/stooper/services/auth",
+        "projects/stooper/services/content",
+        "projects/stooper/services/map",
+        "projects/stooper/services/debug",
+        "projects/stooper/services/auth",
         "projects/slate",
+        "projects/slate/apps/hud",
+        "projects/slate/apps/desktop",
+        "projects/slate/extensions/blender",
+        "projects/slate/extensions/chrome",
+        "projects/slate/extensions/penpot",
+        "projects/slate/extensions/vscode",
+        "projects/slate/runtimes/bevy",
+        "projects/slate/runtimes/terminal",
+        "projects/slate/runtimes/unity",
+        "projects/slate/runtimes/unreal",
+        "projects/slate/packages/core",
+        "projects/slate/packages/jsx",
+        "projects/slate/packages/sketch",
+        "projects/slate/packages/syn",
         "projects/eden",
+        "projects/eden/apps/terminal",
+        "projects/eden/packages/core",
+        "projects/eden/modes/default",
+        "projects/eden/personas/a11y",
         "projects/atlas",
         "projects/ethos",
+        "projects/ethos/packages/cwrap",
+        "projects/ethos/services/registry",
         "tools/monitor"
     ],
     "imports": {
-        "dzx": "https://deno.land/x/dzx@0.4.0/mod.ts"
+        "@std/path": "jsr:@std/path",
+        "@std/fs": "jsr:@std/fs",
+        "@std/fs/glob": "jsr:@std/fs/glob",
+        "@std/fs/unstable-read-text-file": "jsr:@std/fs/unstable-read-text-file",
+        "@std/http": "jsr:@std/http",
+        "@std/assert": "jsr:@std/assert",
+        "@std/cli": "jsr:@std/cli",
+        "@std/toml": "jsr:@std/toml",
+        "@types/react": "npm:@types/react",
+        "dzx": "https://deno.land/x/dzx@0.4.0/mod.ts",
+        "react": "npm:react@18.2.0",
+        "react/jsx-runtime": "npm:react@18.2.0/jsx-runtime",
+        "react/jsx-dev-runtime": "npm:react@18.2.0/jsx-dev-runtime",
+        "react-dom": "npm:react-dom@18.2.0",
+        "react-dom/server": "npm:react-dom@18.2.0/server",
+        "react-router-dom": "npm:react-router-dom",
+        "vue": "npm:vue"
+    },
+    "compilerOptions": {
+        "lib": [
+            "esnext",
+            "dom",
+            "dom.iterable",
+            "dom.asynciterable",
+            "deno.unstable",
+            "deno.worker",
+            "deno.ns"
+        ],
+        "types": [
+            "@types/node",
+            "@types/vscode",
+            "@types/react",
+            "@types/react-dom"
+        ],
+        "jsx": "react-jsx",
+        "jsxImportSource": "react"
     }
 }

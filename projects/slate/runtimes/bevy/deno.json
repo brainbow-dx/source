@@ -1,0 +1,6 @@
+{
+    "name": "@brainbow/slate-bevy",
+    "exports": {
+        ".": "./src/mod.ts"
+    }
+}

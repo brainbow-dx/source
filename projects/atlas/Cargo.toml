@@ -7,7 +7,14 @@ edition = "2024"
 
 #---
 [workspace]
-members = []
+members = [
+    # TODO
+    "apps/monitor",
+    "packages/relay",
+    "services/dev",
+    "extensions/chrome",
+    "extensions/vscode",
+]
 
 [workspace.dependencies]
 # TODO

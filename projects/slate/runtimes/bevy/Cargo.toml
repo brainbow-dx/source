@@ -4,3 +4,6 @@ version = "0.0.0"
 edition = "2024"
 
 [dependencies]
+bevy = { workspace = true, features = [] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
+futures = { workspace = true }

@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+message CreateUserRequest {
+  string name = 1;
+}
+
+message UserCreated {
+  string message = 1;
+}
+
+service StooperAuth {
+    rpc CreateUser (CreateUserRequest) returns (UserCreated) {}
+}

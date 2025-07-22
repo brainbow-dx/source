@@ -1,0 +1,11 @@
+stooper.dev {
+    redir https://www.stooper.dev{uri}
+}
+
+www.stooper.dev {
+    reverse_proxy www:8080
+}
+
+pds.stooper.dev {
+    reverse_proxy pds:8080
+}

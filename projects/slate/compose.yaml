@@ -1,0 +1,25 @@
+services:
+  routing:
+    image: caddy
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+    ports:
+      - "80:80"
+      - "443:443"
+  www:
+    build:
+      context: ./services/www
+      dockerfile: Dockerfile
+    ports:
+      - "8010:8010"
+  etch-io:
+    build:
+      context: ./services/etch-io
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+networks:
+  default:
+    # You can configure custom networks here if needed.
+    # For a basic setup, the default bridge network is usually sufficient.
+    # driver: bridge

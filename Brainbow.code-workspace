@@ -2,30 +2,35 @@
 	"folders": [
 		{
 			"name": "..",
-			"path": ".",
+			"path": "."
 		},
 		{
 			"name": "Stooper",
-			"path": "./projects/stooper",
+			"path": "./projects/stooper"
 		},
 		{
 			"name": "Slate",
-			"path": "./projects/slate",
+			"path": "./projects/slate"
 		},
 		{
 			"name": "Eden",
-			"path": "./projects/eden",
+			"path": "./projects/eden"
 		},
 		{
 			"name": "Atlas",
-			"path": "./projects/atlas",
+			"path": "./projects/atlas"
 		},
 		{
 			"name": "Ethos",
-			"path": "./projects/ethos",
-		},
+			"path": "./projects/ethos"
+		}
 	],
 	"settings": {
+		"files.associations": {
+			"*.ethos": "hcl",
+			"*.schema": "hcl",
+			"*.tf": "hcl",
+		},
 		"deno.enable": false,
 		"deno.unstable": [
 			"deno-lint",

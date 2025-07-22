@@ -1,0 +1,14 @@
+import { resolve } from "@std/path";
+
+import { $ } from "@brainbow/ethos/dev/shell";
+import * as sh from "@brainbow/ethos/dev/shell";
+
+const args = sh.parse(Deno.args);
+
+args.workdir ??= resolve(import.meta.dirname!, "..");
+args.target ??= "windows";
+
+console.info(`Work Dir: ${Deno.cwd()}`);
+console.info(`Flutter Exe:`, await sh.which("flutter"));
+
+await $`cargo build`;

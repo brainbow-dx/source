@@ -2,8 +2,8 @@
   "name": "@brainbow/stooper-mobile",
   "version": "0.0.0",
   "tasks": {
-    "migrate": "deno run -A ../../scripts/migrate.tsx",
-    "dev": "deno run -A --unstable-ffi scripts/dev.tsx"
+    "dev": "deno run -A ./scripts/dev.tsx",
+    "clean": "flutter clean && flutter pub get"
   },
   "exports": {
     ".": "./src/mod.ts"
@@ -11,5 +11,24 @@
   "imports": {
     "@david/which": "jsr:@david/which@^0.4.1",
     "dzx": "https://deno.land/x/dzx@0.4.0/mod.ts"
+  },
+  "compilerOptions": {
+    "lib": [
+      "esnext",
+      "dom",
+      "dom.iterable",
+      "dom.asynciterable",
+      "deno.unstable",
+      "deno.worker",
+      "deno.ns"
+    ],
+    "types": [
+      "@types/node",
+      "@types/vscode",
+      "@types/react",
+      "@types/react-dom"
+    ],
+    "jsx": "react-jsx",
+    "jsxImportSource": "react"
   }
 }

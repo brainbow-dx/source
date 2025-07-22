@@ -1,0 +1,6 @@
+{
+    "name": "@brainbow/slate-syn",
+    "exports": {
+        ".": "./src/mod.ts"
+    }
+}

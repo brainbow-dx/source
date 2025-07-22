@@ -1,0 +1,6 @@
+{
+    "name": "@brainbow/slate-blender",
+    "exports": {
+        ".": "./src/mod.ts"
+    }
+}

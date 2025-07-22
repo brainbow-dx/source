@@ -1,14 +1,13 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+extern crate slate_core;
+pub use crate::slate_core::*;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub extern crate slate_macros as macros;
+pub use crate::macros::*;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+pub extern crate slate_terminal as terminal;
+
+pub extern crate slate_bevy as bevy;
+
+pub mod prelude {
+    pub use slate_core::prelude::*;
 }

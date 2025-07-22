@@ -1,0 +1,46 @@
+services:
+  routing:
+    build:
+      context: ./services/routing
+      dockerfile: Dockerfile
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+  auth:
+    build:
+      context: ./services/auth
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+  # content:
+  #   build:
+  #     context: ./services/content
+  #     dockerfile: Dockerfile
+  #   container_name: content
+  #   ports:
+  #     - "8001:8001"
+  # debug:
+  #   build:
+  #     context: ./services/debug
+  #     dockerfile: Dockerfile
+  #   container_name: debug
+  #   ports:
+  #     - "8002:8002"
+  # location:
+  #   build:
+  #     context: ./services/location
+  #     dockerfile: Dockerfile
+  #   container_name: location
+  #   ports:
+  #     - "8003:8003"
+  # map:
+  #   build:
+  #     context: ./services/map
+  #     dockerfile: Dockerfile
+  #   container_name: map
+  #   ports:
+  #     - "8004:8004"
+networks:
+  default:
+    # You can configure custom networks here if needed.
+    # For a basic setup, the default bridge network is usually sufficient.
+    # driver: bridge

@@ -1,0 +1,6 @@
+{
+    "name": "@brainbow/stooper-content-service",
+    "exports": {
+        ".": "./src/mod.ts"
+    }
+}

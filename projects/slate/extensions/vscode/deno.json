@@ -1,0 +1,6 @@
+{
+    "name": "@brainbow/slate-vscode",
+    "exports": {
+        ".": "./src/mod.ts"
+    }
+}

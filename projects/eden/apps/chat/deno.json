@@ -1,0 +1,6 @@
+{
+    "name": "@brainbow/eden-chat",
+    "exports": {
+        ".": "./src/mod.ts"
+    }
+}

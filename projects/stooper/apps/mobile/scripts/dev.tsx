@@ -1,20 +1,26 @@
+#!/usr/bin/env deno
 import { resolve } from "@std/path";
 
-import { $ } from "@brainbow/ethos/dev";
-import * as dev from "@brainbow/ethos/dev";
+import { $ } from "@brainbow/ethos/dev/shell";
+import * as sh from "@brainbow/ethos/dev/shell";
+import type { Args } from "@brainbow/ethos/dev/shell";
 
-const args = dev.parseCli(Deno.args);
+const args = sh.parse<Args>(Deno.args);
 
 args.workdir ??= resolve(import.meta.dirname!, "..");
 args.target ??= "windows";
+args.reset ??= false;
 args.generate ??= true;
 args.migrate ??= true;
-args.reset ??= false;
+args.services ??= false;
+args.shutdown ??= false;
+args.clean ??= false;
 
 console.info(`Work Dir: ${Deno.cwd()}`);
-console.info(`Flutter Exe:`, await dev.which("flutter"));
+console.info(`Dart Exe:`, $.blue(sh.whichSync("dart") ?? "<not-found>"));
+console.info(`Flutter Exe:`, $.blue(sh.whichSync("flutter") ?? "<not-found>"));
 
-if (args.generate === true) {
+if (args.generate) {
     // TODO: Audit:
     //  - Is this necessary?
     //  - Can we make it faster?
@@ -22,12 +28,24 @@ if (args.generate === true) {
     await $`dart run build_runner build`;
 }
 
-if (args.migrate === true) {
+if (args.migrate) {
     // TODO: Can we make --reset optional/inherited?
     args.reset ?
-        await $`deno task migrate --reset` :
-        await $`deno task migrate`;
+        await $`deno task --cwd ../.. migrate --reset` :
+        await $`deno task --cwd ../.. migrate`;
+}
+
+if (args.services) {
+    await $`docker compose -f ../../compose.yaml up -d`;
 }
 
 // TODO: Should we use `--web-port 8082`?
 await $`flutter run -d ${args.target} --hot`;
+
+if (args.services && args.shutdown) {
+    await $`docker compose -f ../../compose.yaml down`;
+}
+
+if (args.clean) {
+    await $`deno task clean`;
+}

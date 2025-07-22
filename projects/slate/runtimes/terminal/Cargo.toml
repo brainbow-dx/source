@@ -1,0 +1,32 @@
+[package]
+name = "slate-terminal"
+version = "0.0.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["std"]
+std = ["dep:tracing-subscriber"]
+debug = []
+verbose = []
+profiling = []
+ecma = ["dep:deno_bindgen"]
+
+[dependencies]
+ratatui = { workspace = true, features = ["crossterm"] }
+crossterm = { workspace = true }
+
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, optional = true }
+
+# TODO: Remove this in favor of `ethos-ecma` with the `deno` feature.
+deno_bindgen = { workspace = true, optional = true }
+
+#--
+# Crossterm requires we explicitly enable
+# the windows feature when on windows.
+# Remove this at my own peril.
+[target.'cfg(target_os="windows")'.dependencies]
+crossterm = { workspace = true, features = ["windows"] }

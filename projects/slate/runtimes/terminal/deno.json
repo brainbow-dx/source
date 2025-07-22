@@ -1,0 +1,7 @@
+{
+    "name": "@brainbow/slate-terminal",
+    "exports": {
+        ".": "./src/mod.ts",
+        "./lib": "./src/lib.ts"
+    }
+}

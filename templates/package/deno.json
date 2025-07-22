@@ -1,0 +1,6 @@
+{
+    "name": "@brainbow/{{ package_name }}",
+    "exports": {
+        ".": "./src/mod.ts"
+    }
+}

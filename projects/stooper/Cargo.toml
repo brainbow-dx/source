@@ -7,7 +7,7 @@ edition = "2024"
 #TODO
 
 [dev-dependencies]
-#TODO
+anyhow = { workspace = true }
 
 #---
 [workspace]
@@ -19,11 +19,14 @@ members = [
     "services/content",
     "services/location",
     "services/map",
+    "services/debug",
+    "services/monitor",
+    "services/feed",
 ]
 
 [workspace.dependencies]
 anyhow = { version = "1.0" }
 chrono = { version = "*" }
 clap = { version = "*", default-features = false, features = ["derive"] }
-oops = { git = "https://github.com/open-dx/oops-rs", version = "*", default-features = false }
-crwap = { git = "https://github.com/open-dx/oops-rs", version = "*", default-features = false }
+oops = { git = "https://github.com/open-dx/oops-rs", default-features = false }
+crwap = { git = "https://github.com/open-dx/oops-rs", default-features = false }

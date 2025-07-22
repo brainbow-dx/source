@@ -1,0 +1,6 @@
+max_width = 120
+merge_derives = false
+use_small_heuristics = "Off"
+imports_granularity = "Item"
+chain_width = 30
+array_width = 30

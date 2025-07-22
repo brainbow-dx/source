@@ -1,0 +1,6 @@
+{
+    "name": "@brainbow/slate-unreal",
+    "exports": {
+        ".": "./src/mod.ts"
+    }
+}

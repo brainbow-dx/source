@@ -1,0 +1,6 @@
+{
+    "name": "@brainbow/eden-a11y",
+    "exports": {
+        ".": "./src/mod.ts"
+    }
+}

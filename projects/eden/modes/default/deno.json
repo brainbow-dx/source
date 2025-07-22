@@ -1,0 +1,6 @@
+{
+    "name": "@brainbow/eden-default-mode",
+    "exports": {
+        ".": "./src/mod.ts"
+    }
+}

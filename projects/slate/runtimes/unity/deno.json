@@ -1,0 +1,6 @@
+{
+    "name": "@brainbow/slate-unity",
+    "exports": {
+        ".": "./src/mod.ts"
+    }
+}
