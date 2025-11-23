@@ -1,0 +1,20 @@
+[package]
+name = "ethos-log"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = ["std"]
+std = []
+dev = []
+inspect = []
+profiling = []
+micro = []
+
+[dependencies]
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = [
+    "fmt",
+    "ansi",
+    "env-filter",
+] }

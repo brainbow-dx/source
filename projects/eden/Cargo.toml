@@ -3,23 +3,47 @@ name = "eden"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = ["std"]
+std = ["clap/std", "tracing-subscriber"]
+debug = []
+verbose = []
+profiling = []
+
 [dependencies]
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter", "fmt", "ansi"], optional = true }
+clap = { workspace = true, features = ["derive"] }
+derive_more = { workspace = true, features = ["from"] }
+oops = { workspace = true }
+url = { workspace = true }
 
 [dev-dependencies]
-anyhow = { workspace = true, features = ["std", "backtrace"] }
+anyhow = { workspace = true }
 
 #---
 [workspace]
 members = [
+    # TODO
+    "apps/hey",
+    "apps/imagen",
     "apps/terminal",
-    "apps/chat",
+    "services/diffusion",
+    "services/inference",
     "packages/core",
-    "modes/default",
-    "personas/a11y", "apps/psst",
 ]
 
 [workspace.dependencies]
+eden = { path = "." }
+eden-core = { path = "./packages/core" }
+eden-diffusion-service = { path = "./services/diffusion" }
+eden-inference-service = { path = "./services/inference" }
+
+llm = { path = "../../vendor/rust-gpt", default-features = true }
+
 uuid = { version = "1.17", default-features = false }
+rand = { version = "0.9", default-features = false }
+url = { version = "*", default-features = false }
 smallvec = { version = "1.13", default-features = false }
 once_cell = { version = "1.19", default-features = false }
 derive_more = { version = "2.0", default-features = false }
@@ -35,15 +59,37 @@ enum_dispatch = { version = "0.3", default-features = false }
 
 tracing = { version = "0.1", default-features = false }
 tracing-subscriber = { version = "0.3", default-features = false }
+tracing-chrome = { version = "0.7", default-features = false }
 tracy-client = { version = "0.18", default-features = false }
 
+argh = { version = "0.1", default-features = false }
+clap = { version = "4.5", default-features = false }
+eyre = { version = "0.6", default-features = false }
 anyhow = { version = "1.0", default-features = false }
-criterion = { version = "0.6", default-features = false }
 oops = { git = "https://github.com/open-dx/oops-rs", default-features = false, features = ["macros"] }
+
+criterion = { version = "0.6", default-features = false }
+
+futures = { version = "0.3", default-features = false }
+tower = { version = "0.5", default-features = false }
+tower-service = { version = "0.3.3", default-features = false }
+tokio = { version = "1", default-features = false }
+axum = { version = "0.8", default-features = false }
+
+serde = { version = "1.0", default-features = false }
+
+image = { version = "0.25", default-features = false }
+
+candle-core = { version = "*" }
+candle-nn = { version = "*" }
+candle-transformers = { version = "*" }
+hf-hub = { version = "0.4", default-features = false }
+tokenizers = { version = "0.21", default-features = false }
 
 bindgen = { version = "0.72", default-features = false }
 cbindgen = { version = "0.29", default-features = false }
-deno_bindgen = { version = "0.8", default-features = false }
+pyo3 = { version = "0.25.0", default-features = false, features = ["macros"] }
+widestring = { version = "1.2", default-features = false }
 cwrap = { git = "https://github.com/open-dx/cwrap-rs", default-features = false, features = ["macros"] }
 
 proc-macro2 = { version = "1.0", default-features = false }

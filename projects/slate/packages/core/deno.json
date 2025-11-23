@@ -1,6 +1,8 @@
 {
     "name": "@brainbow/slate-core",
     "exports": {
-        ".": "./src/mod.ts"
+        ".": "./src/mod.ts",
+        "./draw": "./src/draw.ts",
+        "./surface": "./src/surface.ts"
     }
 }

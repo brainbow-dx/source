@@ -1,6 +1,6 @@
 import { resolve } from "@std/path";
 
-import { $ } from "@brainbow/ethos/dev/shell";        
+import { $ } from "@brainbow/ethos/dev/shell";
 import * as sh from "@brainbow/ethos/dev/shell";
 
 const args = sh.parse(Deno.args);
@@ -16,15 +16,12 @@ args.clean ??= false;
 
 Deno.chdir(args.workdir);
 
-const configDir = await sh.homedir(`.slate/config`, true);
-await Deno.mkdir(configDir!, { recursive: true });
-
 if (args.services) {
-    await $`docker compose -f ./compose.yaml up -d`;
+    await $`docker compose -f ./docker-compose.yaml up -d`;
 }
 
 if (args.services && args.shutdown) {
-    await $`docker compose -f ./compose.yaml down`;
+    await $`docker compose -f ./docker-compose.yaml down`;
 }
 
 if (args.clean) {

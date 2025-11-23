@@ -1,24 +1,6 @@
 [package]
-name = "ethos-registry-service"
+name = "ethos-registry"
 version = "0.1.0"
 edition = "2024"
 
-[features]
-default = ["std"]
-std = ["dep:tracing-subscriber"]
-debug = []
-verbose = []
-profiling = []
-
 [dependencies]
-anyhow = { workspace = true }
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true, features = [
-    "env-filter",
-], optional = true }
-derive_more = { workspace = true, features = ["from"] }
-oops = { workspace = true }
-
-[dev-dependencies]
-anyhow = { workspace = true, features = ["std", "backtrace"] }
-tracing-subscriber = { workspace = true, features = ["fmt", "ansi"] }

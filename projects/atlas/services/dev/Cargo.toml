@@ -1,6 +1,42 @@
 [package]
-name = "dev"
+name = "atlas-dev"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = ["std"]
+std = []
+dev = []
+inspect = []
+
+#---
 [dependencies]
+atlas-core = { workspace = true }
+
+tower = { workspace = true }
+
+parking_lot = { workspace = true }
+
+# slotmap = { workspace = true }
+# indexmap = { workspace = true }
+
+hashbrown = { workspace = true, features = ["default-hasher"] }
+
+derive_more = { workspace = true, features = [
+    "from",
+    "display",
+    "index",
+    "index_mut",
+    "deref",
+    "deref_mut",
+    "is_variant",
+] }
+
+oops = { workspace = true, features = ["macros"] }
+eyre = { workspace = true }
+
+owo-colors = { workspace = true }
+
+tracing = { workspace = true }
+tracing-core = { workspace = true }
+tracing-subscriber = { workspace = true, optional = true }

@@ -1,0 +1,23 @@
+moodring.dev {
+	redir https://www.slate.dev{uri}
+}
+
+www.moodring.dev {
+	reverse_proxy localhost:8000
+}
+
+auth.moodring.dev {
+	reverse_proxy localhost:8220
+}
+
+vault.moodring.dev {
+	reverse_proxy localhost:8220
+}
+
+sketch.moodring.dev {
+	reverse_proxy localhost:3000
+}
+
+admin.moodring.dev {
+	reverse_proxy localhost:9000
+}

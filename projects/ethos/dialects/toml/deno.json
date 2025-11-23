@@ -1,0 +1,7 @@
+{
+  "name": "@brainbow/ethos-toml",
+  "exports": {
+    ".": "./src/mod.ts",
+    "./generate": "./scripts/.generate.tsx"
+  }
+}

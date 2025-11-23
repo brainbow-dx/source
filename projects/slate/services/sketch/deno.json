@@ -1,0 +1,87 @@
+{
+    "name": "@brainbow/slate-sketch",
+    "tasks": {
+        "dev": "deno run -A scripts/dev.tsx",
+        "clean": "deno clean; deno cache -r --allow-import ."
+    },
+    "exports": {
+        ".": "./src/mod.ts",
+        "./views": "./src/views/mod.ts",
+        "./views/workspace": "./src/views/workspace/mod.ts",
+        "./utils": "./src/utils.ts"
+    },
+    "exclude": [
+        "./.output/"
+    ],
+    "imports": {
+        "@deno/dnt": "jsr:@deno/dnt",
+        "@excalidraw/excalidraw": "npm:@excalidraw/excalidraw",
+        "@excalidraw/excalidraw/index.css": "npm:@excalidraw/excalidraw/index.css",
+        "@std/async/debounce": "jsr:@std/async@1.0.15/debounce",
+        "@std/fs": "jsr:@std/fs",
+        "@std/path": "jsr:@std/path",
+        "@types/chrome": "npm:@types/chrome",
+        "@types/react": "npm:@types/react",
+        "@types/react-dom": "npm:@types/react-dom",
+        "@types/vscode": "npm:@types/vscode",
+        "react": "npm:react@18.3.1",
+        "react/jsx-runtime": "npm:react@18.3.1/jsx-runtime",
+        "react/jsx-dev-runtime": "npm:react@18.3.1/jsx-dev-runtime",
+        "react-dom": "npm:react-dom@18.3.1",
+        "react-dom/client": "npm:react-dom@18.3.1/client",
+        "react-dom/server": "npm:react-dom@18.3.1/server",
+        "react-router-dom": "npm:react-router-dom",
+        "react-code-blocks": "npm:@react-code-blocks",
+        "vscode": "npm:vscode"
+    },
+    "permissions": {
+        "default": {
+            "all": true
+        },
+        "dev": {
+            "read": [
+                "./deno.json"
+            ],
+            "env": true,
+            "run": {
+                "allow": [
+                    "git"
+                ]
+            }
+        },
+        "prod": {
+            "read": [
+                "./deno.json"
+            ],
+            "env": true,
+            "run": {
+                "allow": [
+                    "git"
+                ]
+            }
+        }
+    },
+    "allowScripts": false,
+    "compilerOptions": {
+        "lib": [
+            "esnext",
+            "dom",
+            "dom.iterable",
+            "dom.asynciterable",
+            "deno.unstable",
+            "deno.worker",
+            "deno.ns",
+            "deno"
+        ],
+        "types": [
+            "@types/node",
+            "@types/react",
+            "@types/react-dom",
+            "@types/chrome",
+            "@types/vscode"
+        ],
+        "jsx": "react-jsx",
+        "jsxImportSource": "react",
+        "jsxImportSourceTypes": "@types/react"
+    }
+}

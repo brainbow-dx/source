@@ -46,6 +46,12 @@ dependencies:
   geolocator: ^11.1.0
   font_awesome_flutter: ^10.4.0
   lucide_icons_flutter: ^3.0.7
+  flutter_launcher_icons: ^0.14.4
+  phosphor_flutter: ^2.1.0
+  confetti: ^0.8.0
+  scribble: ^0.10.0+1
+  # TODO: For embedding mini-games?
+  # flutter_unity_widget: ^2022.2.1
 
 dev_dependencies:
   flutter_test:
@@ -98,3 +104,23 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/custom-fonts/#from-packages
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/brand/icons/android/res/mipmap-xxxhdpi/ic_launcher.png"
+  adaptive_icon_background: "assets/brand/icons/android/res/mipmap-xxxhdpi/ic_launcher_background.png" # Or path to image like "assets/background.png"
+  adaptive_icon_foreground: "assets/brand/icons/android/res/mipmap-xxxhdpi/ic_launcher_foreground.png"
+  adaptive_icon_foreground_inset: 0
+  remove_alpha_ios: true
+  min_sdk_android: 21
+  web:
+    generate: true
+    image_path: "assets/brand/icons/web/icon-512.png"
+    background_color: "#000000"
+    theme_color: "#000000"
+  windows:
+    generate: true
+    image_path: "assets/brand/icons/web/icon-512.png"
+  macos:
+    generate: true
+    image_path: "assets/brand/icons/web/icon-512.png"

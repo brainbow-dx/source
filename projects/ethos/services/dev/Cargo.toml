@@ -1,0 +1,49 @@
+[package]
+name = "ethos-dev-service"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = ["std"]
+std = ["dep:tracing-subscriber"]
+debug = []
+verbose = []
+profiling = []
+
+[dependencies]
+ethos-log = { workspace = true }
+
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = [
+    "fmt",
+    "ansi",
+    "env-filter",
+], optional = true }
+derive_more = { workspace = true, features = ["from"] }
+oops = { workspace = true }
+
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net"] }
+tower-service.workspace = true
+axum = { workspace = true, features = [
+    "tokio",
+    "query",
+    "form",
+    "json",
+    "http1",
+    "macros",
+] }
+tower = { workspace = true, features = [
+    "balance",
+    "discover",
+    "filter",
+    "tokio",
+    "tokio-stream",
+    "tokio-util",
+    "tracing",
+    "util",
+] }
+
+[dev-dependencies]
+anyhow = { workspace = true, features = ["std", "backtrace"] }
+tracing-subscriber = { workspace = true, features = ["fmt", "ansi"] }

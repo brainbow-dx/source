@@ -1,0 +1,1 @@
+{"name":"","littleEndian":false,"symbols":{},"typeDefs":{"InferenceServiceEcmaBridge":{"inner":"super"}},"tsTypes":{"InferenceServiceEcmaBridge":"export type InferenceServiceEcmaBridge = {\n    inner: raCompletionMarkerInferenceServiceCBridge;\n};"}}}e;\n};"}}onMarker;\n};"}}ge = {\n    inner: __ra_fixup;\n};"}}superraCompletionMarker;\n};"}}

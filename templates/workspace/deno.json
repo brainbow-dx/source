@@ -1,0 +1,6 @@
+{
+    "name": "@brainbow/workspace-template",
+    "workspace": [
+        "packages/core"
+    ]
+}

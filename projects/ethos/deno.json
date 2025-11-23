@@ -1,9 +1,18 @@
 {
     "name": "@brainbow/ethos",
     "version": "0.0.0",
+    "tasks": {
+        "install": "cargo install --path .",
+        "build": "deno run -A scripts/build.tsx",
+        "dev": "deno run -A scripts/dev.tsx"
+    },
     "exports": {
         ".": "./src/mod.ts",
+        "./project": "./src/project.ts",
+        "./workspace": "./src/workspace.ts",
         "./dev": "./src/dev/mod.ts",
+        "./dev/bundle": "./src/dev/bundle.ts",
+        "./dev/fs": "./src/dev/fs.ts",
         "./dev/shell": "./src/dev/shell/mod.ts"
     },
     "imports": {

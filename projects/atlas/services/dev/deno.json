@@ -1,0 +1,6 @@
+{
+    "name": "@brainbow/atlas-dev",
+    "exports": {
+        ".": "./src/mod.ts"
+    }
+}

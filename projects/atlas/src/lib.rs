@@ -1,14 +1,12 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+extern crate atlas_store;
+pub use atlas_core::*;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub extern crate atlas_store as store;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub extern crate atlas_relay as relay;
+
+pub extern crate atlas_dev as dev;
+
+pub extern crate atlas_home as home;
+
+pub extern crate atlas_bsky as bsky;

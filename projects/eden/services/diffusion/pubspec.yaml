@@ -1,0 +1,20 @@
+name: eden_diffusion
+description: "An Ethos app project template."
+version: 0.0.1
+
+environment:
+  sdk: ^3.8.1
+  flutter: ">=1.17.0"
+
+#--
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  path: ^1.9.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  
+  flutter_lints: 6.0.0

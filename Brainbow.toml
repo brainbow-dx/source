@@ -1,0 +1,14 @@
+[workspace]
+name = "Brainbow"
+
+[templates.workspace]
+path = "templates/workspace"
+
+[templates.package]
+path = "templates/package"
+
+[templates.service]
+path = "templates/service"
+
+[templates.app]
+path = "templates/app"

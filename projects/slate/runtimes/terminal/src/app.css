@@ -1,0 +1,73 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: #111111;
+  color: #dddddd;
+  font-family: sans-serif;
+  
+  & > #root.container {
+    width: 100%;
+    height: 100%;
+    
+    & > .excalidraw {
+      width: inherit;
+      height: inherit;
+    }
+  }
+}
+
+.button-wrapper {
+  input[type="checkbox"] {
+    margin: 5px;
+  }
+  button {
+    z-index: 1;
+    height: 40px;
+    max-width: 200px;
+    margin: 10px;
+    padding: 5px;
+  }
+}
+
+:root[dir="ltr"]
+  .excalidraw
+  .layer-ui__wrapper
+  .zen-mode-transition.App-menu_bottom--transition-left {
+  transform: none;
+}
+
+.excalidraw .selected-shape-actions {
+  text-align: left;
+}
+
+.excalidraw {
+  --color-primary: #faa2c1;
+  --color-primary-darker: #f783ac;
+  --color-primary-darkest: #e64980;
+  --color-primary-light: #fcc2d7;
+  
+  /**
+  TODO: Set a minimum sidebar width?
+  --right-sidebar-width: 500px !important;
+  */
+
+  button.custom-element {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .custom-footer,
+  .custom-element {
+    padding: 0.1rem;
+    margin: 0 8px;
+  }
+  .layer-ui__wrapper__footer.App-menu_bottom {
+    align-items: stretch;
+  }
+  /* till its merged in OSS */
+  .App-toolbar-container .mobile-misc-tools-container {
+    position: absolute;
+  }
+}

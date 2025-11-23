@@ -1,0 +1,44 @@
+<style>
+    article {
+        color: lightgrey;
+    }
+    
+    [contenteditable="true"]:focus {
+        color: lightgrey;
+        outline: none;
+    }
+</style>
+
+<article id="blog-post">
+    <header>
+        <h1>Dang whateveASDFSDFr??</h1>
+    </header>
+    <section class="body-content" contenteditable="true">
+        <p>something asdfasdf else</p>
+        <p>something asdfasdf else</p>
+        <p>something asdfasdf else</p>
+        <p>something asdfasdf else</p>
+        <p>something asdfasdf else</p>
+        <p>something asdfasdf else</p>
+        <p>something asdfasdf else</p>
+        <p>something asdfasdf else</p>
+        <p>something asdfasdf else</p>
+        <p>something asdfasdf else</p>
+        <p>something asdfasdf else</p>
+    </section>
+    <footer>
+        TODO
+    </footer>
+</article>
+
+<script type="module">
+    // import * as path from "@std/path";
+    const postDisplay = document.getElementById("blog-post");
+    const contentSections = postDisplay.getElementsByTagName("section");
+    
+    postDisplay.addEventListener('input', function(event) {
+        console.log('Content changed (input event):', this.innerHTML);
+        // You can access the new content via 'this.innerHTML' or 'event.target.innerHTML'
+        // Perform your change detection logic here
+    });
+</script>

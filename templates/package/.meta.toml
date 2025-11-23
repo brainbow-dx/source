@@ -1,0 +1,24 @@
+[template]
+name = "package"
+include = [
+    "src/**/*.rs",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "src/**/*.js",
+    "src/**/*.jsx",
+    "README.md",
+]
+# .. or
+# exclude = [
+#     ".output/",
+#     ".scratch/",
+# ]
+
+[hooks.generate]
+command = "deno run -A scripts/.generate.tsx"
+
+# [hooks.error]
+# command = "deno run scripts/.cleanup.tsx"
+
+##::some_function_call("whatever")
+# command = "deno run scripts/.celebrate.tsx"

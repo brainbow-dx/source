@@ -1,0 +1,16 @@
+{
+  "name": "@brainbow/eden-imagen",
+  "tasks": {
+    "build": "deno run -A ./scripts/build.tsx",
+    "generate": "deno run -A ./scripts/generate.tsx",
+    "test": "deno run -A ./scripts/test.tsx",
+    "dev": "deno run -A ./scripts/dev.tsx",
+    "install": "deno run -A ./scripts/install.tsx",
+    "publish": "deno run -A ./scripts/publish.tsx",
+    "clean": "deno run -A ./scripts/clean.tsx"
+  },
+  "exports": {
+    ".": "./src/mod.ts",
+    "./generate": "./scripts/.generate.tsx"
+  }
+}

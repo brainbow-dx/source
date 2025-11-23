@@ -1,0 +1,55 @@
+html, body {
+    background-color: transparent;
+}
+[contenteditable="true"]:focus {
+    outline: none;
+}
+textarea, textarea:focus {
+    outline: none;
+    resize: none;
+}
+iframe, iframe:focus {
+    border: none;
+    outline: none;
+}
+
+#overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 1rem;
+    opacity: 0.8;
+    z-index: 99999;
+}
+
+#root.document {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+#code.editor,
+#content.display {
+    background-color: transparent;
+    color: inherit;
+    border: none;
+}
+
+#code.editor {
+    display: none;
+    flex-grow: 0;
+    flex-shrink: 0;
+    height: 5rem;
+}
+
+#content.display {
+    flex-grow: 1;
+    flex-shrink: 1;
+}

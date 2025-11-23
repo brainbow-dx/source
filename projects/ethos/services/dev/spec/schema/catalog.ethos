@@ -1,0 +1,9 @@
+string $ROOT_SCAFFOLD_NAME = "dang"
+
+schema Catalog {
+    string useLongerNames = "omfg"
+    
+    record Product {
+        //..
+    }
+}

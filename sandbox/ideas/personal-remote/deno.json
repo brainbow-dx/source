@@ -1,0 +1,6 @@
+{
+    "name": "@brainbow/prem",
+    "exports": {
+        ".": "./mod.ts"
+    }
+}

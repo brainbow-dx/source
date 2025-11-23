@@ -9,18 +9,27 @@ const args = sh.parse<Args>(Deno.args);
 
 args.workdir ??= resolve(import.meta.dirname!, "..");
 args.target ??= "windows";
-args.reset ??= false;
+args.debug ??= undefined;
+args.release ??= undefined;
+args.reset ??= true;
 args.generate ??= true;
+args.icons ??= true;
 args.migrate ??= true;
-args.services ??= false;
-args.shutdown ??= false;
+args.services ??= true;
+args.shutdown ??= true;
+args.run ??= true;
 args.clean ??= false;
 
-console.info(`Work Dir: ${Deno.cwd()}`);
+const workspaceRoot = resolve(args.workdir, "../..");
+
+Deno.chdir(args.workdir);
+
+console.info(`Workspace: ${workspaceRoot}`);
+console.info(`Project: ${Deno.cwd()}`);
 console.info(`Dart Exe:`, $.blue(sh.whichSync("dart") ?? "<not-found>"));
 console.info(`Flutter Exe:`, $.blue(sh.whichSync("flutter") ?? "<not-found>"));
 
-if (args.generate) {
+if (args.generate === true) {
     // TODO: Audit:
     //  - Is this necessary?
     //  - Can we make it faster?
@@ -28,24 +37,32 @@ if (args.generate) {
     await $`dart run build_runner build`;
 }
 
-if (args.migrate) {
+if (args.icons === true) {
+    await $`dart run flutter_launcher_icons`;
+}
+
+if (args.migrate === true) {
     // TODO: Can we make --reset optional/inherited?
     args.reset ?
         await $`deno task --cwd ../.. migrate --reset` :
         await $`deno task --cwd ../.. migrate`;
 }
 
-if (args.services) {
+if (args.services === true) {
     await $`docker compose -f ../../compose.yaml up -d`;
 }
 
-// TODO: Should we use `--web-port 8082`?
-await $`flutter run -d ${args.target} --hot`;
+if (args.run === true) {
+    // TODO: Should we use `--web-port 8082`?
+    args.target !== undefined
+        ? await $`flutter run -d ${args.target} --hot`
+        : await $`flutter run --hot`;
+}
 
-if (args.services && args.shutdown) {
+if (args.services === true && args.shutdown === true) {
     await $`docker compose -f ../../compose.yaml down`;
 }
 
-if (args.clean) {
+if (args.clean === true) {
     await $`deno task clean`;
 }

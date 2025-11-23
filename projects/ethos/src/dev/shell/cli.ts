@@ -1,4 +1,8 @@
+export type { Args } from "jsr:@std/cli";
+
+//--
 import { parseArgs } from "jsr:@std/cli";
+import type { Args } from "jsr:@std/cli";
 
 import { $ } from "dzx";
 
@@ -7,13 +11,18 @@ import { $ } from "dzx";
  * @param args Set of string arguments to be parsed.
  * @returns Parsed arguments or nothing.
  */
-// deno-lint-ignore no-explicit-any
-export function parse<A extends Record<string, any>>(args: string[] = []) {
+export function parse<A extends Args>(args: string[] = [], setupFn?: (args: A) => void) {
     $.verbose = 2;
     $.shell = "bash";
     $.stdout = "inherit";
     $.stderr = "inherit";
     $.stdin = "inherit";
 
-    return parseArgs<A>(args);
+    const parsedArgs = parseArgs<A>(args);
+
+    if (setupFn) {
+        setupFn(parsedArgs as A);
+    }
+
+    return parsedArgs;
 }

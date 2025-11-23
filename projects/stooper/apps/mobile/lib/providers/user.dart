@@ -8,7 +8,7 @@ import 'package:stooper_mobile/services/user.dart';
 // providers/user_provider.dart
 class UserProvider extends ChangeNotifier {
   final Map<String, User> _users = {
-    'TODO': User(id: 'TODO', name: 'moodring'),
+    'TODO': User(id: 'TODO', name: 'moodring.dev'),
   };
 
   final UserStore _userStore;

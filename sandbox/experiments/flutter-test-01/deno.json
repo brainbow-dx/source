@@ -1,0 +1,9 @@
+{
+    "name": "@brainbow/sandbox-flutter-test-01",
+    "tasks": {
+        "dev": "deno run -A scripts/dev.tsx"
+    },
+    "exports": {
+        ".": "./src/mod.ts"
+    }
+}

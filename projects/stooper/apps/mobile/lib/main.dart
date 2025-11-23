@@ -1,6 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:stooper_mobile/pages/settings/settings.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import 'package:window_manager/window_manager.dart';
 
@@ -8,15 +10,16 @@ import 'package:logging/logging.dart';
 
 import 'package:provider/provider.dart';
 
-import 'package:lucide_icons_flutter/lucide_icons.dart';
-
 import 'package:stooper_mobile/providers/location.dart';
 import 'package:stooper_mobile/pages/feed/feed.dart';
 import 'package:stooper_mobile/pages/map.dart';
-import 'package:stooper_mobile/pages/user/user.dart';
+import 'package:stooper_mobile/pages/user/home.dart';
 import 'package:stooper_mobile/pages/messages.dart';
 import 'package:stooper_mobile/providers/user.dart';
 import 'package:stooper_mobile/services/user.dart';
+import 'package:stooper_mobile/pages/dev/dev.dart';
+import 'package:stooper_mobile/pages/loading/loading.dart';
+import 'package:stooper_mobile/pages/prefs/prefs.dart';
 
 Future<void> main() async {
   Logger.root.level = Level.ALL;
@@ -27,9 +30,13 @@ Future<void> main() async {
   });
 
   WidgetsFlutterBinding.ensureInitialized();
-  await windowManager.ensureInitialized();
-
-  windowManager.setAlwaysOnTop(true);
+  
+  if (!kIsWeb) {
+    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+      await windowManager.ensureInitialized();
+      windowManager.setAlwaysOnTop(true);
+    }
+  }
 
   runApp(MultiProvider(
     providers: [
@@ -51,7 +58,7 @@ class StooperMobileApp extends StatefulWidget {
 class _StooperMobileAppState extends State<StooperMobileApp> {
   final _rootNavigator = GlobalKey<NavigatorState>();
 
-  int _currentPageIndex = 0;
+  int? _currentPageIndex = 0;
 
   @override
   void initState() {
@@ -68,7 +75,7 @@ class _StooperMobileAppState extends State<StooperMobileApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Stooper Mobile',
+      title: 'Stooper',
       theme: ThemeData(
         brightness: Brightness.light,
         primarySwatch: Colors.blue,
@@ -81,12 +88,16 @@ class _StooperMobileAppState extends State<StooperMobileApp> {
         body: Navigator(
           key: _rootNavigator,
           initialRoute: '/',
-          onGenerateRoute: (settings) {
+          onGenerateRoute: (route) {
             Widget nextPage;
-            int nextPageIndex = _currentPageIndex;
+            int? nextPageIndex = _currentPageIndex;
 
-            switch (settings.name) {
+            switch (route.name) {
               case '/':
+                nextPage = const LoadingScreen();
+                nextPageIndex = null;
+                break;
+              case '/feed':
                 nextPage = const FeedScreen();
                 nextPageIndex = 0;
                 break;
@@ -94,23 +105,21 @@ class _StooperMobileAppState extends State<StooperMobileApp> {
                 nextPage = const MapScreen();
                 nextPageIndex = 1;
                 break;
-              case '/inbox':
+              case '/messages':
                 nextPage = const InboxScreen();
                 nextPageIndex = 2;
                 break;
-              case '/user':
-                // return PageRouteBuilder(
-                //   opaque: false,
-                //   barrierDismissible: true,
-                //   pageBuilder: (_, __, ___) => const UserScreen(),
-                //   settings: settings,
-                // );
-                nextPage = const UserScreen();
+              case '/home':
+                nextPage = const HomeScreen();
                 nextPageIndex = 3;
                 break;
-              case '/settings':
-                nextPage = const SettingsScreen();
-                nextPageIndex = 3;
+              case '/dev':
+                nextPage = const DevScreen();
+                nextPageIndex = 4;
+                break;
+              case '/prefs':
+                nextPage = const PrefsScreen();
+                nextPageIndex = 5;
                 break;
               default:
                 nextPage = const Center(
@@ -119,7 +128,7 @@ class _StooperMobileAppState extends State<StooperMobileApp> {
                     style: TextStyle(color: Colors.white),
                   ),
                 );
-                nextPageIndex = -1;
+                nextPageIndex = 0;
             }
 
             if (nextPageIndex != _currentPageIndex) {
@@ -131,7 +140,7 @@ class _StooperMobileAppState extends State<StooperMobileApp> {
             }
 
             return MaterialPageRoute(
-              settings: settings,
+              settings: route,
               builder: (context) => nextPage,
             );
           },
@@ -139,61 +148,86 @@ class _StooperMobileAppState extends State<StooperMobileApp> {
         // drawer: Drawer(
         //   child: // Populate the Drawer in the next step.
         // ),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _currentPageIndex,
-          onDestinationSelected: (int index) {
-            NavigatorState? navigatorState = _rootNavigator.currentState;
+        bottomNavigationBar: _currentPageIndex != null
+            ? NavigationBar(
+                selectedIndex: _currentPageIndex!,
+                onDestinationSelected: (int index) {
+                  NavigatorState? navigatorState = _rootNavigator.currentState;
 
-            if (navigatorState == null) {
-              throw 'Root navigator not found!';
-            }
+                  if (navigatorState == null) {
+                    throw 'Root navigator not found!';
+                  }
 
-            switch (index) {
-              case 0:
-                navigatorState.pushNamed('/');
-                break;
-              case 1:
-                navigatorState.pushNamed('/map');
-                break;
-              case 2:
-                navigatorState.pushNamed('/inbox');
-                break;
-              case 3:
-                navigatorState.pushNamed('/user');
-                break;
-              case 4:
-                navigatorState.pushNamed('/settings');
-                break;
-            }
-          },
-          destinations: const [
-            NavigationDestination(
-              label: "Feed",
-              icon: Icon(LucideIcons.store200),
-            ),
-            NavigationDestination(
-              label: "Map",
-              icon: Badge(
-                child: Icon(LucideIcons.map200),
-              ),
-            ),
-            NavigationDestination(
-              label: "Inbox",
-              icon: Badge(
-                label: Text("2"),
-                child: Icon(LucideIcons.inbox200),
-              ),
-            ),
-            NavigationDestination(
-              label: "User",
-              icon: Icon(LucideIcons.user200),
-            ),
-            NavigationDestination(
-              label: "Settings",
-              icon: Icon(LucideIcons.settings200),
-            ),
-          ],
-        ),
+                  switch (index) {
+                    case 0:
+                      navigatorState.pushNamed('/feed');
+                      break;
+                    case 1:
+                      navigatorState.pushNamed('/map');
+                      break;
+                    case 2:
+                      navigatorState.pushNamed('/messages');
+                      break;
+                    case 3:
+                      navigatorState.pushNamed('/home');
+                      break;
+                    case 4:
+                      navigatorState.pushNamed('/dev');
+                      break;
+                    case 5:
+                      navigatorState.pushNamed('/prefs');
+                      break;
+                  }
+                },
+                destinations: const [
+                  NavigationDestination(
+                    icon: Badge(
+                      child: Icon(PhosphorIconsLight.cardsThree),
+                    ),
+                    selectedIcon: Badge(
+                      label: Text("2"),
+                      child: Icon(PhosphorIconsRegular.cardsThree),
+                    ),
+                    label: "Feed",
+                  ),
+                  NavigationDestination(
+                    icon: Badge(
+                      child: Icon(PhosphorIconsLight.mapTrifold),
+                    ),
+                    selectedIcon: Badge(
+                      label: Text("2"),
+                      child: Icon(PhosphorIconsRegular.mapTrifold),
+                    ),
+                    label: "Wander",
+                  ),
+                  NavigationDestination(
+                    icon: Badge(
+                      child: Icon(PhosphorIconsLight.mailbox),
+                    ),
+                    selectedIcon: Badge(
+                      label: Text("2"),
+                      child: Icon(PhosphorIconsRegular.mailbox),
+                    ),
+                    label: "Postbox",
+                  ),
+                  NavigationDestination(
+                    icon: Icon(PhosphorIconsLight.barn),
+                    selectedIcon: Icon(PhosphorIconsRegular.barn),
+                    label: "Home",
+                  ),
+                  NavigationDestination(
+                    icon: Icon(PhosphorIconsLight.terminalWindow),
+                    selectedIcon: Icon(PhosphorIconsRegular.terminalWindow),
+                    label: "Dev",
+                  ),
+                  NavigationDestination(
+                    icon: Icon(PhosphorIconsLight.flower),
+                    selectedIcon: Icon(PhosphorIconsRegular.flower),
+                    label: "Prefs",
+                  ),
+                ],
+              )
+            : null,
       ),
     );
   }

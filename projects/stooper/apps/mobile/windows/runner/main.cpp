@@ -33,15 +33,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   int screenWidth = desktop.right;
   int screenHeight = desktop.bottom;
 
-  Win32Window::Size size(430, 932);
+  Win32Window::Size size(1440, 960);
 
-  int posX = (screenWidth - size.width) / 2;
-  int posY = (screenHeight - size.height) / 2;
+  int posX = (screenWidth - size.width) / 9;
+  int posY = (screenHeight - size.height) / 9;
 
   FlutterWindow window(project);
   Win32Window::Point origin(posX, posY);
 
-  if (!window.Create(L"Stooper Desktop", origin, size))
+  if (!window.Create(L"Stooper", origin, size))
   {
     return EXIT_FAILURE;
   }

@@ -1,0 +1,22 @@
+[template]
+name = "Basic App"
+exclude = [
+    # TODO
+    ".output/",
+    ".scratch/",
+    "README.md",
+]
+
+[vars.dang]
+default = "todo"
+module = ""
+
+[generate.hooks]
+run = [
+    # TODO
+    "deno run -A scripts/#generate.tsx",
+]
+watch = [
+    # TODO
+    "deno watch -A scripts/#generate.txx",
+]

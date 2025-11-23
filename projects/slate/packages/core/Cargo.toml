@@ -3,17 +3,22 @@ name = "slate-core"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+crate-type = ["rlib", "cdylib"]
+
 [features]
-default = ["std", "macros", "bump"]
-std = ["dep:tracing-subscriber"]
+default = ["std", "macros"]
+std = ["dep:tracing-subscriber", "tracing-subscriber/fmt", "tracing-subscriber/ansi"]
 debug = []
 verbose = []
 profiling = []
 macros = []
-bump = []
 
 [dependencies]
 slate-macros = { workspace = true }
+
+# TODO: Remove this dependency.
+atlas = { workspace = true }
 
 uuid = { workspace = true, features = ["v4"] }
 once_cell = { workspace = true }
@@ -21,24 +26,28 @@ smallvec = { workspace = true }
 hashbrown = { workspace = true, features = ["default", "nightly"] }
 foldhash = { workspace = true }
 ahash = { workspace = true }
+palette = { workspace = true, features = ["libm"] }
+ui-events = { workspace = true }
 
-dyn-clone = { workspace = true }
+parking_lot = { workspace = true }
 
-bumpalo = { workspace = true, features = [
-    "allocator_api",
-    "boxed",
-    "collections",
-] }
-bumpalo-herd = { workspace = true }
+derive_more = { workspace = true, features = ["from"] }
+
+num-traits = { workspace = true }
 
 enum_dispatch = { workspace = true }
 
+bumpalo = { workspace = true, features = [ "boxed", "collections", "allocator_api"] }
+bumpalo-herd = { workspace = true }
+
+dyn-clone = { workspace = true }
+
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true, features = [
-    "env-filter",
-], optional = true }
-derive_more = { workspace = true, features = ["from"] }
+tracing-subscriber = { workspace = true, features = ["env-filter"], optional = true }
+
 oops = { workspace = true }
+eyre = { workspace = true }
+color-eyre = { workspace = true }
 
 [dev-dependencies]
 tracing-subscriber = { workspace = true, features = ["fmt", "ansi"] }

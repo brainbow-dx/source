@@ -1,0 +1,6 @@
+{
+    "name": "@brainbow/ethos-flutter",
+    "exports": {
+        ".": "./src/mod.ts"
+    }
+}

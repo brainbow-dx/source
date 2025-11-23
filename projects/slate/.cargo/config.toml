@@ -13,4 +13,3 @@ linker = "lld-link.exe"
 rustflags = ["--cfg", "getrandom_backend=\"wasm_js\"", "-C", "linker-plugin-lto"]
 env = { CARGO_HOME = "~/.cargo/wasm-home" }
 runner = "wasm-pack"
-

@@ -3,4 +3,9 @@ name = "schema"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = ["std", "proto"]
+std = []
+proto = []
+
 [dependencies]

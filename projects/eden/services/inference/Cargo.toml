@@ -1,0 +1,30 @@
+[package]
+name = "eden-inference-service"
+version = "0.1.0"
+edition = "2024"
+build = "scripts/build.rs"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+#--
+[dependencies]
+serde = { workspace = true, features = ["alloc", "derive", "serde_derive"] }
+
+pyo3 = { workspace = true, features = [
+    "uuid",
+    "serde",
+    "extension-module",
+    "abi3",
+    "auto-initialize",
+    "experimental-async",
+    "multiple-pymethods",
+] }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+
+widestring = { workspace = true, features = ["alloc"] }
+
+[build-dependencies]
+anyhow = { workspace = true }

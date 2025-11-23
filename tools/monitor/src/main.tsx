@@ -4,9 +4,11 @@ export function main() {
     const terminal = new TerminalSurface();
 
     // ..
-    terminal.draw(
-        <div>
-            TODO
-        </div>
-    )
+    terminal.draw(_surface => {
+        return (
+            <div>
+                TODO
+            </div>
+        )
+    });
 }

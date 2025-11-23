@@ -1,0 +1,15 @@
+stooper.local {
+	redir https://www.stooper.local{uri}
+}
+
+www.stooper.local {
+	reverse_proxy www:8000
+}
+
+api.stooper.local {
+	reverse_proxy pds:8100
+}
+
+pds.stooper.local {
+	reverse_proxy pds:9200
+}

@@ -1,0 +1,10 @@
+{
+  "name": "@brainbow/slate-meta",
+  "scripts": {
+    "init": "deno run ./scripts/init",
+    "generate": "deno run ./scripts/generate"
+  },
+  "exports": {
+    ".": "./src/mod.ts"
+  }
+}

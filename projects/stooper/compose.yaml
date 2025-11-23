@@ -1,12 +1,15 @@
 services:
-  routing:
+  dev:
     build:
-      context: ./services/routing
+      context: .
       dockerfile: Dockerfile
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
+    ports:
+      - "80:80"
+      - "443:443"
   auth:
-    build:
+    build: 
       context: ./services/auth
       dockerfile: Dockerfile
     ports:

@@ -1,6 +1,55 @@
 {
     "name": "@brainbow/slate-vscode",
+    "tasks": {
+        "build": "deno run -A scripts/build.tsx",
+        "dev": "deno run -A scripts/dev.tsx",
+        "publish": "deno run -A scripts/publish.tsx",
+        "clean": "rm -rf ./.output"
+    },
+    "permissions": {
+        "default": {
+            "env": true,
+            "ffi": true
+        }
+    },
     "exports": {
         ".": "./src/mod.ts"
+    },
+    "exclude": [
+        "./.output"
+    ],
+    "imports": {
+        "#proto": ".output/pkg/proto",
+        "@deno/dnt": "jsr:@deno/dnt@0.42.3",
+        "@excalidraw/excalidraw": "npm:@excalidraw/excalidraw@0.18.0",
+        "@excalidraw/excalidraw/index.css": "npm/@excalidraw/excalidraw@0.18.0/dist/dev/index.css",
+        "@std/async/debounce": "jsr:@std/async@1.0.15/debounce",
+        "@types/react": "npm:@types/react@18.3.1",
+        "@types/vscode": "npm:@types/vscode@^1.105.0",
+        "react": "npm:react@18.3.1",
+        "react-dom": "npm:react-dom@18.3.1",
+        "react-dom/client": "npm:react-dom@18.3.1/client",
+        "react-dom/server": "npm:react-dom@18.3.1/server"
+    },
+    "compilerOptions": {
+        "lib": [
+            "deno.unstable",
+            "deno.worker",
+            "deno.ns",
+            "dom",
+            "dom.iterable",
+            "dom.asynciterable",
+            "esnext"
+        ],
+        "types": [
+            "@types/node",
+            "@types/react",
+            "@types/react-dom",
+            "@types/vscode",
+            "./types/index.d.ts"
+        ],
+        "jsx": "react-jsx",
+        "jsxImportSource": "react",
+        "jsxImportSourceTypes": "@types/react"
     }
 }

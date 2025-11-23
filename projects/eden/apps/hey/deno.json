@@ -1,0 +1,7 @@
+{
+  "name": "@brainbow/eden-hey",
+  "exports": {
+    ".": "./src/mod.ts",
+    "./generate": "./scripts/.generate.tsx"
+  }
+}

@@ -1,0 +1,33 @@
+$include "dafdsfddf"
+
+/// Configuration stdlib includes some types for building up other types.
+kind Integer {
+    ::as(i8, i9) {
+        //..
+    }
+    
+    @0 i8 length {
+        //..
+    }
+}
+
+kind String {
+    ::as(string) {
+        //..
+    }
+    
+    @0 i8 length {
+        //..
+    }
+}
+
+/// Hello??
+workspace Ethos {
+    /// Some Documentation for this item.
+    //#slate::doc("https://docs.dang.gov/whappa-ow?read=a:book")
+    string some_key = ""
+    
+    app Terminal {
+        //..
+    }
+}

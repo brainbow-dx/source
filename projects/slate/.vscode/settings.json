@@ -1,11 +1,17 @@
 {
     "deno.enable": true,
     "deno.disablePaths": [
-        "./.cargo/target",
-        "./.output",
-        "./.scratch",
+        "./**/.cargo/target",
+        "./**/.output",
+        "./**/.scratch",
     ],
     "files.exclude": {
         "**/.git": true,
+        "**/.idea": true,
+        "**/.dart_tool": true,
+        "**/.cargo/target": true,
+    },
+    "search.exclude": {
+        "**/.output": true,
     }
 }

@@ -1,6 +1,0 @@
-{
-    "name": "@brainbow/slate-sketch",
-    "exports": {
-        ".": "./src/mod.ts"
-    }
-}

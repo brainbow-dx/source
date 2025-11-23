@@ -13,10 +13,10 @@ pub fn init(filter: &str) {
     #[cfg(feature = "std")]
     {
         // TODO: Make the tracing subscriber configurable via tracing builder.
-
+        
         use tracing_subscriber::FmtSubscriber;
         use tracing_subscriber::fmt::time;
-
+        
         let subscriber = FmtSubscriber::builder()
             .with_env_filter(filter)
             .with_timer(time::uptime())
@@ -29,7 +29,6 @@ pub fn init(filter: &str) {
             .with_line_number(false)
             .finish();
 
-        tracing::subscriber::set_global_default(subscriber)
-            .expect("setting default subscriber failed");
+        tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
     }
 }

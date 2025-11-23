@@ -2,6 +2,7 @@
   "name": "@brainbow/stooper-mobile",
   "version": "0.0.0",
   "tasks": {
+    "build": "deno run -A ./scripts/build.tsx",
     "dev": "deno run -A ./scripts/dev.tsx",
     "clean": "flutter clean && flutter pub get"
   },

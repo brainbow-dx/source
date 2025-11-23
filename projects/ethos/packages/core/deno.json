@@ -1,0 +1,6 @@
+{
+    "name": "@brainbow/ethos-core",
+    "exports": {
+        ".": "./src/mod.ts"
+    }
+}

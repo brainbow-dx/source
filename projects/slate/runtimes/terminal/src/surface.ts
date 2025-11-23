@@ -1,21 +1,46 @@
-import * as c from "@brainbow/cwrap";
+import type { Surface } from "@brainbow/slate-core/surface";
+import type { DrawFn } from "@brainbow/slate-core/draw";
 
-import type { JSX } from "react";
-
-type DrawJsx = (props: object) => JSX.Element;
-
-interface Surface {
-    draw(drawFn: DrawJsx): void;
+export class LocalStore extends Map {
+    construct() {
+        //..
+    }
 }
 
-@c.struct("TerminalSurface")
+// import * as c from "@brainbow/ethos/cwrap";
+
+export class TerminalStore extends LocalStore {
+    override construct() {
+        //..
+    }
+}
+
+// @c.struct("TerminalSurface")
 export class TerminalSurface implements Surface {
-    constructor() {
+    public readonly store = new TerminalStore();
+
+    private _isRunning = true;
+
+    constructor(
+        private readonly backend: object,
+    ) {
         //..
     }
 
-    draw(drawFn: DrawJsx) {
-        const jsxTree = drawFn(this);
+    public get isRunning() {
+        return this._isRunning;
+    }
+
+    public start() {
+        this._isRunning = true;
+    }
+
+    public stop() {
+        this._isRunning = false;
+    }
+
+    public async draw(drawFn: DrawFn) {
+        const jsxTree = await drawFn(this);
         console.debug(`JSX Tree:\n`, jsxTree);
     }
 }

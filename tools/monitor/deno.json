@@ -1,5 +1,5 @@
 {
-    "name": "@brainbow/dev-monitor",
+    "name": "@brainbow/monitor",
     "version": "0.0.0",
     "exports": {
         ".": "./src/mod.ts"

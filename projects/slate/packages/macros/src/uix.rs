@@ -258,15 +258,12 @@ impl Parse for UIxElement {
                                 println!("Parsed Documentation Attribute: TODO");
                             }
                             _ => {
-                                return Err(token_buf
-                                    .error(format!("Unknown attribute ident: {:}", attr_ident)));
+                                return Err(token_buf.error(format!("Unknown attribute ident: {:}", attr_ident)));
                             }
                         }
                     }
                     None => {
-                        return Err(
-                            token_buf.error(format!("Failed to parse attribute ident: {:?}", attr))
-                        );
+                        return Err(token_buf.error(format!("Failed to parse attribute ident: {:?}", attr)));
                     }
                 }
             }
@@ -357,10 +354,9 @@ impl Parse for UIxElement {
                         Err(error) => {
                             #[cfg(feature = "debug")]
                             eprintln!("Failed to parse child Element: {:#?}", error);
-                            return Err(token_buf.error(format!(
-                                "Couldn't parse child of `{}`: {:}",
-                                element.ident, error
-                            )));
+                            return Err(
+                                token_buf.error(format!("Couldn't parse child of `{}`: {:}", element.ident, error))
+                            );
                         }
                     }
                 }
@@ -408,7 +404,11 @@ impl ToTokens for UIxElement {
         // Write props, where `prop="value"`, `prop={value}`, or `prop=[value]`
         // is converted to `.with_prop(value)`.
         let mut props = proc_macro2::TokenStream::new();
-        for ElementProp { key, value } in &self.props {
+        for ElementProp {
+            key,
+            value,
+        } in &self.props
+        {
             // Build the method name into a "with" method (for building the element's props).
             let method_name = Ident::new(&format!("with_{}", key), key.span());
             match value {

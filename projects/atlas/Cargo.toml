@@ -3,18 +3,83 @@ name = "atlas"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = ["std"]
+std = []
+dev = []
+inspect = []
+profiling = []
+
 [dependencies]
+atlas-core = { workspace = true }
+atlas-relay = { workspace = true }
+atlas-store = { workspace = true }
+atlas-dev = { workspace = true }
+atlas-home = { workspace = true }
+atlas-pds = { workspace = true }
+atlas-bsky = { workspace = true }
 
 #---
 [workspace]
 members = [
-    # TODO
     "apps/monitor",
-    "packages/relay",
-    "services/dev",
     "extensions/chrome",
     "extensions/vscode",
+    "packages/core",
+    "packages/relay",
+    "packages/store",
+    "services/dev",
+    "services/bsky",
+    "services/pds",
+    "services/home",
 ]
 
-[workspace.dependencies]
+[workspace.lints]
 # TODO
+
+[workspace.lints.rust]
+# TODO
+
+[workspace.lints.clippy]
+# TODO
+
+[workspace.lints.rustdoc]
+# TODO
+
+[workspace.dependencies]
+atlas = { path = "." }
+atlas-core = { path = "./packages/core" }
+atlas-relay = { path = "./packages/relay" }
+atlas-store = { path = "./packages/store" }
+atlas-dev = { path = "./services/dev" }
+atlas-home = { path = "./services/home" }
+atlas-pds = { path = "./services/pds" }
+atlas-bsky = { path = "./services/bsky" }
+
+tower = { version = "0.5", default-features = false }
+
+uuid = { version = "1.17", default-features = false }
+once_cell = { version = "1.19", default-features = false }
+parking_lot = { version = "0.12", default-features = false }
+spin = { version = "0.10", default-features = false }
+smallvec = { version = "1.13", default-features = false }
+slotmap = { version = "1.0", default-features = false }
+indexmap = { version = "2.10", default-features = false }
+derive_more = { version = "2.0", default-features = false }
+
+hashbrown = { version = "0.15", default-features = false }
+
+oops = { git = "https://github.com/open-dx/oops-rs", default-features = false, features = ["macros"] }
+eyre = { version = "0.6", default-features = false }
+
+owo-colors = { version = "4.2", default-features = false }
+color-eyre = { version = "0.6", default-features = false }
+
+clap = { version = "4.5", default-features = false }
+
+criterion = { version = "0.6", default-features = false }
+
+tracing = { version = "0.1", default-features = false }
+tracing-core = { version = "0.1", default-features = false }
+tracing-subscriber = { version = "0.3", default-features = false }
+tracy-client = { version = "0.18", default-features = false }

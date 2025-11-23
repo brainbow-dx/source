@@ -81,10 +81,7 @@ pub fn styles(token_buf: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 /// TODO
 #[proc_macro_attribute]
-pub fn render(
-    _ts1: proc_macro::TokenStream,
-    _ts2: proc_macro::TokenStream,
-) -> proc_macro::TokenStream {
+pub fn render(_ts1: proc_macro::TokenStream, _ts2: proc_macro::TokenStream) -> proc_macro::TokenStream {
     // _ts1
     proc_macro::TokenStream::new()
 }

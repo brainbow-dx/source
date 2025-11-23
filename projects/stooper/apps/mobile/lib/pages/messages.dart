@@ -4,6 +4,7 @@ import "package:flutter/material.dart";
 class InboxScreen extends StatelessWidget {
   const InboxScreen({super.key});
 
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -26,9 +27,9 @@ class InboxScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: Center(
+      body: const Center(
         child: Column(
-          children: const [
+          children: [
             Text("Notifications + Messages"),
           ],
         ),

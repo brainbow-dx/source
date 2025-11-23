@@ -1,0 +1,31 @@
+{
+  "name": "@brainbow/eden-stable-diffusion",
+  "tasks": {
+    "init": "deno run ./scripts/init",
+    "generate": "deno run ./scripts/.init.tsx"
+  },
+  "exports": {
+    ".": "./src/mod.ts",
+    "./generate": "./scripts/.init.tsx"
+  },
+  "compilerOptions": {
+    "lib": [
+      "esnext",
+      "dom.asynciterable",
+      "dom.iterable",
+      "dom",
+      "deno.unstable",
+      "deno.worker",
+      "deno.ns",
+      "deno"
+    ],
+    "types": [
+      "@types/node",
+      "@types/vscode",
+      "@types/react-dom",
+      "@types/react"
+    ],
+    "jsx": "react-jsx",
+    "jsxImportSource": "react"
+  }
+}

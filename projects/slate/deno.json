@@ -8,8 +8,20 @@
     },
     "exports": {
         ".": "./src/mod.ts",
-        "./jsx": "./src/jsx/mod.ts",
-        "./jsx-runtime": "./src/jsx/runtime.ts"
+        "./terminal": "./src/terminal.ts",
+        "./parse/markdown": "./src/parse/markdown.ts",
+        "./jsx-runtime": "./src/jsx/runtime.ts",
+        "./jsx": "./src/jsx/mod.ts"
+    },
+    "imports": {
+        "react": "npm:react@18.3.1",
+        "react/jsx-runtime": "npm:react@18.3.1/jsx-runtime",
+        "react/jsx-dev-runtime": "npm:react@18.3.1/jsx-dev-runtime",
+        "react-dom": "npm:react-dom@18.3.1",
+        "react-dom/client": "npm:react-dom@18.3.1/client",
+        "react-dom/server": "npm:react-dom@18.3.1/server",
+        "react-router-dom": "npm:react-router-dom",
+        "react-code-blocks": "npm:@react-code-blocks"
     },
     "compilerOptions": {
         "lib": [
@@ -25,9 +37,11 @@
             "@types/node",
             "@types/vscode",
             "@types/react",
-            "@types/react-dom"
+            "@types/react-dom",
+            "react"
         ],
         "jsx": "react-jsx",
-        "jsxImportSource": "react"
+        "jsxImportSource": "react",
+        "jsxImportSourceTypes": "@types/react"
     }
 }

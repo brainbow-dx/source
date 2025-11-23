@@ -1,6 +1,9 @@
 # Created by https://www.toptal.com/developers/gitignore/api/windows,macos,linux,rust,yarn,node
 # Edit at https://www.toptal.com/developers/gitignore?templates=windows,macos,linux,rust,yarn,node
 
+.scratch/
+.output/
+
 ### Linux ###
 *~
 

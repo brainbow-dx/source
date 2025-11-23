@@ -1,0 +1,92 @@
+{
+	"folders": [
+		{
+			"name": "Brainbow",
+			"path": "../.."
+		},
+		{
+			"name": "Ideaeation",
+			"path": "../../sandbox/ideas"
+		},
+		{
+			"name": "Experiments",
+			"path": "../../sandbox/experiments"
+		},
+		{
+			"name": "Stooper",
+			"path": "../../projects/stooper"
+		},
+		{
+			"name": "Slate",
+			"path": "../../projects/slate"
+		},
+		{
+			// @scribe 
+			"name": "Eden",
+			"path": "../../projects/eden"
+		},
+		{
+			"name": "Atlas",
+			"path": "../../projects/atlas"
+		},
+		{
+			"name": "Ethos",
+			"path": "../../projects/ethos"
+		},
+		{
+			"name": "Templates",
+			"path": "../../templates"
+		},
+	],
+	"settings": {
+		"files.associations": {
+			"**.ethos": "hcl",
+			"**.spec": "hcl",
+			"**.sketch": "svg",
+			"**.tf": "hcl",
+			"Caddyfile.*": "caddyfile",
+		},
+		"workbench.editorAssociations": {
+			"*.svg": "editor.excalidraw"
+		},
+		"files.exclude": {
+			"**/.vscode": false,
+			"**/.output": false,
+			"**/.cargo": false,
+			"**/.venv": true,
+			"**/.idea": true,
+			"**/.dart_tool": true,
+			"**/__pycache__": true,
+			"**/node_modules": false,
+			"**/.git": true,
+			"**/.svn": true,
+			"**/.hg": true,
+			"**/.DS_Store": true,
+			"**/Thumbs.db": true
+		},
+		"vscode-iconset-sketch-nomo-dark.files.associations": {
+			"**.ethos": "hcl",
+			"**.spec": "hcl",
+			"**.sketch": "svg",
+			"**.jsonc": "json"
+		},
+		"rust-analyzer.rustfmt.extraArgs": [
+			//..
+		],
+		"[rust]": {
+			"editor.formatOnSave": false
+		},
+		"deno.enable": false,
+		"deno.unstable": [
+			"deno-lint",
+			"deno-fmt",
+			"deno-test",
+			"deno-serve",
+			"deno-deploy"
+		],
+		"dart.devToolsTheme": "dark",
+		"dart.allowTestsOutsideTestFolder": true,
+		"dart.flutterCreateOrganization": "com.brainbow",
+		// "dart.devToolsPort": null,
+	},
+}

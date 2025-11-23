@@ -3,26 +3,57 @@ name = "ethos"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = ["std"]
+std = ["clap/std", "tracing-subscriber"]
+debug = []
+verbose = []
+profiling = []
+
 [dependencies]
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter", "fmt", "ansi"], optional = true }
+clap = { workspace = true, features = ["derive"] }
+derive_more = { workspace = true }
+oops = { workspace = true }
+serde = { workspace = true }
+url = { workspace = true }
+hcl-edit = { workspace = true }
+hcl-rs = { workspace = true }
+
+[dev-dependencies]
+eyre = { workspace = true, features = ["auto-install"] }
 
 #---
 [workspace]
 members = [
     # TODO
-    "packages/cwrap",
-    "services/registry"
+    "packages/core",
+    "packages/log",
+    "services/dev",
+    "services/registry",
+    "dialects/ecma",
 ]
 
 [workspace.dependencies]
+ethos = { path = "." }
+ethos-core = { path = "./packages/log" }
+ethos-log = { path = "./packages/log" }
+ethos-dev-service = { path = "./services/dev" }
+
 uuid = { version = "1.17", default-features = false }
+url = { version = "*", default-features = false }
 smallvec = { version = "1.13", default-features = false }
 once_cell = { version = "1.19", default-features = false }
 derive_more = { version = "2.0", default-features = false }
 parking_lot = { version = "0.12", default-features = false }
 spin = { version = "0.10", default-features = false }
+serde = { version = "1.0", default-features = false }
+hcl-rs = { version = "0.19", default-features = false }
+hcl-edit = { version = "0.9", default-features = false }
 
 hashbrown = { version = "0.15", default-features = false }
-foldhash = { version = "0.1", default-features = false }
+foldhash = { version = "0.2", default-features = false }
 ahash = { version = "0.8", default-features = false }
 
 enum-iterator = { version = "2.1", default-features = false }
@@ -32,15 +63,29 @@ tracing = { version = "0.1", default-features = false }
 tracing-subscriber = { version = "0.3", default-features = false }
 tracy-client = { version = "0.18", default-features = false }
 
+eyre = { version = "0.6", default-features = false }
 anyhow = { version = "1.0", default-features = false }
-criterion = { version = "0.6", default-features = false }
+clap = { version = "4.5", default-features = false }
+criterion = { version = "0.7", default-features = false }
 oops = { git = "https://github.com/open-dx/oops-rs", default-features = false, features = ["macros"] }
+
+futures = { version = "0.3", default-features = false }
+tower = { version = "0.5", default-features = false }
+tower-service = { version = "0.3.3", default-features = false }
+tokio = { version = "1", default-features = false }
+axum = { version = "0.8", default-features = false }
 
 bindgen = { version = "0.72", default-features = false }
 cbindgen = { version = "0.29", default-features = false }
-deno_bindgen = { version = "0.8", default-features = false }
 cwrap = { git = "https://github.com/open-dx/cwrap-rs", default-features = false, features = ["macros"] }
 
 proc-macro2 = { version = "1.0", default-features = false }
 quote = { version = "1.0", default-features = false }
 syn = { version = "2.0", default-features = false }
+
+deno_core = { version = "0.355", default-features = false }
+swc = { version = "36.0", default-features = false }
+swc_core = { version = "37.0", default-features = false }
+# swc_malloc = { version = "1.2", features = ["hashbrown"] }
+# swc_ecma_ast = { version = "15.0", default-features = false }
+# swc_ecma_quote = { version = "23.0", default-features = false }

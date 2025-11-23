@@ -1,8 +1,0 @@
-{
-    "name": "@brainbow/cwrap",
-    "version": "0.0.0",
-    "exports": {
-        ".": "./src/mod.ts"
-    },
-    "imports": {}
-}

@@ -24,7 +24,9 @@ pub struct ElementDeriveBuilder {
 impl ElementDeriveBuilder {
     /// TODO
     pub fn new(source: DeriveInput) -> Self {
-        ElementDeriveBuilder { source }
+        ElementDeriveBuilder {
+            source,
+        }
     }
 }
 
@@ -53,7 +55,7 @@ impl ElementDeriveBuilder {
         let mut render_exprs = Vec::new();
         for attr in &self.source.attrs {
             match &attr.meta {
-                Meta::List(list) => {
+                Meta::List(list) =>
                     if list.path.is_ident("render") {
                         let expr_args = list
                             .parse_args_with(Punctuated::<Expr, Token![,]>::parse_terminated)
@@ -70,9 +72,7 @@ impl ElementDeriveBuilder {
                                 Expr::Path(_) | Expr::Field(_) if render_expr == None => {
                                     render_expr = Some(expr_arg);
                                 }
-                                Expr::If(arg_if)
-                                    if render_expr != None && render_condition == None =>
-                                {
+                                Expr::If(arg_if) if render_expr != None && render_condition == None => {
                                     render_condition = Some(arg_if.cond);
                                 }
                                 Expr::Path(_) => {
@@ -87,8 +87,7 @@ impl ElementDeriveBuilder {
                         if let Some(render_expr) = render_expr {
                             render_exprs.push((render_expr, render_condition))
                         }
-                    }
-                }
+                    },
                 _ => {
                     //..
                 }
@@ -166,10 +165,7 @@ impl TryFrom<&Attribute> for ElementEventAttribute {
     fn try_from(attr: &Attribute) -> Result<Self> {
         match &attr.meta {
             Meta::List(meta_list) => ElementEventAttribute::try_from(meta_list),
-            _ => Err(Error::new_spanned(
-                attr,
-                "Expected a list of items for 'event'",
-            )),
+            _ => Err(Error::new_spanned(attr, "Expected a list of items for 'event'")),
         }
     }
 }
@@ -180,8 +176,7 @@ impl TryFrom<&MetaList> for ElementEventAttribute {
     /// TODO
     fn try_from(meta_list: &MetaList) -> Result<Self> {
         // Events are seperated by commas, so we use `Punctuated` to parse them.
-        let punctuated =
-            meta_list.parse_args_with(Punctuated::<Expr, Token![,]>::parse_terminated)?;
+        let punctuated = meta_list.parse_args_with(Punctuated::<Expr, Token![,]>::parse_terminated)?;
 
         // Extract the event name (required).
         let Some(first_expr) = punctuated.first().cloned() else {
@@ -215,10 +210,7 @@ impl TryFrom<&Attribute> for ElementStyleAttribute {
     fn try_from(attr: &Attribute) -> Result<Self> {
         match &attr.meta {
             Meta::List(meta_list) => ElementStyleAttribute::try_from(meta_list),
-            _ => Err(Error::new_spanned(
-                attr,
-                "Expected a list of items for 'event'",
-            )),
+            _ => Err(Error::new_spanned(attr, "Expected a list of items for 'event'")),
         }
     }
 }
@@ -229,8 +221,7 @@ impl TryFrom<&MetaList> for ElementStyleAttribute {
     /// Get the style name and values from a `MetaList`.
     fn try_from(meta_list: &MetaList) -> Result<Self> {
         // Styles are seperated by commas, so we use `Punctuated` to parse them.
-        let punctuated =
-            meta_list.parse_args_with(Punctuated::<Expr, Token![,]>::parse_terminated)?;
+        let punctuated = meta_list.parse_args_with(Punctuated::<Expr, Token![,]>::parse_terminated)?;
 
         // Extract the style name (required).
         let Some(first_expr) = punctuated.first().cloned() else {
@@ -264,10 +255,7 @@ impl TryFrom<&Attribute> for ElementClassAttribute {
     fn try_from(attr: &Attribute) -> Result<Self> {
         match &attr.meta {
             Meta::List(meta_list) => ElementClassAttribute::try_from(meta_list),
-            _ => Err(Error::new_spanned(
-                attr,
-                "Expected a list of expressions for 'class'",
-            )),
+            _ => Err(Error::new_spanned(attr, "Expected a list of expressions for 'class'")),
         }
     }
 }
@@ -277,8 +265,7 @@ impl TryFrom<&MetaList> for ElementClassAttribute {
 
     /// TODO
     fn try_from(meta_list: &MetaList) -> Result<Self> {
-        let punctuated =
-            meta_list.parse_args_with(Punctuated::<Expr, Token![,]>::parse_terminated)?;
+        let punctuated = meta_list.parse_args_with(Punctuated::<Expr, Token![,]>::parse_terminated)?;
 
         #[cfg(feature = "verbose")]
         for expr in &punctuated {
@@ -322,24 +309,21 @@ impl TryFrom<&ExprAssign> for ElementProp {
                 None => {
                     return Err(Error::new_spanned(
                         expr_assign,
-                        format!(
-                            "Expected an identifier for the prop key but got `{:?}`.",
-                            expr_path
-                        ),
+                        format!("Expected an identifier for the prop key but got `{:?}`.", expr_path),
                     ));
                 }
             },
             _ => {
-                return Err(Error::new_spanned(
-                    expr_assign,
-                    "Expected an identifier for the prop key but got `None`.",
-                ));
+                return Err(Error::new_spanned(expr_assign, "Expected an identifier for the prop key but got `None`."));
             }
         };
 
         let value = Some(ElementPropValue(*expr_assign.right.to_owned()));
 
-        Ok(ElementProp { key, value })
+        Ok(ElementProp {
+            key,
+            value,
+        })
     }
 }
 
@@ -354,7 +338,10 @@ impl Parse for ElementProp {
             value = Some(ElementPropValue::parse(token_buf)?);
         }
 
-        Ok(ElementProp { key, value })
+        Ok(ElementProp {
+            key,
+            value,
+        })
     }
 }
 
@@ -392,10 +379,7 @@ impl Parse for ElementPropValue {
             };
         }
 
-        Err(token_buf.error(format!(
-            "Failed to parse prop value expression: {:?}",
-            errors
-        )))
+        Err(token_buf.error(format!("Failed to parse prop value expression: {:?}", errors)))
     }
 }
 
