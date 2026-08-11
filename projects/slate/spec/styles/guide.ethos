@@ -1,7 +1,0 @@
-theme DefaultDark {
-    name = "Default (Dark)";
-}
-
-theme DefaultLight {
-    name = "Default (Light)";
-}

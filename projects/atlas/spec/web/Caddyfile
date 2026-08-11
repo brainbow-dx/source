@@ -1,0 +1,19 @@
+atlas.localhost {
+	redir https://www.atlas.localhost{uri}
+}
+
+www.atlas.localhost {
+	reverse_proxy 127.0.0.1:8000
+}
+
+api.atlas.localhost {
+	reverse_proxy 127.0.0.1:8100
+}
+
+pds.atlas.localhost {
+	reverse_proxy 127.0.0.1:9200
+}
+
+dev.atlas.localhost {
+	reverse_proxy 127.0.0.1:3000
+}

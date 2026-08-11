@@ -1,9 +1,9 @@
 #!/usr/bin/env deno
 import { resolve } from "@std/path";
 
-import { $ } from "@brainbow/ethos/dev/shell";
-import * as sh from "@brainbow/ethos/dev/shell";
-import type { Args } from "@brainbow/ethos/dev/shell";
+import { $ } from "@ethos/dev/shell";
+import * as sh from "@ethos/dev/shell";
+import type { Args } from "@ethos/dev/shell";
 
 const args = sh.parse<Args>(Deno.args);
 

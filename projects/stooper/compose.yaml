@@ -1,5 +1,23 @@
 services:
   dev:
+    image: lscr.io/linuxserver/code-server:latest
+    container_name: dev-container
+    profiles: [dev, code]
+    restart: unless-stopped
+    ports:
+      - 3910:8443
+    volumes:
+      - .:/brainbow/projects/escher
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      # - HASHED_PASSWORD=4477858e96106882c7a1cc7c381669b6b082d78e26ed1dcf281d676dbde6ca8ba4927b77355474690037dcb2002b4774b76ebdf2442e337e923eb632ec50bd1f
+      - SUDO_PASSWORD_HASH=4477858e96106882c7a1cc7c381669b6b082d78e26ed1dcf281d676dbde6ca8ba4927b77355474690037dcb2002b4774b76ebdf2442e337e923eb632ec50bd1f
+      - PWA_APPNAME=escher-code-server
+      - PROXY_DOMAIN=code.escher.localhost
+      - DEFAULT_WORKSPACE=/brainbow/projects/escher
+  dev-v1:
     build:
       context: .
       dockerfile: Dockerfile
@@ -8,6 +26,15 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    profiles: [dev, proxy]
+  monitor:
+    image: louislam/uptime-kuma:2
+    restart: unless-stopped
+    profiles: [dev,data]
+    volumes:
+      - ./.output/monitor/data:/app/data
+    ports:
+      - "3911:3001"
   auth:
     build: 
       context: ./services/auth

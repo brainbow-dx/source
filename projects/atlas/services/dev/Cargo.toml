@@ -13,8 +13,6 @@ inspect = []
 [dependencies]
 atlas-core = { workspace = true }
 
-tower = { workspace = true }
-
 parking_lot = { workspace = true }
 
 # slotmap = { workspace = true }
@@ -40,3 +38,11 @@ owo-colors = { workspace = true }
 tracing = { workspace = true }
 tracing-core = { workspace = true }
 tracing-subscriber = { workspace = true, optional = true }
+
+tower = { workspace = true, features = [] }
+
+[target.'cfg(not(target_arch="wasm32"))'.dependencies]
+tower = { workspace = true }
+
+[target.'cfg(target_arch="wasm32")'.dependencies]
+uuid = { workspace = true, features = ["v4", "js"] }

@@ -1,0 +1,23 @@
+code.brainbow.localhost {
+	tls internal
+
+	# @origin_allowed header_regexp Origin ^https?://([a-z0-9-]+\.)?brainbow\.localhost(:[0-9]+)?$
+
+	# header @origin_allowed {
+	# 	Access-Control-Allow-Origin "{header.Origin}"
+	# 	Access-Control-Allow-Credentials "true"
+	# }
+
+	# header {
+	# 	Content-Security-Policy "frame-ancestors 'self' brainbow.localhost *.brainbow.localhost"
+
+	# 	Cross-Origin-Embedder-Policy "require-corp"
+	# 	Cross-Origin-Opener-Policy "same-origin"
+
+	# 	Cross-Origin-Embedder-Policy "require-corp"
+	# 	Cross-Origin-Opener-Policy "same-origin"
+	# 	Cross-Origin-Resource-Policy "cross-origin"
+	# }
+
+	reverse_proxy 127.0.0.1:3900
+}

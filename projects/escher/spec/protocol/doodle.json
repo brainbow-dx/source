@@ -1,0 +1,21 @@
+{
+  "lexicon": 1,
+  "id": "dev.brainbow.escher.sketch.doodle",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "A digital sticky note record.",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["text", "createdAt", "color"],
+        "properties": {
+          "text": { "type": "string", "maxLength": 300 },
+          "color": { "type": "string", "description": "Hex code or CSS color name" },
+          "image": { "type": "blob", "accept": ["image/*"] },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      }
+    }
+  }
+}

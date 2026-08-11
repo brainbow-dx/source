@@ -1,5 +1,5 @@
 {
-    "name": "@brainbow/workspace-template",
+    "name": "@templates/workspace",
     "workspace": [
         "packages/core"
     ]

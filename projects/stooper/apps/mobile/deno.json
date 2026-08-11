@@ -1,5 +1,5 @@
 {
-  "name": "@brainbow/stooper-mobile",
+  "name": "@stooper/mobile",
   "version": "0.0.0",
   "tasks": {
     "build": "deno run -A ./scripts/build.tsx",

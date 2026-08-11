@@ -1,0 +1,10 @@
+[book]
+title = "Aby SDK"
+authors = ["Aby Games"]
+language = "en"
+multilingual = false
+src = "."
+
+[build]
+build-dir = "dist/public"
+create-missing = true

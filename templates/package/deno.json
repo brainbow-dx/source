@@ -1,5 +1,5 @@
 {
-    "name": "@brainbow/package-template",
+    "name": "@templates/package",
     "exports": {
         ".": "./src/mod.ts",
         "./generate": "./scripts/.generate.tsx"

@@ -1,0 +1,8 @@
+{
+    "name": "@escher/desktop",
+    "version": "0.0.0-preview",
+    "license": "MIT",
+    "exports": {
+        ".": "./src/mod.ts"
+    }
+}

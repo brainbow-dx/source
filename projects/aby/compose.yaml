@@ -1,0 +1,14 @@
+services:
+  web-player:
+    image: caddy:latest
+    profiles: [web]
+    ports:
+      - 8094:80
+    volumes:
+      - ./spec/web/Caddyfile:/etc/caddy/Caddyfile
+      - ./.output/web:/usr/share/caddy
+networks:
+  default:
+    # You can configure custom networks here if needed.
+    # For a basic setup, the default bridge network is usually sufficient.
+    # driver: bridge

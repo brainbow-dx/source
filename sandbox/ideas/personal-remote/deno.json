@@ -1,5 +1,5 @@
 {
-    "name": "@brainbow/prem",
+    "name": "@sandbox/prem",
     "exports": {
         ".": "./mod.ts"
     }

@@ -1,9 +1,0 @@
-# import ""../../projects/atlas/spec/network/Caddyfile.dev"
-
-# import ""../../projects/ethos/spec/network/Caddyfile.dev"
-
-import "../../projects/stooper/spec/network/Caddyfile.dev"
-
-import "../../projects/slate/spec/network/Caddyfile"
-
-# import "../../sandbox/experiments/moodring/spec/network/Caddyfile.dev"

@@ -1,0 +1,6 @@
+services:
+  dbui:
+    image: devopsansiblede/libsql-studio:latest
+    ports:
+      - 3902:3000
+    restart: unless-stopped

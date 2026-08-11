@@ -1,0 +1,107 @@
+{
+    "name": "@escher/escher",
+    "tasks": {
+        "build": "deno run -A --unstable-bundle ./scripts/build.tsx",
+        "dev": "deno run --unstable-broadcast-channel -A scripts/dev.tsx",
+        "clean": "deno clean; deno cache -r --allow-import ."
+    },
+    "exclude": [
+        "./.output/"
+    ],
+    "exports": {
+        ".": "./src/mod.ts",
+        "./scene": "./src/scene/server.ts",
+        "./components/editor": "./src/components/editor/mod.ts",
+        "./components/editor/markdown": "./src/components/editor/markdown/mod.ts",
+        "./components/editor/markup": "./src/components/editor/markup/mod.ts",
+        "./components/editor/sketch": "./src/components/editor/sketch/mod.ts",
+        "./utils": "./src/utils.ts"
+    },
+    "imports": {
+        "#assets/": "./assets/",
+        "#pkg/": "./.output/pkg/",
+        "#src/": "./src/",
+        "@escher/sdk": "../..",
+        "@ethos/sdk": "../../../ethos",
+        "@atlas/sdk": "../../../atlas",
+        "@eden/sdk": "../../../@eden",
+        "@deno/dnt": "jsr:@deno/dnt",
+        "@excalidraw/excalidraw": "npm:@excalidraw/excalidraw",
+        "@excalidraw/excalidraw/context": "npm:@excalidraw/excalidraw/context",
+        "@excalidraw/excalidraw/index.css": "npm:@excalidraw/excalidraw/index.css",
+        "@libs/xml": "jsr:@libs/xml",
+        "@radix-ui/themes": "npm:@radix-ui/themes",
+        "@radix-ui/react-icons": "npm:@radix-ui/react-icons",
+        "@std/async/debounce": "jsr:@std/async@1.0.15/debounce",
+        "@std/fs": "jsr:@std/fs",
+        "@std/path": "jsr:@std/path",
+        "@std/uuid": "jsr:@std/uuid",
+        "@std/async": "jsr:@std/async",
+        "@types/chrome": "npm:@types/chrome",
+        "@types/react": "npm:@types/react",
+        "@types/react-dom": "npm:@types/react-dom",
+        "@types/vscode": "npm:@types/vscode",
+        "@uidotdev/usehooks": "npm:@uidotdev/usehooks",
+        "caddy": "npm:@accelerated-software-development/caddy-api-client/caddy",
+        "react": "npm:react@18.3.1",
+        "react/jsx-runtime": "npm:react@18.3.1/jsx-runtime",
+        "react/jsx-dev-runtime": "npm:react@18.3.1/jsx-dev-runtime",
+        "react-dom": "npm:react-dom@18.3.1",
+        "react-dom/client": "npm:react-dom@18.3.1/client",
+        "react-dom/server": "npm:react-dom@18.3.1/server",
+        "react-router-dom": "npm:react-router-dom",
+        "react-code-blocks": "npm:@react-code-blocks",
+        "vscode": "npm:vscode"
+    },
+    "permissions": {
+        "default": {
+            "all": true
+        },
+        "dev": {
+            "read": [
+                "./deno.json"
+            ],
+            "env": true,
+            "run": {
+                "allow": [
+                    "git"
+                ]
+            }
+        },
+        "prod": {
+            "read": [
+                "./deno.json"
+            ],
+            "env": true,
+            "run": {
+                "allow": [
+                    "git"
+                ]
+            }
+        }
+    },
+    "allowScripts": false,
+    "compilerOptions": {
+        "lib": [
+            "esnext",
+            "dom",
+            "dom.iterable",
+            "dom.asynciterable",
+            "deno.window",
+            "deno.unstable",
+            "deno.worker",
+            "deno.ns",
+            "deno"
+        ],
+        "types": [
+            "@types/node",
+            "@types/react",
+            "@types/react-dom",
+            "@types/chrome",
+            "@types/vscode"
+        ],
+        "jsx": "react-jsx",
+        "jsxImportSource": "react",
+        "jsxImportSourceTypes": "@types/react"
+    }
+}

@@ -42,7 +42,7 @@ ethos-log = { path = "./packages/log" }
 ethos-dev-service = { path = "./services/dev" }
 
 uuid = { version = "1.17", default-features = false }
-url = { version = "*", default-features = false }
+url = { version = "2.5", default-features = false }
 smallvec = { version = "1.13", default-features = false }
 once_cell = { version = "1.19", default-features = false }
 derive_more = { version = "2.0", default-features = false }
@@ -52,7 +52,8 @@ serde = { version = "1.0", default-features = false }
 hcl-rs = { version = "0.19", default-features = false }
 hcl-edit = { version = "0.9", default-features = false }
 
-hashbrown = { version = "0.15", default-features = false }
+hashbrown = { version = "0.16", default-features = false }
+dashmap = { version = "*", default-features = false }
 foldhash = { version = "0.2", default-features = false }
 ahash = { version = "0.8", default-features = false }
 
@@ -63,10 +64,13 @@ tracing = { version = "0.1", default-features = false }
 tracing-subscriber = { version = "0.3", default-features = false }
 tracy-client = { version = "0.18", default-features = false }
 
+tempfile = { version = "3.27", default-features = false }
+sys_traits = { version = "0.1", default-features = false }
+
 eyre = { version = "0.6", default-features = false }
 anyhow = { version = "1.0", default-features = false }
 clap = { version = "4.5", default-features = false }
-criterion = { version = "0.7", default-features = false }
+criterion = { version = "0.8", default-features = false }
 oops = { git = "https://github.com/open-dx/oops-rs", default-features = false, features = ["macros"] }
 
 futures = { version = "0.3", default-features = false }
@@ -74,6 +78,8 @@ tower = { version = "0.5", default-features = false }
 tower-service = { version = "0.3.3", default-features = false }
 tokio = { version = "1", default-features = false }
 axum = { version = "0.8", default-features = false }
+
+slab = { version = "0.4" }
 
 bindgen = { version = "0.72", default-features = false }
 cbindgen = { version = "0.29", default-features = false }
@@ -83,9 +89,11 @@ proc-macro2 = { version = "1.0", default-features = false }
 quote = { version = "1.0", default-features = false }
 syn = { version = "2.0", default-features = false }
 
-deno_core = { version = "0.355", default-features = false }
-swc = { version = "36.0", default-features = false }
-swc_core = { version = "37.0", default-features = false }
+deno_core = { version = "0.397", default-features = false }
+deno_runtime = { version = "0.252", default-features = false }
+deno_resolver = { version = "0.75", default-features = false }
+swc = { version = "60.0", default-features = false }
+swc_core = { version = "62.0", default-features = false }
 # swc_malloc = { version = "1.2", features = ["hashbrown"] }
 # swc_ecma_ast = { version = "15.0", default-features = false }
 # swc_ecma_quote = { version = "23.0", default-features = false }

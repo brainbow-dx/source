@@ -1,14 +1,15 @@
 #!/usr/bin/env deno
+// deno-lint-ignore-file no-explicit-any
 import { join, resolve, normalize, basename, globToRegExp, parse as parsePath } from "@std/path";
 import { exists, walk, WalkOptions } from "@std/fs";
 
-import { $ } from "@brainbow/ethos/dev/shell";
-import * as sh from "@brainbow/ethos/dev/shell";
+import { $ } from "@ethos/dev/shell";
+import * as sh from "@ethos/dev/shell";
 
-import * as flutter from "@brainbow/ethos-flutter";
-import { FlutterProject } from "@brainbow/ethos-flutter";
+import { copyFiles } from "@ethos/dev/fs";
 
-import { copyFiles } from "@brainbow/ethos/dev/fs";
+import * as flutter from "@ethos/flutter";
+import { FlutterProject } from "@ethos/flutter";
 
 // TODO: Move this to ethos/os.
 function isValidPath(relPath: string, include?: RegExp[], exclude?: RegExp[]) {
@@ -137,7 +138,7 @@ if (args.rust === true) {
             // match: include,
             // skip: exclude,
         },
-        onCopy(_content, relPath) {
+        onCopy(_content: any, relPath: string) {
             if (!isValidPath(relPath, include, exclude)) {
                 console.debug($.dim(`x skip ${relPath}`));
                 return false;
@@ -157,7 +158,7 @@ if (args.rust === true) {
                 }
             }
         },
-        onMakeDir(relPath) {
+        onMakeDir(relPath: any) {
             if (args.verbose) {
                 console.debug($.dim(`  /`), `make ${relPath}`);
             }
@@ -208,7 +209,7 @@ if (args.deno === true) {
         walk: {
             exts,
         },
-        onCopy(_content, relPath) {
+        onCopy(_content: any, relPath: string) {
             if (!isValidPath(relPath, include, exclude)) {
                 console.debug($.dim(`x skip ${relPath}`));
                 return false;
@@ -224,7 +225,7 @@ if (args.deno === true) {
                 }
             }
         },
-        onMakeDir(relPath) {
+        onMakeDir(relPath: any) {
             if (args.verbose) {
                 console.debug($.dim(`  /`), `make ${relPath}`);
             }
@@ -288,7 +289,7 @@ if (args.flutter === true) {
         walk: {
             exts,
         },
-        onCopy(content, relPath) {
+        onCopy(content: any, relPath: string) {
             if (!isValidPath(relPath, include, exclude)) {
                 console.debug($.dim(`Skipping ${relPath}`));
                 return false;
@@ -303,7 +304,7 @@ if (args.flutter === true) {
                 }
             }
         },
-        onMakeDir(relPath) {
+        onMakeDir(relPath: any) {
             if (args.verbose) {
                 console.debug($.dim(`  /`), `make ${relPath}`);
             }

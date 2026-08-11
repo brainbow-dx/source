@@ -1,7 +1,9 @@
 {
-  "name": "@brainbow/ethos-nu",
-  "exports": {
-    ".": "./src/mod.ts",
-    "./generate": "./scripts/.generate.tsx"
-  }
+    "name": "@ethos/nu",
+    "version": "0.0.0-preview",
+    "license": "MIT",
+    "exports": {
+        ".": "./src/mod.ts",
+        "./generate": "./scripts/.generate.tsx"
+    }
 }

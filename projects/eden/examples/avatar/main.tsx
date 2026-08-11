@@ -5,11 +5,11 @@ import { join, resolve } from "@std/path";
 import { exists } from "@std/fs";
 import { serveDir } from "@std/http";
 
-import { $ } from "@brainbow/ethos/dev/shell";
-import * as sh from "@brainbow/ethos/dev/shell";
-import type { Args } from "@brainbow/ethos/dev/shell";
+import { $ } from "@ethos/dev/shell";
+import * as sh from "@ethos/dev/shell";
+import type { Args } from "@ethos/dev/shell";
 
-import { TerminalSurface } from "@brainbow/slate/terminal";
+import { TerminalSurface } from "@escher/terminal";
 
 //---
 const args = sh.parse<Args>(Deno.args);

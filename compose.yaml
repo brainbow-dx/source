@@ -1,0 +1,39 @@
+services:
+  dev:
+    build:
+      dockerfile: Dockerfile
+      context: .
+    stdin_open: true
+    tty: true
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      # TODO: https://github.com/coder/code-server/blob/main/docs/FAQ.md#can-i-store-my-password-hashed
+      # - PASSWORD=password
+      # - HASHED_PASSWORD=
+      # - SUDO_PASSWORD=password
+      # - SUDO_PASSWORD_HASH=
+      - PROXY_DOMAIN=dev.brainbow.localhost
+      - DEFAULT_WORKSPACE=/workspace
+      - PWA_APPNAME=brainbow-dev
+    volumes:
+      - .:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - 3000:3000
+    restart: unless-stopped
+
+include:
+  # TODO: Move these into the dev container?
+  - tools/code/compose.yaml
+  - tools/data/compose.yaml
+  - tools/design/compose.yaml
+  - tools/monitor/compose.yaml
+  - tools/workflow/compose.yaml
+  
+networks:
+  default:
+    # You can configure custom networks here if needed.
+    # For a basic setup, the default bridge network is usually sufficient.
+    # driver: bridge

@@ -1,4 +1,5 @@
-import denoConfig from "../deno.json" with { type: "json" };
+import denoConfigText from "../deno.jsonc" with { type: "text" };
+const denoConfig = JSON.parse(denoConfigText);
 
 export const VERSION = denoConfig.version;
 

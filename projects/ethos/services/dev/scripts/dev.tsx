@@ -1,29 +1,84 @@
 #!/usr/bin/deno
+// deno-lint-ignore-file
+import { globToRegExp, join, parse, ParsedPath, resolve } from "@std/path";
+import { debounce } from "@std/async/debounce";
 
-import { resolve } from "@std/path";
+import { $, ManagedProcess } from "#src/shell.ts";
+import * as sh from "#src/shell.ts";
+import type { Args } from "#src/shell.ts";
 
-import { $ } from "@brainbow/ethos/dev/shell";
-import { parse, type Args } from "@brainbow/ethos/dev/shell";
+// Note: For the moment, if this stops, it won't try to restart and you'll
+// likely have an orphan process. Use `lsof -i :3000` and `kill -9 [pid]`.
 
-const args = parse<Args>(Deno.args);
+// TODO: Listen for Exit Code 127 and also restart.
+// TODO: Attempt to restart when the service fails for any reason.
 
-args.workdir ??= resolve(import.meta.dirname!, "..");
-args.target ??= "windows";
+import type { ReactNode } from "react";
+
+import { serveDev } from "#src/server.ts";
+
+// import { TerminalSurface } from "@escher/terminal";
+import { Workspace } from "@ethos/sdk/workspace";
+
+//---
+interface DevArgs extends Args {
+    cwd?: string,
+    workspace?: string,
+}
+
+const args = sh.parse<DevArgs>(Deno.args);
+
+args.cwd ??= resolve(import.meta.dirname!, "..");
+args.server ??= true;
 args.generate ??= true;
+args.build ??= true;
+args.run ??= true;
+args.clean ??= false;
 
-Deno.chdir(args.workdir);
+Deno.chdir(args.cwd);
 
-if (true === args.generate) {
-    // TODO: Audit:
-    //  - Is this necessary?
-    //  - Can we make it faster?
-    // TODO: Probably better to move this to a build.ts, anyway.
-    await $`echo 'TODO: Generate Command'`;
+const composeCommand = $`docker compose up --build --profiles dev --watch`;
+const composeProcess = new ManagedProcess(composeCommand, {
+    // delay: 1000,
+    timeout: 10000,
+});
+
+// const terminal = new TerminalSurface(Deno.stdout);
+
+//---
+if (args.generate === true) {
+    // await $`deno bundle`;
 }
 
-if (false === args.target.includes(["windows"])) {
-    console.error(`Unknown target: ${args.target}`);
-    Deno.exit(1);
+if (args.build) {
+    await $`deno task build --reset --generate`;
 }
 
-await $`cargo run`;
+if (args.server) {
+    console.debug(`Running Docker Compose`);
+    await composeProcess.run();
+}
+
+if (args.run) {
+    const workspace = new Workspace(args.cwd);
+    
+    const devProcess = new ManagedProcess($`cargo run --example serve --features dev`, {
+        delay: 100,
+        timeout: 5000,
+    });
+    
+    const ignorePatterns = globToRegExp("**/.output/**");
+    
+    // await devProcess.run();
+    
+    await serveDev(workspace, devProcess, {
+        outputDir: args.outdir,
+        onFsEvent(_) {
+            try {
+                // TODO
+            } catch (error: unknown) {
+                console.error(`Dev build failed!`, error);
+            }
+        },
+    })
+}

@@ -1,0 +1,6 @@
+{
+    "name": "@escher/moodring",
+    "exports": {
+        ".": "./src/mod.ts"
+    }
+}

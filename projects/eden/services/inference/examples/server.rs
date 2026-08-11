@@ -22,7 +22,7 @@ pub fn main() -> Result<ExitCode> {
         let venv_path = WideCString::from_str(venv_path.to_string_lossy()).expect("wide cstring");
 
         #[allow(deprecated)]
-        Py_SetPythonHome(venv_path.as_ptr());
+        Py_SetPythonHome(venv_path.as_ptr() as *const i32);
     }
 
     pyo3::prepare_freethreaded_python();

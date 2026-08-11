@@ -1,0 +1,53 @@
+stooper.localhost {
+	tls internal
+	redir https://www.stooper.localhost{uri}
+}
+
+www.stooper.localhost {
+	tls internal
+	reverse_proxy localhost:8000
+}
+
+api.stooper.localhost {
+	tls internal
+	reverse_proxy localhost:8100
+}
+
+dev.stooper.localhost {
+	tls internal
+	reverse_proxy localhost:3615
+}
+
+escher.stooper.localhost {
+	tls internal
+	reverse_proxy localhost:3615
+}
+
+workspace.stooper.localhost {
+	tls internal
+	reverse_proxy localhost:3615
+}
+
+mobile.stooper.localhost {
+	tls internal
+
+	# TODO: root * ${STOOPER_PROJECT_ROOT}/apps/mobile/build/web
+	root * /Users/lorren/Dev/Brainbow/projects/stooper/apps/mobile/build/web
+
+	@gzFiles path *.gz
+
+	header @gzFiles Content-Encoding gzip
+
+	header **.js.gz Content-Type application/javascript
+	header **.wasm.gz Content-Type application/wasm
+	header **.data.gz Content-Type application/octet-stream
+
+	file_server {
+		precompressed gzip
+
+		# browse /Users/lorren/Dev/Aby/spec/web/dir-listing.html
+		browse {
+			reveal_symlinks
+		}
+	}
+}

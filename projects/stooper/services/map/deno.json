@@ -1,5 +1,5 @@
 {
-    "name": "@brainbow/stooper-map-service",
+    "name": "@stooper/map-service",
     "exports": {
         ".": "./src/mod.ts"
     }

@@ -2,8 +2,8 @@
 
 import { resolve } from "@std/path";
 
-import { $ } from "@brainbow/ethos/dev";
-import { parse } from "@brainbow/ethos/dev";
+import { $ } from "#src/shell.ts";
+import { parse } from "#src/shell.ts";
 
 const args = parse(Deno.args);
 

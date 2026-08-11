@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package com.web.sketch.escher.brainbow;
+
+//---
+service ConfigService {
+    rpc Get(GetConfigRequest) returns (GetConfigResponse);
+}
+
+//---
+message GetConfigRequest {
+    optional string filter = 0;
+}
+
+message GetConfigResponse {
+    //..
+}

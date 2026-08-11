@@ -1,5 +1,5 @@
 {
-    "name": "@brainbow/service-template",
+    "name": "@templates/service",
     "tasks": {
         "init": "deno run ./scripts/init",
         "generate": "deno run ./scripts/.init.tsx"

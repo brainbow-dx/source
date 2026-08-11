@@ -1,11 +1,34 @@
 {
-    "name": "@brainbow/stooper",
+    "name": "@stooper/sdk",
     "version": "0.0.0",
+    "exclude": [
+        "**/.git",
+        "**/.output",
+        "**/node_modules"
+    ],
     "exports": {
         ".": "./src/mod.ts"
     },
     "imports": {
+        "#assets/": "./assets/",
+        "#src/": "./src/",
+        "@ethos/sdk": "../ethos",
+        "@atlas/sdk": "../atlas",
+        "@escher/sdk": "../escher",
+        "@eden/sdk": "../eden",
         "@std/path": "jsr:@std/path",
+        "@std/uuid": "jsr:@std/uuid",
         "dzx": "https://deno.land/x/dzx@0.4.0/mod.ts"
-    }
+    },
+    "workspace": [
+        "./apps/mobile",
+        "./packages/core",
+        "./services/auth",
+        "./services/content",
+        "./services/dev",
+        "./services/feed",
+        "./services/location",
+        "./services/map",
+        "./services/monitor",
+    ]
 }

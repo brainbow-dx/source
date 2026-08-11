@@ -1,0 +1,147 @@
+{
+    "name": "escher-vscode",
+    "displayName": "Escher",
+    "publisher": "brainbow-dx",
+    "version": "0.0.0",
+    "description": "Your package.",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/brainbow-dx/escher.git"
+    },
+    "bugs": {
+        "url": "https://github.com/brainbow-dx/escher/issues"
+    },
+    "engines": {
+        "vscode": "^1.105.0"
+    },
+    "categories": [
+        "Other"
+    ],
+    "scripts": {
+        "vscode:prepublish": "echo 'TODO'",
+        "compile": "tsc --jsx react-jsx -p ./",
+        "watch": "tsc -watch --jsx react-jsx -p ./",
+        "package": "npx --yes @vscode/vsce package",
+        "lint": "eslint src",
+        "test": "vscode-test"
+    },
+    "type": "module",
+    "activationEvents": [],
+    "contributes": {
+        "commands": [
+            {
+                "command": "escher-vscode.helloWorld",
+                "title": "Hello World"
+            }
+        ],
+        "menus": {
+            "view/title": [
+                {
+                    "command": "escher-vscode.helloWorld",
+                    "when": "view == escher-pad",
+                    "group": "navigation"
+                },
+                {
+                    "command": "escher-vscode.helloWorld",
+                    "when": "view == escher-pad",
+                    "group": "navigation@1"
+                }
+            ]
+        },
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "id": "escher-nav",
+                    "title": "Sketch",
+                    "icon": "assets/web/explorer/activity-icon.svg"
+                }
+            ],
+            "panel": [
+                {
+                    "id": "escher-book",
+                    "title": "Sketch",
+                    "icon": "assets/web/explorer/activity-icon.svg"
+                }
+            ]
+        },
+        "views": {
+            "escher-nav": [
+                {
+                    "id": "escher-inspector",
+                    "name": "Sketch Inspector",
+                    "type": "webview"
+                }
+            ],
+            "escher-book": [
+                {
+                    "id": "escher-pad",
+                    "name": "Sketch Pad",
+                    "type": "webview"
+                }
+            ]
+        },
+        "customEditors": [
+            {
+                "viewType": "escher-editor",
+                "displayName": "Sketch Editor",
+                "priority": "default",
+                "selector": [
+                    {
+                        "filenamePattern": "*.sketch.svg"
+                    }
+                ]
+            },
+            {
+                "viewType": "escher-markup-editor",
+                "displayName": "Markup Editor",
+                "priority": "default",
+                "selector": [
+                    {
+                        "filenamePattern": "*.html"
+                    },
+                    {
+                        "filenamePattern": "*.uxml"
+                    }
+                ]
+            },
+            {
+                "viewType": "escher-svg-editor",
+                "displayName": "SVG Editor",
+                "priority": "default",
+                "selector": [
+                    {
+                        "filenamePattern": "*.svg"
+                    }
+                ]
+            },
+            {
+                "viewType": "escher-markdown-editor",
+                "displayName": "Markdown Editor",
+                "priority": "default",
+                "selector": [
+                    {
+                        "filenamePattern": "*.md"
+                    },
+                    {
+                        "filenamePattern": "*.mdx"
+                    },
+                    {
+                        "filenamePattern": "*.mdbook"
+                    }
+                ]
+            }
+        ]
+    },
+    "devDependencies": {
+        "@types/vscode": "^1.105.0",
+        "@types/mocha": "^10.0.10",
+        "@types/node": "22.x",
+        "@typescript-eslint/eslint-plugin": "^8.45.0",
+        "@typescript-eslint/parser": "^8.45.0",
+        "eslint": "^9.36.0",
+        "typescript": "^5.9.3",
+        "@vscode/test-cli": "^0.0.11",
+        "@vscode/test-electron": "^2.5.2"
+    }
+}

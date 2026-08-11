@@ -1,0 +1,12 @@
+{
+    "name": "@escher/sdk",
+    "version": "0.0.0-preview",
+    "license": "MIT",
+    "exports": {
+        ".": "./src/mod.ts",
+        "./dev": "./src/dev.ts",
+        "./terminal": "./src/terminal.ts",
+        "./types": "./src/types.ts",
+        "./jsx-runtime": "./src/runtime.ts"
+    }
+}

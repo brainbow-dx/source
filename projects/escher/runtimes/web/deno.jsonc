@@ -1,0 +1,29 @@
+{
+    "name": "@escher/web",
+    "version": "0.0.0-preview",
+    "license": "MIT",
+    "tasks": {
+        "build": "deno run -A ./scripts/build.tsx",
+        "dev": "deno run -A --env-file ./scripts/dev.tsx",
+        "clean": "deno clean && rm -rf .output"
+    },
+    "exports": {
+        ".": "./src/mod.ts",
+        "./react": "./src/external/react/mod.ts",
+        "./react/jsx": "./src/external/react/jsx/mod.ts",
+        "./react/jsx/runtime": "./src/external/react/jsx/runtime.ts",
+        "./react/jsx/dev-runtime": "./src/external/react/jsx/dev-runtime.ts",
+        "./components/editor": "./src/components/editor/mod.ts",
+        "./components/editor/markdown": "./src/components/editor/resource/markdown/mod.ts",
+        "./components/editor/markup": "./src/components/editor/resource/markup/mod.ts",
+        "./components/workspace": "./src/components/workspace/mod.ts",
+        "./stores/scene": "./src/stores/scene/mod.ts",
+        "./resource": "./src/resource.ts",
+        "./utils": "./src/utils.ts"
+    },
+    "imports": {
+        "#assets/": "./assets/",
+        "#spec/": "./spec/",
+        "#src/": "./src/"
+    }
+}

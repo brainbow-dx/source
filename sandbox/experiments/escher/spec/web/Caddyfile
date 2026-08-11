@@ -1,0 +1,29 @@
+escher.brainbow.localhost {
+	tls internal
+
+	# root * /Users/lorren/Dev/Brainbow/projects/escher/services/sketch/.output/pkg/web
+
+	# # @gzFiles path *.gz
+	# # header @gzFiles Content-Encoding gzip
+	# header *.gz Content-Encoding gzip
+	# header *.js.gz Content-Type application/javascript
+	# header *.wasm.gz Content-Type application/wasm
+	# header *.data.gz Content-Type application/octet-stream
+
+	# @static file {
+	# 	try_files {path} {path}.html {path}/index.html
+	# }
+
+	# handle @static {
+	# 	file_server {
+	# 		precompressed gzip
+	# 		browse {
+	# 			reveal_symlinks
+	# 		}
+	# 	}
+	# }
+
+	handle {
+		reverse_proxy 127.0.0.1:3615
+	}
+}

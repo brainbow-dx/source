@@ -1,0 +1,16 @@
+[package]
+name = "escher-macros"
+version = "0.0.0-pre"
+edition = "2024"
+
+[lib]
+proc-macro = true
+
+[features]
+dev = []
+verbose = []
+
+[dependencies]
+proc-macro2 = { workspace = true, features = ["default"] }
+quote = { workspace = true, features = ["default"] }
+syn = { workspace = true, features = ["default"] }

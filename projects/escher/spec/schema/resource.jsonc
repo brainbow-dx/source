@@ -1,0 +1,31 @@
+{
+    "lexicon": 1,
+    "id": "localhost.brainbow.escher.scene",
+    "defs": {
+        "main": {
+            "type": "record",
+            // "name": "Escher.Scene",
+            "description": "An Escher Scene",
+            "record": {
+                "type": "object",
+                "required": [
+                    "id",
+                    "createdAt"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "datetime"
+                    },
+                    // "createdAt": {
+                    //     "type": "string",
+                    //     "format": "datetime"
+                    // }
+                }
+            }
+        }
+    }
+}

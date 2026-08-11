@@ -1,0 +1,77 @@
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Logs and temporary files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Node.js / JavaScript
+node_modules/
+pnp.*
+jspm_packages/
+dist/
+build/
+tmp/
+cache/
+coverage/
+.docs/_site/
+package-lock.json
+yarn.lock
+
+# IDE and editor files
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Environment variables
+.env
+*.env
+*.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pytest_cache/
+dist/
+build/
+eggs/
+*.egg-info/
+.installed.cfg
+pip-selfcheck.json
+
+# Java
+target/
+*.classpath
+*.project
+*.settings/
+
+# Go
+bin/
+pkg/
+vendor/
+
+# Rust
+Cargo.lock
+**/target
+
+# C/C++
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.dylib
+*.pdb
+
+# Docker
+.dockerignore
+docker-compose.yml
+Dockerfile
+*.tmp
+

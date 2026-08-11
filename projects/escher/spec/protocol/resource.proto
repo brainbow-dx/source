@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package dev.brainbow.escher.sketch;
+
+service ResourceService {
+    rpc GetResource(GetResourceRequest) returns (GetResourceResponse);
+    rpc SaveResource(SaveResourceRequest) returns (SaveResourceResponse);
+}
+
+message GetResourceRequest {
+    //..
+}
+
+message GetResourceResponse {
+    //..
+}
+
+message SaveResourceRequest {
+    //..
+}
+
+message SaveResourceResponse {
+    //..
+}
+
+message SavedResourceEvent {
+    //..
+}

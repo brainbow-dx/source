@@ -1,7 +1,9 @@
 {
-  "name": "@brainbow/ethos-deno",
-  "exports": {
-    ".": "./src/mod.ts",
-    "./generate": "./scripts/.generate.tsx"
-  }
+    "name": "@ethos/deno",
+    "version": "0.0.0-preview",
+    "license": "MIT",
+    "exports": {
+        ".": "./src/mod.ts",
+        "./generate": "./scripts/.generate.tsx"
+    }
 }

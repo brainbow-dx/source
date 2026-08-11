@@ -1,6 +1,0 @@
-{
-    "name": "@brainbow/slate-desktop",
-    "exports": {
-        ".": "./src/mod.ts"
-    }
-}

@@ -35,7 +35,7 @@ class _FilterOverlayDialogState extends State<FilterOverlayDialog> {
               ],
             ),
             DropdownButtonFormField<String>(
-              value: _selectedCategory,
+              initialValue: _selectedCategory,
               hint: const Text('Select Category'),
               items: _categories.map((category) {
                 return DropdownMenuItem(

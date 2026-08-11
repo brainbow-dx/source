@@ -2,13 +2,13 @@
 import { join, resolve, normalize, basename, globToRegExp, parse as parsePath } from "@std/path";
 import { exists, walk, WalkOptions } from "@std/fs";
 
-import { $ } from "@brainbow/ethos/dev/shell";
-import * as sh from "@brainbow/ethos/dev/shell";
+import { $ } from "@ethos/dev/shell";
+import * as sh from "@ethos/dev/shell";
 
-import * as flutter from "@brainbow/ethos-flutter";
-import { FlutterProject } from "@brainbow/ethos-flutter";
+import * as flutter from "@ethos/flutter";
+import { FlutterProject } from "@ethos/flutter";
 
-import { copyFiles } from "@brainbow/ethos/dev/fs";
+import { copyFiles } from "@ethos/dev/fs";
 
 // TODO: Move this to ethos/os.
 function isValidPath(relPath: string, include?: RegExp[], exclude?: RegExp[]) {
@@ -55,8 +55,7 @@ args.run ??= false;
 
 //---
 export const DEFAULT_PLATFORMS = "windows,mac,linux,ios,android,web";
-
-export const ETHOS_WORKSPACE_DIR = resolve("C:/Brainbow");
+export const ETHOS_WORKSPACE_DIR = resolve("/Users/lorren/Dev/Brainbow");
 
 export const OUT_DIR = resolve(Deno.cwd(), args._[0]?.toString() ?? ".");
 
@@ -187,6 +186,7 @@ if (args.deno === true) {
     const denoWorkspaceConfigPath = resolve(ETHOS_WORKSPACE_DIR, "deno.json");
     const denoWorkspaceConfigContents = (await Deno.readTextFile(denoWorkspaceConfigPath))
         .replace(/\\"|"(?:\\"|[^"])*"|(\/\/.*|\/\*[\s\S]*?\*\/)/g, (m, g) => g ? "" : m);
+    // console.debug(`Workspace config: ${denoWorkspaceConfigPath}`, denoWorkspaceConfigContents);
     const denoWorkspaceConfig = JSON.parse(denoWorkspaceConfigContents);
 
     console.debug($.brightBlue(`Deno`), denoWorkspaceConfigPath);

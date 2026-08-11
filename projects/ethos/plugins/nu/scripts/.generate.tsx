@@ -1,15 +1,16 @@
 #!/usr/bin/env deno
+// deno-lint-ignore-file no-explicit-any no-unused-vars verbatim-module-syntax
 import { join, resolve, normalize, dirname, basename } from "@std/path";
 import * as path from "@std/path";
 import { exists, existsSync, walk, WalkOptions } from "@std/fs";
 
-import { $ } from "@brainbow/ethos/dev/shell";
-import * as sh from "@brainbow/ethos/dev/shell";
+import { $ } from "@ethos/dev/shell";
+import * as sh from "@ethos/dev/shell";
 
-import * as flutter from "@brainbow/ethos-flutter";
-import { FlutterProject } from "@brainbow/ethos-flutter";
+import * as flutter from "@ethos/flutter";
+import { FlutterProject } from "@ethos/flutter";
 
-import { copyFiles } from "@brainbow/ethos/dev/fs";
+import { copyFiles } from "@ethos/dev/fs";
 
 interface Args extends sh.Args {
     rust?: boolean,
@@ -34,11 +35,11 @@ args.inspect ??= false;
 args.run ??= false;
 
 //---
-export const WORKSPACE_DIR = resolve("C:/Brainbow");
+export const WORKSPACE_DIR: string = resolve("C:/Brainbow");
 
-export const DEFAULT_PLATFORMS = "windows,mac,linux,ios,android,web";
+export const DEFAULT_PLATFORMS: string = "windows,mac,linux,ios,android,web";
 
-export const OUT_DIR = resolve(Deno.cwd(), args._[0]?.toString() ?? ".");
+export const OUT_DIR: string = resolve(Deno.cwd(), args._[0]?.toString() ?? ".");
 
 if (args.verbose === true) {
     console.debug($.bold.magenta(`Args:`), args);
@@ -104,12 +105,12 @@ if (args.rust === true) {
         walk: {
             exts: ["toml", "rs"],
         },
-        onMakeDir(relPath) {
+        onMakeDir(relPath: any) {
             if (args.verbose) {
                 console.debug(`Creating directory @ '${relPath}'`);
             }
         },
-        onCopy(content, relPath) {
+        onCopy(content: any, relPath: string) {
             let isRustFile;
 
             for (const pattern of match) {
@@ -180,12 +181,12 @@ if (args.deno === true) {
         walk: {
             exts: ["json", "jsonc", "ts", "tsx", "js", "jsx"],
         },
-        onMakeDir(relPath) {
+        onMakeDir(relPath: any) {
             if (args.verbose) {
                 console.debug(`Creating directory @ '${relPath}'`);
             }
         },
-        onCopy(content, relPath) {
+        onCopy(content: any, relPath: string) {
             let isDenoFile;
 
             for (const pattern of match) {
@@ -261,12 +262,12 @@ if (args.flutter === true) {
         walk: {
             exts: ["yaml", "dart"],
         },
-        onMakeDir(relPath) {
+        onMakeDir(relPath: any) {
             if (args.verbose) {
                 console.debug(`Creating directory @ '${relPath}'`);
             }
         },
-        onCopy(content, relPath) {
+        onCopy(content: any, relPath: string) {
             let isFlutterFile;
 
             for (const pattern of match) {

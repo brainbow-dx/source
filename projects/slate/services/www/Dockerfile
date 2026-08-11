@@ -1,1 +1,0 @@
-FROM crccheck/hello-world

@@ -1,5 +1,5 @@
 {
-    "name": "@brainbow/eden-terminal",
+    "name": "@eden/terminal",
     "exports": {
         ".": "./src/mod.ts"
     }

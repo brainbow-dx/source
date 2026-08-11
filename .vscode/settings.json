@@ -12,5 +12,8 @@
         "**/.DS_Store": true,
         "**/Thumbs.db": true,
         "./projects": true
+    },
+    "files.associations": {
+        "*.ethos": "hcl"
     }
 }

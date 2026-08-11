@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package dev.brainbow.escher.sketch.user;
+
+service UserService {
+    rpc GetUsers(GetUsersRequest) returns (GetUsersResponse);
+    rpc GetUser(GetUserRequest) returns (GetUserResponse);
+}
+
+message CreateUserRequest {
+    //..
+}
+
+message CreateUserResponse {
+    //..
+}
+
+message UpdatedUserRequest {
+    //..
+}
+
+message UpdatedUserResult {
+    //..
+}
+
+message GetUserRequest {
+    //..
+}
+
+message GetUserResponse {
+    //..
+}
+
+message GetUsersRequest {
+    //..
+}
+
+message GetUsersResponse {
+    //..
+}

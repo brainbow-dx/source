@@ -1,0 +1,29 @@
+moodring.localhost {
+	tls internal
+	redir https://www.moodring.localhost{uri}
+}
+
+www.moodring.localhost {
+	tls internal
+	reverse_proxy 127.0.0.1:8000
+}
+
+auth.moodring.localhost {
+	tls internal
+	reverse_proxy 127.0.0.1:9000
+}
+
+pds.moodring.localhost {
+	tls internal
+	reverse_proxy 127.0.0.1:9001
+}
+
+admin.moodring.localhost {
+	tls internal
+	reverse_proxy 127.0.0.1:9999
+}
+
+*.moodring.localhost {
+	tls internal
+	reverse_proxy 127.0.0.1:3615
+}

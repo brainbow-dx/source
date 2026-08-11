@@ -1,0 +1,111 @@
+{
+    "tasks": {
+        "build": "deno run -A --unstable-bundle ./scripts/build.tsx",
+        "clean": "deno clean; deno cache -r --allow-import .",
+        "dev": "deno run -A --unstable-ffi --unstable-raw-imports scripts/dev.tsx",
+        "install": "deno run -A --unstable-ffi --unstable-raw-imports scripts/install.tsx",
+        "migrate": "deno run -P scripts/migrate.tsx"
+    },
+    "exports": {
+        ".": "./src/mod.ts",
+        "./terminal": "./src/terminal.ts",
+        "./parse/markup": "./src/parse/markup.ts",
+        "./parse/markdown": "./src/parse/markdown.ts"
+    },
+    "exclude": [
+        "**/.git",
+        "**/.output",
+        "**/.scratch",
+        "**/node_modules"
+    ],
+    "imports": {
+        "#assets/": "./assets/",
+        "#parse/": "./src/parse/",
+        "#pkg/": "./.output/pkg/",
+        "#src/": "./src/",
+        "@deno/dnt": "jsr:@deno/dnt@0.43.1",
+        "@excalidraw/excalidraw": "npm:@excalidraw/excalidraw@0.18.1",
+        "@excalidraw/excalidraw/context": "npm:@excalidraw/excalidraw@0.18.1/context",
+        "@excalidraw/excalidraw/index.css": "npm:@excalidraw/excalidraw@0.18.1/index.css",
+        "@libs/xml": "jsr:@libs/xml@8.0.0",
+        "@radix-ui/themes": "npm:@radix-ui/themes@3.3.0",
+        "@radix-ui/react-icons": "npm:@radix-ui/react-icons@1.3.2",
+        "@std/async/debounce": "jsr:@std/async@1.5.0/debounce",
+        "@std/fs": "jsr:@std/fs@1.0.24",
+        "@std/path": "jsr:@std/path@1.1.6",
+        "@std/uuid": "jsr:@std/uuid@1.1.1",
+        "@std/async": "jsr:@std/async@1.5.0",
+        "@types/chrome": "npm:@types/chrome@0.2.5",
+        "@types/react": "npm:@types/react@19.2.18",
+        "@types/react-dom": "npm:@types/react-dom@19.2.4",
+        "@types/vscode": "npm:@types/vscode@1.125.0",
+        "@uidotdev/usehooks": "npm:@uidotdev/usehooks@2.4.1",
+        "caddy": "npm:@accelerated-software-development/caddy-api-client@0.7.1/caddy",
+        "react": "npm:react@19.2.8",
+        "react/jsx-runtime": "npm:react@19.2.8/jsx-runtime",
+        "react/jsx-dev-runtime": "npm:react@19.2.8/jsx-dev-runtime",
+        "react-dom": "npm:react-dom@19.2.8",
+        "react-dom/client": "npm:react-dom@19.2.8/client",
+        "react-dom/server": "npm:react-dom@19.2.8/server",
+        "react-router-dom": "npm:react-router-dom@7.18.2",
+        "react-code-blocks": "npm:@react-code-blocks",
+        "vscode": "npm:vscode@1.1.37"
+    },
+    "links": [
+        // TODO: Remove this when we get all
+        // of them published to registries.
+        "../ethos"
+    ],
+    "workspace": [
+        "./apps/hudd",
+        "./apps/desktop",
+        "./packages/core",
+        "./packages/dev",
+        "./packages/jsx",
+        "./packages/sdk",
+        "./packages/syn",
+        "./runtimes/bevy",
+        "./runtimes/terminal",
+        "./runtimes/unity",
+        "./runtimes/unreal",
+        "./runtimes/os",
+        "./runtimes/web",
+        "./extensions/blender",
+        "./extensions/chrome",
+        "./extensions/penpot",
+        "./extensions/vscode"
+    ],
+    // "permissions": {
+    //     "default": {
+    //         // TODO: Fix this ..
+    //         "all": true
+    //     }
+    // },
+    // "unstable": [
+    //     "broadcast-channel",
+    //     "ffi",
+    //     "raw-imports",
+    //     "webgpu"
+    // ],
+    "nodeModulesDir": "auto",
+    // TODO: Move this out to tsconfig.json?
+    "compilerOptions": {
+        "lib": [
+            "esnext",
+            "dom",
+            "dom.iterable",
+            "dom.asynciterable",
+            "deno.ns",
+            "deno.unstable",
+            "deno.worker"
+        ],
+        "types": [
+            "@types/react",
+            "@types/react-dom",
+            "@types/vscode"
+        ],
+        "jsx": "react-jsx",
+        "jsxImportSource": "react",
+        "jsxImportSourceTypes": "@types/react"
+    }
+}

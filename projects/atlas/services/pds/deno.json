@@ -1,0 +1,6 @@
+{
+    "name": "@atlas/pds",
+    "exports": {
+        ".": "./src/mod.ts"
+    }
+}

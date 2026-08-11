@@ -1,0 +1,11 @@
+{
+    "name": "@escher/dev",
+    "version": "0.0.0-preview",
+    "license": "MIT",
+    "exports": {
+        ".": "./src/mod.ts",
+        "./dev": "./src/dev.ts",
+        "./types": "./src/types.ts",
+        "./jsx-runtime": "./src/runtime.ts"
+    }
+}

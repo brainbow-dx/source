@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Edit</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#222222" />
+    <base href="/" />
+    <link rel="icon" href="/favicon.ico">
+    <!--TODO: Remove this in favor of a bundled npm build ..-->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@excalidraw/excalidraw/dist/prod/index.min.css" />
+    <link rel="stylesheet" href="./app.css" />
+    <style>
+        iframe#resource {
+            position: absolute;
+            inset: 0;
+            visibility: hidden;
+        }
+    </style>
+    <script>
+        window.EXCALIDRAW_ASSET_PATH = "https://cdn.jsdelivr.net/npm/@excalidraw/excalidraw/dist/prod/"; 
+        // window.SKETCH_ASSET_PATH = "/";
+    </script>
+    <script defer type="module" src="./editor.tsx"></script>
+</head>
+<body>
+    <div id="editor" class="surface container">
+        <!--TODO-->
+    </div>
+    <noscript>
+        <em>JS Req. *sad*</em>
+    </noscript>
+</body>
+</html>

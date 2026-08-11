@@ -1,6 +1,0 @@
-{
-    "name": "@brainbow/slate-penpot",
-    "exports": {
-        ".": "./src/mod.ts"
-    }
-}

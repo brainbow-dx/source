@@ -1,0 +1,6 @@
+{
+    "name": "@atlas/home",
+    "exports": {
+        ".": "./src/mod.ts"
+    }
+}

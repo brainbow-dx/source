@@ -1,5 +1,5 @@
 {
-  "name": "@brainbow/eden-hey",
+  "name": "@eden/hey",
   "exports": {
     ".": "./src/mod.ts",
     "./generate": "./scripts/.generate.tsx"

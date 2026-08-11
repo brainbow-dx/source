@@ -1,0 +1,43 @@
+{
+  "name": "@stooper/dev",
+  "tasks": {
+    "init": "deno run ./scripts/init",
+    "generate": "deno run ./scripts/.init.tsx"
+  },
+  "exclude": [
+    "**/.git",
+    "**/.output",
+    "**/node_modules"
+  ],
+  "exports": {
+    ".": "./src/mod.ts",
+    "./generate": "./scripts/.init.tsx"
+  },
+  "imports": {
+      "#assets/": "./assets/",
+      "#src/": "./src/",
+      "@std/path": "jsr:@std/path",
+      "@std/uuid": "jsr:@std/uuid",
+      "dzx": "https://deno.land/x/dzx@0.4.0/mod.ts"
+  },
+  "compilerOptions": {
+    "lib": [
+      "esnext",
+      "dom.asynciterable",
+      "dom.iterable",
+      "dom",
+      "deno.unstable",
+      "deno.worker",
+      "deno.ns",
+      "deno"
+    ],
+    "types": [
+      "@types/node",
+      "@types/vscode",
+      "@types/react-dom",
+      "@types/react"
+    ],
+    "jsx": "react-jsx",
+    "jsxImportSource": "react"
+  }
+}

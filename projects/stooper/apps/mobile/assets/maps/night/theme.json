@@ -24,7 +24,7 @@
         ]
     },
     {
-        "featureType": "administrative.locality",
+        "featureType": "administrative.localhostity",
         "elementType": "labels.text.fill",
         "stylers": [
             {

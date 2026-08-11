@@ -1,0 +1,19 @@
+eden.localhost {
+	redir https://www.eden.localhost{uri}
+}
+
+www.eden.localhost {
+	reverse_proxy 127.0.0.1:8000
+}
+
+api.eden.localhost {
+	reverse_proxy 127.0.0.1:8100
+}
+
+pds.eden.localhost {
+	reverse_proxy 127.0.0.1:9200
+}
+
+dev.eden.localhost {
+	reverse_proxy 127.0.0.1:3000
+}

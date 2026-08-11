@@ -1,0 +1,40 @@
+play.aby.localhost {
+	tls internal
+
+	root /Users/lorren/Dev/Aby/.output/web
+
+	reverse_proxy localhost:8080 {
+		handle_response status 404 {
+			# TODO: Pass?
+		}
+	}
+
+	handle_errors {
+		@404 {
+			expression {err.status} == 404
+		}
+
+		handle @404 {
+			rewrite * /404.html
+			# TODO: Pass?
+		}
+
+		handle {
+			rewrite * /error.html
+			# TODO: Pass?
+		}
+	}
+
+	file_server {
+		# encode gzip
+		precompressed gzip
+		header **.gz Content-Encoding gzip
+		header **.js.gz Content-Type application/javascript
+		header **.wasm.gz Content-Type application/wasm
+		header **.data.gz Content-Type application/octet-stream
+		# browse /Users/lorren/Dev/Aby/spec/web/dir-listing.html
+		browse ./dir-listing.html {
+			reveal_symlinks
+		}
+	}
+}

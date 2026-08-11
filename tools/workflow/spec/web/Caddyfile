@@ -1,0 +1,23 @@
+n8n.brainbow.localhost {
+	tls internal
+	reverse_proxy localhost:3904
+
+	# Define a matcher for your domain and its subdomains
+	@origin_allowed header_regexp Origin ^https?://([a-z0-9-]+\.)?brainbow\.localhost(:[0-9]+)?$
+
+	header @origin_allowed {
+		Access-Control-Allow-Origin "{header.Origin}"
+		Access-Control-Allow-Credentials "true"
+	}
+
+	header {
+		Content-Security-Policy "frame-ancestors 'self' brainbow.localhost *.brainbow.localhost"
+
+		Cross-Origin-Embedder-Policy "require-corp"
+		Cross-Origin-Opener-Policy "same-origin"
+
+		Cross-Origin-Embedder-Policy "require-corp"
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Resource-Policy "cross-origin"
+	}
+}

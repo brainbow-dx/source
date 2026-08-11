@@ -1,0 +1,22 @@
+{
+  "name": "@eden/sdk",
+  "exports": {
+    ".": "./src/mod.ts",
+    "./generate": "./scripts/generate.tsx"
+  },
+  // "links": [
+  //   "../atlas",
+  //   "../ethos",
+  //   "../escher",
+  //   "../stooper"
+  // ],
+  "workspace": [
+    "./apps/hey",
+    "./apps/imagen",
+    "./apps/terminal",
+    "./services/inference",
+    "./services/diffusion",
+    "./packages/core",
+    "./personas/a11y"
+  ]
+}

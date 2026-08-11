@@ -1,0 +1,477 @@
+/**
+ * Environment Setup
+ */
+:root {
+    font-family: 'Casscadia', 'Lucida Grande', sans-serif;
+}
+
+html, body {
+    width: 100vw;
+    height: 100vh;
+}
+
+/**
+ * SKETCH EDITOR
+ * Surface Container
+ */
+.surface {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+/**
+ * EXCALIDRAW
+ * Common Styles
+ */
+.surface .excalidraw {
+    --default-button-size: 1.8rem;
+    --default-icon-size: 1rem;
+    
+    --lg-button-size: 2rem;
+    --lg-icon-size: 1rem;
+    
+    --mobile-action-button-size: 1.6rem;
+    
+    --editor-container-padding: 1rem;
+    
+    --border-radius-md: 0.12rem;
+    --border-radius-lg: 0.12rem;
+    
+    --ui-font: Assistant, system-ui, BlinkMacSystemFont, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    
+    /*
+    .App-top-bar,
+    .App-bottom-bar,
+    .canvas-tools,
+    .layer-ui__wrapper > * {
+        zoom: 0.85;
+    }
+    */
+}
+
+@media screen and (min-device-width: 1921px) {
+    .surface .excalidraw {
+        --default-button-size: 2rem;
+        --default-icon-size: 1rem;
+        
+        --lg-button-size: 2rem;
+        --lg-icon-size: 1rem;
+    }
+}    
+
+/*
+.surface .excalidraw {
+	--color-primary: #faa2c1;
+	--color-primary-darker: #f783ac;
+	--color-primary-darkest: #e64980;
+	--color-primary-light: #fcc2d7;
+}
+
+.surface .excalidraw {
+    --color-primary: blue;
+}
+
+.surface .excalidraw--mobile {
+    --color-primary: green;
+}
+
+.surface .excalidraw.theme--dark {
+    --color-primary: cyan;
+}
+
+.surface .excalidraw--mobile.theme--dark {
+    --color-primary: red;
+}
+*/
+
+/**
+ * EXCALIDRAW
+ * Application Menu
+ */
+.surface .excalidraw {
+    display: flex;
+    
+    .excalidraw__canvas {
+        &:not(.interactive) {
+            opacity: 1;
+        }
+    }
+    
+    .App-menu_top nav {
+        display: flex;
+    }
+    
+    .App-mobile-menu .panelColumn {
+        display: flex;
+        flex-direction: row;
+        gap: 1.2rem;
+        
+        & > div > div,
+        & > fieldset > div {
+            display: flex;
+            flex-direction: row;
+            flex-wrap: nowrap;
+        }
+        .range-wrapper {
+            min-width: 10rem;
+        }
+        .color-picker-container {
+            display: flex;
+            gap: 0.2rem;
+        }
+    }
+
+    .App-toolbar {
+        --lg-icon-size: 1rem;
+        
+        padding: 0;
+        
+        .HintViewer {
+            margin-top: 0.2rem;
+        }
+        .Stack {
+            gap: unset !important;
+            
+            .ToolIcon {
+                svg {
+                    width: var(--default-icon-size);
+                    height: var(--default-icon-size);
+                }
+            }
+        }
+    }
+    
+    .mobile-misc-tools-container {
+        display: none;
+    }
+    
+    .sidebar {
+        flex-grow: 0;
+        flex-shrink: 0;
+        width: var(--right-sidebar-width);
+        
+        &.sidebar--docked ~ .tools-overlay {
+            right: var(--right-sidebar-width);
+        }
+        
+        input[type=text] {
+            width: 100%;
+        }
+        
+        .sidebar__header {
+            flex-shrink: 0;
+            align-items: stretch;
+            max-height: 60%;
+            overflow: hidden;
+            overflow-y: auto;
+            
+            .sidebar__header__buttons {
+                position: absolute;
+                top: 0;
+                right: 0;
+            }
+        }
+        
+        .sidebar-tabs-root {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            
+            & > [role=tabpanel] {
+                flex-grow: 1;
+                flex-shrink: 1;
+                overflow-x: none;
+                overflow-y: auto;
+            }
+            
+            & > footer {
+                flex-grow: 0;
+                flex-shrink: 0;
+            }
+        }
+    }
+    
+    .exc-stats {
+		top: unset;
+		right: 3rem;
+		bottom: 3rem;
+	}
+}
+
+/**
+ * EXCALIDRAW
+ * Overlays
+ */
+.surface .excalidraw {
+    /* --zIndex-layerUI: 100; */
+    
+    .tools-overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 4;
+        margin:
+            calc(var(--editor-container-padding) + 3rem)
+            var(--editor-container-padding);
+        transition: margin 500ms;
+        pointer-events: none;
+        
+        &[data-view-mode=true] {
+            margin-top: var(--editor-container-padding) !important;
+            
+            & > .sidebar-tools {
+                opacity: 0;
+                pointer-events: none;
+            }
+        }
+        &[data-zen-mode=true] {
+            margin: var(--editor-container-padding);
+        }
+        
+        & > .misc-tools-container {
+            position: absolute;
+            top: 0;
+            right: -1rem;
+            display: flex;
+            flex-direction: column;
+            width: auto;
+            opacity: 1;
+            pointer-events: all;
+            transition: opacity 100ms;
+        }
+        & > .canvas-tools {
+            position: absolute;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 1em;
+            z-index: 4;
+            pointer-events: all;
+            
+            & > section {
+                display: flex;
+                flex-direction: column;
+                margin-top: auto;
+                margin-bottom: auto;
+                
+                & > label,
+                & > button {
+                    display: flex;
+                    flex-direction: row;
+                    justify-content: center;
+                    align-items: center;
+                    width: var(--button-width, var(--default-button-size));
+                    height: var(--button-height, var(--default-button-size));
+                    cursor: pointer;
+                    
+                    img, svg {
+                        width: var(--lg-icon-size);
+                        height: var(--lg-icon-size);
+                        stroke: currentcolor;
+                        stroke-linecap: round;
+                        stroke-linejoin: round;
+                        stroke-width: 1.5;
+                        pointer-events: none;
+                    }
+                }
+                & > label {
+                    & > input[type="checkbox"],
+                    & > input[type="radio"] {
+                        visibility: hidden;
+                        position: absolute;
+                    }
+                    & > input:not(:checked) + svg,
+                    & > input:not(:checked) + img {
+                        opacity: 0.6;
+                    }
+                }
+                & > button:not(:active) + svg,
+                & > button:not(:active) + img {
+                    opacity: 0.6;
+                }
+            }
+        }
+    }
+}
+
+.surface .excalidraw {
+    .resource-overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 3;
+        display: flex;
+        flex-direction: column;
+        justify-content: end;
+        align-items: start;
+        margin:
+            calc(var(--editor-container-padding) + 3rem)
+            var(--editor-container-padding);
+        font-size: 0.7rem;
+        pointer-events: none;
+        transition: all 200ms;
+        
+        &:not([data-debug=true]) {
+            opacity: 0;
+            transform: translate(-2rem, 0);
+            transition: all 600ms;
+            
+            & > .tracing-stream,
+            & > .metadata {
+                opacity: 0;
+                transition: all 600ms;
+            }
+        }
+        
+        & > * {
+            pointer-events: all;
+        }
+        
+        & > .tracing-stream,
+        & > .metadata {
+            display: flex;
+            flex-direction: column;
+            transition: all 200ms;
+        }
+    }
+}
+
+/**
+ * EXCALIDRAW
+ * Footer Actions Menu
+ */
+.surface .excalidraw {
+    .footer-center {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+        gap: 1rem;
+        margin: auto 1rem;
+        
+        & > section {
+            display: flex;
+            flex-direction: row;
+            gap: 1rem;
+            margin-top: auto;
+            margin-bottom: auto;
+            font-size: 0.9;
+            
+            &.status {
+                opacity: 0.25;
+            }
+            &.actions {
+                gap: 0;
+            }
+            
+            img,
+            svg {
+                margin: 0.6rem;
+                width: 1rem;
+                height: 1rem;
+                color: currentColor;
+                stroke: #aaa;
+                stroke-width: 2;
+                pointer-events: none;
+            }
+            
+            & > label,
+            & > button {
+                display: flex;
+                flex-direction: row;
+                gap: 0rem;
+                cursor: pointer;
+            }
+            & > button {
+                margin: 0;
+                padding: 0;
+                background-color: transparent;
+                font-family: inherit;
+                color: currentColor;
+                border: none;
+                outline: none;
+                cursor: pointer;
+                opacity: 0.5;
+                transition: opacity 500ms;
+            }
+            & > button:hover {
+                opacity: 1.0;
+                transition: opacity 100ms;
+            }
+            & > button:active {
+                opacity: 0.9;
+            }
+            & > button > span {
+                display: none;
+            }
+            
+            & > label > input[type=checkbox],
+            & > label > input[type=radio] {
+                visibility: hidden;
+                position: absolute;
+            }
+            & > label > input:not(:checked) + svg,
+            & > label > input:not(:checked) + img {
+                opacity: 0.6;
+            }
+            & > button:not(:active) + svg,
+            & > button:not(:active) + img {
+                opacity: 0.6;
+            }
+        }
+    }
+}
+
+.surface .excalidraw--mobile .App-bottom-bar .Island {
+    padding: 0;
+    background-color: transparent;
+}
+.surface .excalidraw--mobile .App-bottom-bar .App-mobile-menu {
+    background-color: var(--island-bg-color);
+}
+.surface .excalidraw--mobile .App-bottom-bar .zero-label,
+.surface .excalidraw--mobile .App-bottom-bar .value-bubble {
+    bottom: initial;
+}
+
+/**
+ * EXCALIDRAW
+ * Embed Container
+ */
+.surface .excalidraw {
+    dialog[role=container].embed {
+        display: flex;
+        flex-grow: 1;
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background: transparent;
+        border: none;
+
+        & > iframe,
+        & > object {
+            width: 100%;
+            height: 100%;
+            background: transparent;
+            border: none;
+            scrollbar-track-color: aqua;
+        }
+        
+        & > object {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+    }
+}
+
+/**
+ * EXCALIDRAW
+ * Editor Controls
+ */
+.surface .excalidraw .selected-shape-actions {
+	text-align: left;
+}

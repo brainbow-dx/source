@@ -1,12 +1,13 @@
+// deno-lint-ignore-file no-unused-vars verbatim-module-syntax no-explicit-any
 // TODO: Move this to the `@brainbow/ethos/flutter` package.
 import { join, resolve } from "@std/path";
 import { existsSync, walk } from "@std/fs";
 
-import { $ } from "@brainbow/ethos/dev/shell";
+import { $ } from "@ethos/dev/shell";
 
-import { copyFiles } from "@brainbow/ethos/dev/fs";
+import { copyFiles } from "@ethos/dev/fs";
 
-export function toNameFrom(sourceName: string) {
+export function toNameFrom(sourceName: string): string {
     // We should try to convert from pascal case here too.
     return sourceName
         .replaceAll('-', '_')
@@ -29,11 +30,11 @@ export class FlutterProject {
         this.rootDir = options.rootDir;
     }
 
-    public get exists() {
+    public get exists(): any {
         return existsSync(this.rootDir);
     }
 
-    async create(options?: { platforms?: string[], onFinished?: () => void }) {
+    async create(options?: { platforms?: string[], onFinished?: () => void }): Promise<any> {
         const result = await $`flutter create --project-name ${this.name} -t package ${this.rootDir}`;
 
         // Ethos manages most of this with workspace tools + config.

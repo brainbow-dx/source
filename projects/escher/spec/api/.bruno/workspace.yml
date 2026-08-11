@@ -1,0 +1,19 @@
+# Bruno Workspace
+# Ref: https://docs.usebruno.com/bruno-basics/create-a-workspace
+# Ref: https://docs.usebruno.com/bru-cli/overview
+# Ref: https://docs.usebruno.com/converters/openapi-to-bruno
+#---
+opencollection: 1.0.0
+info:
+  name: "Escher"
+  type: workspace
+
+collections:
+  - name: "resources"
+    path: "collections/auth"
+  - name: "Resources"
+    path: "collections/resources"
+
+specs:
+
+docs: ''

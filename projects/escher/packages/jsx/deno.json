@@ -1,0 +1,9 @@
+{
+    "name": "@escher/jsx",
+    "version": "0.0.0-preview",
+    "license": "MIT",
+    "exports": {
+        ".": "./src/mod.ts",
+        "./dev": "./src/dev.ts"
+    }
+}

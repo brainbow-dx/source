@@ -1,4 +1,4 @@
-import { TerminalSurface } from "@brainbow/slate-terminal";
+import { TerminalSurface } from "@escher/terminal";
 
 export function main() {
     const terminal = new TerminalSurface();

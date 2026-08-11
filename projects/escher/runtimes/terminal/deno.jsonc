@@ -1,0 +1,50 @@
+{
+    "name": "@escher/terminal",
+    "version": "0.0.0-preview",
+    "license": "MIT",
+    "exclude": [
+        "./.cargo/",
+        "./.output/",
+        "./.vscode/",
+        "./.scratch/"
+    ],
+    "exports": {
+        ".": "./src/mod.ts",
+        "./utils": "./src/utils.ts"
+    },
+    "imports": {
+        "@std/path": "jsr:@std/path",
+        "@std/fs": "jsr:@std/fs",
+        "@types/chrome": "npm:@types/chrome",
+        "@types/react": "npm:@types/react",
+        "@types/react-dom": "npm:@types/react-dom",
+        "react": "npm:react@18.3.1",
+        "react/jsx-runtime": "npm:react@18.3.1/jsx-runtime",
+        "react/jsx-dev-runtime": "npm:react@18.3.1/jsx-dev-runtime",
+        "react-dom": "npm:react-dom@18.3.1",
+        "react-dom/client": "npm:react-dom@18.3.1/client",
+        "react-dom/server": "npm:react-dom@18.3.1/server",
+        "react-router-dom": "npm:react-router-dom",
+        "react-code-blocks": "npm:@react-code-blocks"
+    },
+    "compilerOptions": {
+        "lib": [
+            "esnext",
+            "dom",
+            "dom.iterable",
+            "dom.asynciterable",
+            "deno.unstable",
+            "deno.worker",
+            "deno.ns"
+        ],
+        "types": [
+            "@types/vscode",
+            "@types/react",
+            "@types/react-dom",
+            "@types/chrome"
+        ],
+        "jsx": "react-jsx",
+        "jsxImportSource": "react",
+        "jsxImportSourceTypes": "@types/react"
+    }
+}

@@ -1,7 +1,0 @@
-{
-    "name": "@brainbow/slate-jsx",
-    "exports": {
-        ".": "./src/mod.ts",
-        "./dev": "./src/dev.ts"
-    }
-}

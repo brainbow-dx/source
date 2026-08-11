@@ -1,6 +1,9 @@
 {
-    "name": "@brainbow/ethos-core",
+    "name": "@ethos/core",
+    "version": "0.0.0-preview",
+    "license": "MIT",
     "exports": {
-        ".": "./src/mod.ts"
+        ".": "./src/mod.ts",
+        "./workspace": "./src/workspace.ts"
     }
 }

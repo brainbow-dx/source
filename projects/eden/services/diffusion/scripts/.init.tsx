@@ -2,13 +2,13 @@
 import { join, resolve, normalize } from "@std/path";
 import { exists, existsSync, walk, WalkOptions } from "@std/fs";
 
-import { $ } from "@brainbow/ethos/dev/shell";
-import * as sh from "@brainbow/ethos/dev/shell";
+import { $ } from "@ethos/dev/shell";
+import * as sh from "@ethos/dev/shell";
 
-import * as flutter from "@brainbow/ethos-flutter";
-import { FlutterProject } from "@brainbow/ethos-flutter";
+import * as flutter from "@ethos/flutter";
+import { FlutterProject } from "@ethos/flutter";
 
-import { copyFiles } from "@brainbow/ethos/dev/fs";
+import { copyFiles } from "@ethos/dev/fs";
 
 interface Args extends sh.Args {
     rust?: boolean,

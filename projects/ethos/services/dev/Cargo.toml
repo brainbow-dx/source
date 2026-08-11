@@ -1,5 +1,5 @@
 [package]
-name = "ethos-dev-service"
+name = "ethos-dev"
 version = "0.1.0"
 edition = "2024"
 
@@ -22,6 +22,10 @@ tracing-subscriber = { workspace = true, features = [
 ], optional = true }
 derive_more = { workspace = true, features = ["from"] }
 oops = { workspace = true }
+
+dashmap = { workspace = true, features = ["serde"] }
+
+serde = { workspace = true, features = ["derive"] }
 
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net"] }
 tower-service.workspace = true

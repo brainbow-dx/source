@@ -1,5 +1,5 @@
 {
-    "name": "@brainbow/stooper-core",
+    "name": "@stooper/core",
     "exports": {
         ".": "./src/mod.ts"
     }

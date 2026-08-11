@@ -1,0 +1,12 @@
+services:
+  monitor:
+    image: louislam/uptime-kuma:2
+    restart: unless-stopped
+    profiles:
+     - dev
+     - data
+    ports:
+      - 3901:3001
+    volumes:
+      - ./.output/monitor/data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock

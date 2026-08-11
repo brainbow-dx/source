@@ -1,0 +1,9 @@
+services:
+  code:
+    image: gitpod/openvscode-server
+    ports:
+      - "3900:3000"
+    volumes:
+      - type: bind
+        source: ../..
+        target: /workspace

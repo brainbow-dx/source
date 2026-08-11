@@ -1,0 +1,6 @@
+{
+    "name": "@atlas/bsky",
+    "exports": {
+        ".": "./src/mod.ts"
+    }
+}

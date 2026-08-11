@@ -1,0 +1,35 @@
+/**
+Ref: https://docs.excalidraw.com/docs/codebase/json-schema
+Example:
+{
+    "type": "excalidraw",
+    "version": 2,
+    "source": "https://excalidraw.com",
+    "elements": [
+        {
+            "id": "pologsyG-tAraPgiN9xP9b",
+            "type": "rectangle",
+            "x": 928,
+            "y": 319,
+            "width": 134,
+            "height": 902
+            // ..
+        }
+        // ..
+    ],
+    "appState": {
+        "gridSize": 20,
+        "viewBackgroundColor": "#ffffff"
+    },
+    "files": {
+        "3cebd7720911620a3938ce77243696149da03861": {
+            "mimeType": "image/png",
+            "id": "3cebd7720911620a3938c.77243626149da03861",
+            "dataURL": "data:image/png;base64,iVBORWOKGgoAAAANSUhEUgA=",
+            "created": 1690295874454,
+            "lastRetrieved": 1690295874454
+        }
+        // ..
+    }
+}
+*/

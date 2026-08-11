@@ -24,7 +24,7 @@ kind String {
 /// Hello??
 workspace Ethos {
     /// Some Documentation for this item.
-    //#slate::doc("https://docs.dang.gov/whappa-ow?read=a:book")
+    //#escher::doc("https://docs.dang.gov/whappa-ow?read=a:book")
     string some_key = ""
     
     app Terminal {

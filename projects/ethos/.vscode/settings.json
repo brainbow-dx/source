@@ -5,7 +5,14 @@
         "./.output",
         "./.scratch",
     ],
+    "files.associations": {
+        "*.ethos": "hcl",
+    },
     "files.exclude": {
         "**/.git": true,
+    },
+    "chat.tools.terminal.autoApprove": {
+        "command": true,
+        "mdbook": true
     }
 }

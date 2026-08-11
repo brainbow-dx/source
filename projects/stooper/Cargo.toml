@@ -1,5 +1,5 @@
 [package]
-name = "slate"
+name = "stooper"
 version = "0.0.0"
 edition = "2024"
 
@@ -19,7 +19,6 @@ members = [
     "services/content",
     "services/location",
     "services/map",
-    "services/debug",
     "services/monitor",
     "services/feed",
 ]

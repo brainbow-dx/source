@@ -1,0 +1,42 @@
+{
+  "type": "excalidrawlib",
+  "version": 2,
+  "source": "https://sketch.brainbow.localhost",
+  "libraryItems": [
+    {
+      "status": "unpublished",
+      "elements": [
+        {
+          "id": "TCFyaI_avC2mbwk344BYL",
+          "type": "rectangle",
+          "x": 2020,
+          "y": 680,
+          "width": 300,
+          "height": 200,
+          "angle": 0,
+          "strokeColor": "#228be6",
+          "backgroundColor": "#4dabf7",
+          "fillStyle": "hachure",
+          "strokeWidth": 1,
+          "strokeStyle": "solid",
+          "roughness": 0,
+          "opacity": 100,
+          "groupIds": [],
+          "frameId": null,
+          "index": "a4",
+          "roundness": null,
+          "seed": 564678533,
+          "version": 31,
+          "versionNonce": 246524101,
+          "isDeleted": false,
+          "boundElements": null,
+          "updated": 1769940381662,
+          "link": null,
+          "locked": false
+        }
+      ],
+      "id": "sd_tK5KGKbuY9Bv8n1uC3",
+      "created": 1769940385021
+    }
+  ]
+}

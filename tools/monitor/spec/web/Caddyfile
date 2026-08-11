@@ -1,0 +1,4 @@
+monitor.brainbow.localhost {
+	tls internal
+	reverse_proxy localhost:3901
+}

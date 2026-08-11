@@ -1,8 +1,8 @@
 #!/usr/bin/deno
 import { resolve } from "@std/path";
 
-import { $ } from "@brainbow/ethos/dev/shell";
-import { parse, type Args } from "@brainbow/ethos/dev/shell";
+import { $ } from "@ethos/dev/shell";
+import { parse, type Args } from "@ethos/dev/shell";
 
 const args = parse<Args>(Deno.args);
 

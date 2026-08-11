@@ -1,0 +1,49 @@
+
+:root {
+    font-family: sans-serif;
+}
+
+:root[dir="ltr"]
+	.excalidraw
+	.layer-ui__wrapper
+	.zen-mode-transition.App-menu_bottom--transition-left {
+	transform: none;
+}
+
+html, body {
+	margin: 0;
+	padding: 0;
+	min-width: 100vw;
+	min-height: 100vh;
+	background-color: #111111;
+	color: #dddddd;
+    font-family: 'Cascadia', 'Lucida Console', sans-serif;
+	
+	& > #root.container {
+		width: 100%;
+		height: 100%;
+
+		& > .excalidraw {
+			width: inherit;
+			height: inherit;
+		}
+	}
+}
+
+h1:first-child,
+h2:first-child,
+h3:first-child,
+h4:first-child,
+h5:first-child,
+h6:first-child {
+    margin-top: 0;
+}
+
+h1:last-child,
+h2:last-child,
+h3:last-child,
+h4:last-child,
+h5:last-child,
+h6:last-child {
+    margin-bottom: 0;
+}

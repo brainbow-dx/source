@@ -1,0 +1,25 @@
+{
+    "name": "@ethos/dev",
+    "version": "0.0.0-preview",
+    "license": "MIT",
+    "tasks": {
+        "build": "deno run -A scripts/build.tsx",
+        "dev": "deno run -A scripts/dev.tsx"
+    },
+    "exports": {
+        ".": "./src/mod.ts",
+        "./fs": "./src/fs.ts",
+        "./shell": "./src/shell.ts",
+        "./server": "./src/server.ts"
+    },
+    "imports": {
+        "#spec/": "./spec/",
+        "#src/": "./src/",
+        "@std/cli": "jsr:@std/cli@1.0",
+        "@std/async": "jsr:@std/async@1.2",
+        "@std/path": "jsr:@std/path@1.1",
+        "@std/uuid/v5": "jsr:@std/uuid/v5",
+        // "@escher/terminal": "https://github.com/brainbow-dx/source/tree/main/projects/escher",
+        "react": "npm:react"
+    }
+}

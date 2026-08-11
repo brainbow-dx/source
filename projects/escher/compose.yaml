@@ -1,0 +1,34 @@
+services:
+  # www:
+  #   profiles: [web]
+  #   build:
+  #     context: ./apps/www
+  #     dockerfile: Dockerfile
+  #   develop:
+  #     watch:
+  #       - path: ./apps/www
+  #         target: /workspace/apps/www
+  #         action: sync+restart
+  #       - path: .
+  #         target: /workspace
+  #         action: sync+restart
+  #   ports:
+  #     - "8100:8000"
+  db0:
+    image: ghcr.io/tursodatabase/libsql-server:latest
+    platform: linux/amd64
+    ports:
+      - "5100:5100" # HTTP
+      - "5101:5101" # gRPC
+    environment:
+      SQLD_NODE: primary
+      SQLD_PRIMARY_URL: TODO
+      SQLD_DB_PATH: db0
+    volumes:
+      - ./.output/data:/var/lib/sqld
+
+networks:
+  default:
+    # You can configure custom networks here if needed.
+    # For a basic setup, the default bridge network is usually sufficient.
+    # driver: bridge

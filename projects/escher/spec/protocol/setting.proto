@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package dev.brainbow.escher.sketch;
+
+service SettingService {
+    rpc GetSettings(GetSettingsRequest) returns (GetSettingsResponse);
+    rpc UpdateSettings(UpdateSettingsRequest) returns (UpdateSettingsResponse);
+}
+
+message GetSettingsRequest {
+    //..
+}
+
+message GetSettingsResponse {
+    //..
+}
+
+message UpdateSettingsRequest {
+    //..
+}
+
+message UpdateSettingsResponse {
+    //..
+}
+
+message UpdatedSettingsEvent {
+    //..
+}

@@ -1,0 +1,10 @@
+{
+    "name": "@escher/core",
+    "version": "0.0.0-preview",
+    "license": "MIT",
+    "exports": {
+        ".": "./src/mod.ts",
+        "./draw": "./src/draw.ts",
+        "./surface": "./src/surface.ts"
+    }
+}

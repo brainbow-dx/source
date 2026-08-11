@@ -1,5 +1,5 @@
 {
-  "name": "@brainbow/eden-stable-diffusion",
+  "name": "@eden/stable-diffusion",
   "tasks": {
     "init": "deno run ./scripts/init",
     "generate": "deno run ./scripts/.init.tsx"

@@ -1,9 +1,9 @@
 import { resolve } from "@std/path";
 import { existsSync } from "@std/fs/exists";
 
-import { $ } from "@brainbow/ethos/dev/shell";
-import * as sh from "@brainbow/ethos/dev/shell";
-import type { Args } from "@brainbow/ethos/dev/shell";
+import { $ } from "@ethos/dev/shell";
+import * as sh from "@ethos/dev/shell";
+import type { Args } from "@ethos/dev/shell";
 
 const args = sh.parse<Args>(Deno.args);
 

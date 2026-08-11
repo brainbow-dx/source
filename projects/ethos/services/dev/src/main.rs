@@ -4,12 +4,18 @@ extern crate alloc;
 
 mod service;
 
+use std::any::Any;
+use std::any::TypeId;
 //---
 use std::process::ExitCode;
+use std::sync::Arc;
 
 use anyhow::Result;
 
 use axum::extract::Request;
+use dashmap::DashMap;
+use serde::Deserialize;
+use serde::Serialize;
 use tokio::net::TcpListener;
 
 use tower::Service;
@@ -19,29 +25,52 @@ use axum::extract::State;
 use axum::routing::get;
 
 use crate::service::DevService;
-use crate::service::DevServiceError;
 use crate::service::DevServiceRequest;
-use crate::service::DevServiceState;
-// use tracing::Level;
+use crate::service::DevServiceError;
 
 //---
-pub struct Server {
+#[derive(Clone)]
+pub struct DevServer {
     address: String,
+    state: DevServerState,
 }
 
-impl Server {
-    pub fn new<S: ToString>(address: S) -> Self {
-        Server {
+#[derive(Clone, Default)]
+// #[derive(Serialize, Deserialize)]
+pub struct DevServerState {
+    //..
+}
+
+impl DevServer {
+    pub fn new<A: ToString>(address: A) -> Self {
+        DevServer {
             address: address.to_string(),
+            state: DevServerState::default(),
         }
     }
+    
+    pub fn with_state(mut self, state: DevServerState) -> Self {
+        self.state = state;
+        self // ..
+    }
 
-    pub fn with_service<S>(mut self, service: S) -> Self
-    where
-        S: Service<Request>,
-    {
-        // self.services.push();
-        self // etc ..
+    pub fn state(&self) -> DevServerState {
+        self.state.clone()
+    }
+    
+    pub async fn start(&self) -> Result<()> {
+        let listener = TcpListener::bind(&self.address).await?;
+        let router = Router::new()
+            // TODO
+            .route_service("/", DevService::new())
+            .fallback(get(handle_not_found))
+            .with_state(self.state());
+        
+        tracing::info!("Listening (Dev) at http://{0}", listener.local_addr()?);
+
+        axum::serve(listener, router).await?;
+        
+        Ok(())
     }
 }
 
@@ -50,34 +79,29 @@ impl Server {
 pub async fn main() -> Result<ExitCode> {
     ethos_log::init("trace");
 
-    let server = Server::new("0.0.0.0:9000");
-    // .with_service(DevService::new());
-    {
-        let service = DevService::new();
-
-        let listener = TcpListener::bind(server.address).await?;
-        let router = Router::new()
-            // TODO
-            // .route("/", get(handle_homepage_service))
-            .fallback(get(handle_dev_service))
-            .with_state(service.state());
-
-        tracing::info!("Listening at http://{0}", listener.local_addr()?);
-
-        axum::serve(listener, router).await?;
-    }
+    let server = DevServer::new("0.0.0.0:9000");
+    
+    server.start().await?;
 
     Ok(ExitCode::SUCCESS)
 }
 
+//--
+#[derive(Clone, Default)]
+#[derive(Serialize, Deserialize)]
+pub struct ServeExample {
+    //..
+}
+
 #[axum::debug_handler]
-async fn handle_dev_service(
-    State(mut service): State<DevServiceState>,
+async fn handle_not_found(
+    State(mut state): State<DevServerState>,
     request: DevServiceRequest,
 ) -> Result<String, DevServiceError> {
-    let response = service.call(request).await?;
+    // let response = state.call(request).await?;
 
     tracing::debug!("LKSJDFLKSJLKSDFSF");
 
-    Ok(response.message)
+    // Ok(response.message)
+    Ok(format!("TODO"))
 }

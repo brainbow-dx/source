@@ -1,0 +1,54 @@
+(static-server) {
+	root * "{$BRAINBOW_ROOT:.}/{args[0]}/.output/pkg/web"
+
+	@static file {
+		try_files {path} {path}.html {path}/index.html
+	}
+
+	handle @static {
+		file_server {
+			precompressed gzip
+			browse {
+				reveal_symlinks
+			}
+		}
+	}
+}
+
+escher.brainbow.localhost {
+	tls internal
+
+	import static-server "projects/escher"
+
+	handle {
+		reverse_proxy 127.0.0.1:3615
+	}
+}
+
+escher.brainbow.dev {
+	tls {
+		dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+	}
+
+	import static-server "projects/escher"
+
+	handle {
+		reverse_proxy 127.0.0.1:3615
+	}
+}
+
+escher-brainbow--{$TS_DEVICE_NAME:dev}.{$TS_DNS_KEY}.ts.net {
+	bind tailscale/escher-brainbow--{$TS_DEVICE_NAME:dev}
+
+	import static-server "projects/escher"
+
+	handle /tailscale {
+		tailscale_auth
+		templates
+		respond `Hello, {{ placeholder "http.auth.user.id" }}`
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:3615
+	}
+}
