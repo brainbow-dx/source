@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1539df0b28d53ef4a99ac57102ffae26, type: 3}
+  m_Name: RW_Pistol
+  m_EditorClassIdentifier: 
+  idNumber: 1
+  reward: 0
+  description: 
+  weight: 10
+  importedSprite: {fileID: 21300000, guid: 375430cd117186540a5a14f5fc17f31f, type: 3}
+  damage: 2
+  _reloadRate: 0.5
+  bulletObject: {fileID: 4588530954240602476, guid: b027e983f09f6454ca202b707036b007, type: 3}

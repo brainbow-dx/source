@@ -1,0 +1,45 @@
+{
+	"Version": 3,
+	"Meta": {
+		"Duration": 0.533,
+		"Fps": 30.0,
+		"Loop": true,
+		"AreBeziersRestricted": true,
+		"CurveCount": 2,
+		"TotalSegmentCount": 3,
+		"TotalPointCount": 7,
+		"UserDataCount": 0,
+		"TotalUserDataSize": 0
+	},
+	"Curves": [
+		{
+			"Target": "Parameter",
+			"Id": "f_arm_rot",
+			"Segments": [
+				0,
+				180,
+				1,
+				0.122,
+				176.633,
+				0.244,
+				-67.056,
+				0.367,
+				-74,
+				0,
+				0.533,
+				-74
+			]
+		},
+		{
+			"Target": "Parameter",
+			"Id": "knife_vis",
+			"Segments": [
+				0,
+				1,
+				0,
+				0.533,
+				1
+			]
+		}
+	]
+}

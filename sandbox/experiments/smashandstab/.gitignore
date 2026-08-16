@@ -1,0 +1,19 @@
+# Unity
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]serSettings/
+[Mm]emoryCaptures/
+UIElementsSchema/
+
+# IDE-regenerated on project open, not real content
+.vscode/
+.vs/
+*.csproj
+*.sln
+*.slnx
+*.user
+*.suo

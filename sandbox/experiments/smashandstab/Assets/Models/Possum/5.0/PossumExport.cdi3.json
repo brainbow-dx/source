@@ -1,0 +1,106 @@
+{
+	"Version": 3,
+	"Parameters": [
+		{
+			"Id": "Param2",
+			"GroupId": "",
+			"Name": "idle"
+		},
+		{
+			"Id": "Param6",
+			"GroupId": "",
+			"Name": "running"
+		},
+		{
+			"Id": "Param",
+			"GroupId": "",
+			"Name": "walk cycle"
+		},
+		{
+			"Id": "Param3",
+			"GroupId": "",
+			"Name": ">arm"
+		},
+		{
+			"Id": "Param4",
+			"GroupId": "",
+			"Name": "<arm"
+		},
+		{
+			"Id": "Param7",
+			"GroupId": "",
+			"Name": "<curl"
+		},
+		{
+			"Id": "Param8",
+			"GroupId": "",
+			"Name": ">curl"
+		},
+		{
+			"Id": "Param5",
+			"GroupId": "",
+			"Name": "ear"
+		},
+		{
+			"Id": "Param9",
+			"GroupId": "",
+			"Name": "Tail"
+		},
+		{
+			"Id": "Param10",
+			"GroupId": "",
+			"Name": "flip head"
+		},
+		{
+			"Id": "Param11",
+			"GroupId": "",
+			"Name": "flip gun"
+		},
+		{
+			"Id": "Param12",
+			"GroupId": "",
+			"Name": "gun vis"
+		},
+		{
+			"Id": "Param13",
+			"GroupId": "",
+			"Name": "norm arm vs"
+		},
+		{
+			"Id": "Param14",
+			"GroupId": "",
+			"Name": "rev arm vs"
+		}
+	],
+	"ParameterGroups": [],
+	"Parts": [
+		{
+			"Id": "Part4",
+			"Name": "Gun.psd"
+		},
+		{
+			"Id": "Part3",
+			"Name": "PossumTail.psd"
+		},
+		{
+			"Id": "Root",
+			"Name": "Root"
+		},
+		{
+			"Id": "Part",
+			"Name": "<Arm"
+		},
+		{
+			"Id": "Head",
+			"Name": "Head"
+		},
+		{
+			"Id": "Part2",
+			"Name": ">arm"
+		},
+		{
+			"Id": "eye",
+			"Name": "eye"
+		}
+	]
+}
