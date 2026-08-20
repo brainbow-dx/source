@@ -1,5 +1,9 @@
 [alias]
 dev = "run --features dev"
+# `examples/mario` needs `escher-bevy`'s `audio` feature (off by default, see that crate's
+# `Cargo.toml`) for its sound effects; `cargo run --example mario` alone fails with a
+# required-features error without this alias.
+mario = "run -p escher-bevy --example mario --features audio"
 
 #--
 [build]
