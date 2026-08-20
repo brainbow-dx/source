@@ -36,10 +36,14 @@ pub struct MarioSfx {
 pub fn setup_mario_sfx(mut commands: Commands, mut audio_sources: ResMut<Assets<AudioSource>>) {
     let mut add = |samples: Vec<i16>| audio_sources.add(AudioSource { bytes: wav_bytes(SFX_SAMPLE_RATE, &samples).into() });
 
+    // `jump`/`hit_crunch` are deliberately cross-wired to each other's synth right now, per direct
+    // user request after hearing both in place: the hit's impact reads better as the sharper
+    // upward blip, and the jump reads better as the punchier crunch. `synth_jump_blip`/
+    // `synth_hit_crunch` themselves are unchanged, just swapped which event plays which.
     commands.insert_resource(MarioSfx {
-        jump: add(synth_jump_blip()),
+        jump: add(synth_hit_crunch()),
         attack: add(synth_attack_slash()),
-        hit_crunch: add(synth_hit_crunch()),
+        hit_crunch: add(synth_jump_blip()),
         hit_hurt: add(synth_hit_hurt()),
         death: add(synth_death_pop()),
     });
