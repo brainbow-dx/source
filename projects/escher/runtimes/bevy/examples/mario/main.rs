@@ -131,7 +131,15 @@ fn main() -> Result<ExitCode> {
 
     let state = GameState::new(runtime.clone(), name, identity_uuid);
     persistence::spawn_connect_persistence(state.clone());
-    relay::spawn(runtime.handle().clone(), args.relay.clone(), args.room.clone(), state.local_mario_snapshot.clone(), state.remote_mario.clone());
+    relay::spawn(
+        runtime.handle().clone(),
+        args.relay.clone(),
+        args.room.clone(),
+        state.local_mario_snapshot.clone(),
+        state.remote_mario.clone(),
+        state.outgoing_combat_events.clone(),
+        state.incoming_combat_events.clone(),
+    );
 
     App::new()
         .add_plugins(EscherBevyPlugin::new(
@@ -172,6 +180,13 @@ pub struct GameState {
     pub connected_players: Arc<RwLock<Vec<(String, String, (u8, u8, u8))>>>,
     pub local_mario_snapshot: Arc<RwLock<Vec<relay::PositionPacket>>>,
     pub remote_mario: relay::RemoteMarioTable,
+    /// Hits this instance's own local attackers landed on a remote-tracked target, waiting to go
+    /// out over the reliable combat channel. Pushed to by `physics::update_mario_physics`, drained
+    /// by `relay`'s own combat send loop.
+    pub outgoing_combat_events: Arc<RwLock<Vec<relay::CombatEvent>>>,
+    /// Combat events landed on this instance's own local players by a remote attacker, waiting to
+    /// be applied. Pushed to by `relay`'s combat receive loop, drained once per physics tick.
+    pub incoming_combat_events: Arc<RwLock<Vec<relay::CombatEvent>>>,
     /// Cached wrapped backdrop rows, recomputed only when the terminal width actually changes.
     mario_wrap_cache: Arc<RwLock<Option<(u16, Arc<Vec<String>>)>>>,
     pub ghosts: Arc<RwLock<Vec<ghosts::GhostEntry>>>,
@@ -230,6 +245,8 @@ impl GameState {
             connected_players: Arc::new(RwLock::new(Vec::new())),
             local_mario_snapshot: Arc::new(RwLock::new(Vec::new())),
             remote_mario: Arc::new(RwLock::new(std::collections::HashMap::new())),
+            outgoing_combat_events: Arc::new(RwLock::new(Vec::new())),
+            incoming_combat_events: Arc::new(RwLock::new(Vec::new())),
             mario_wrap_cache: Arc::new(RwLock::new(None)),
             ghosts: Arc::new(RwLock::new(Vec::new())),
             cheat_menu_open: Arc::new(RwLock::new(false)),

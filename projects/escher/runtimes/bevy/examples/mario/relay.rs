@@ -1,11 +1,21 @@
-//! Real-time position sync between running instances, over WebRTC data channels negotiated
-//! through `atlas-relay`'s signaling WebSocket.
+//! Real-time position and combat sync between running instances, over WebRTC data channels
+//! negotiated through `atlas-relay`'s signaling WebSocket. Two data channels per peer, deliberately
+//! different reliability characteristics for deliberately different kinds of data:
 //!
-//! Each packet is a full snapshot of one player's motion state rather than a delta, and carries a
-//! per-sender `seq` so a future authoritative server could reject stale updates. Packets go out on
-//! a fixed interval over an unordered, unreliable data channel: a fresher packet is always moments
-//! away, so a dropped or out-of-order one simply doesn't matter, and no reliable/ordered channel's
-//! head-of-line blocking can add latency to it.
+//! - `POSITION_DATA_CHANNEL_LABEL`: unordered, zero-retransmit. Each packet is a full snapshot of
+//!   one player's motion state rather than a delta, and carries a per-sender `seq` so a future
+//!   authoritative server could reject stale updates. Sent on a fixed interval: a fresher packet is
+//!   always moments away, so a dropped or out-of-order one simply doesn't matter, and no
+//!   reliable/ordered channel's head-of-line blocking can add latency to it.
+//! - `COMBAT_DATA_CHANNEL_LABEL`: reliable, ordered (the default `RTCDataChannelInit`). A landed
+//!   hit is a one-shot event, not continuously-resent state like position — losing one permanently
+//!   desyncs "is this player alive" between the two machines, so unlike position it has to arrive.
+//!
+//! Combat authority is attacker-side: the instance whose local player's swing connects against a
+//! remote-tracked target's last-known position decides the hit happened and sends a `CombatEvent`
+//! naming the target; the target's own instance is what actually applies the death to its own
+//! locally-owned player (see `physics::update_mario_physics`) — the attacker's instance has no
+//! authority to mutate a player it doesn't own.
 //!
 //! Negotiation follows one rule to avoid a two-sided offer race: whoever the relay's `Joined`
 //! message names as already-present peers gets offered a connection by the newcomer, and whoever
@@ -60,14 +70,30 @@ pub struct PositionPacket {
 /// last known position rather than disappearing.
 pub type RemoteMarioTable = Arc<RwLock<HashMap<String, PositionPacket>>>;
 
+/// One landed hit, attacker-authoritative (see this module's own doc comment). `dx`/`dy` are the
+/// attacking swing's own direction (`MarioAttackEffect::dx`/`dy`), carried along so the target's
+/// own instance can build the same reversed death-burst direction the local-vs-local path already
+/// does, without needing to know anything about the attacker's actual position.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CombatEvent {
+    pub attacker_candidate_id: String,
+    pub target_candidate_id: String,
+    pub heavy: bool,
+    pub dx: f32,
+    pub dy: f32,
+}
+
 /// About 30Hz, frequent enough that a dropped packet is a non-event.
 const SEND_INTERVAL: Duration = Duration::from_millis(33);
-const DATA_CHANNEL_LABEL: &str = "mario-sync";
+const POSITION_DATA_CHANNEL_LABEL: &str = "mario-sync";
+const COMBAT_DATA_CHANNEL_LABEL: &str = "mario-combat";
 
-/// One connected peer's negotiated transport. `channel` starts `None` on the answering side, since
-/// the offerer's `create_data_channel` call is what opens it, which only reaches this side later as
-/// a `PeerConnectionEventHandler::on_data_channel` callback. It's filled in immediately on the
-/// offering side, which already holds the channel handle directly.
+/// One connected peer's negotiated transport: one channel per label (see this module's own doc
+/// comment for why position and combat get separate channels with different reliability). Both
+/// start `None` on the answering side, since the offerer's `create_data_channel` calls are what
+/// open them, which only reach this side later as `PeerConnectionEventHandler::on_data_channel`
+/// callbacks, one per channel, routed by `data_channel.label()`. Both are filled in immediately on
+/// the offering side, which already holds the channel handles directly.
 ///
 /// `ice_gate` buffers ICE candidates that arrive before the remote description is set. Candidates
 /// arrive over the relay socket as independent messages with no ordering guarantee against the
@@ -76,7 +102,8 @@ const DATA_CHANNEL_LABEL: &str = "mario-sync";
 /// then buffer" and "flip the flag, then drain the buffer" can never interleave.
 struct PeerLink {
     connection: Arc<dyn PeerConnection>,
-    channel: RwLock<Option<Arc<dyn DataChannel>>>,
+    position_channel: RwLock<Option<Arc<dyn DataChannel>>>,
+    combat_channel: RwLock<Option<Arc<dyn DataChannel>>>,
     ice_gate: parking_lot::Mutex<IceGate>,
 }
 
@@ -87,12 +114,13 @@ struct IceGate {
 }
 
 /// State shared by a peer connection's own event handler and the relay's read loop: the relay
-/// socket (to forward gathered ICE candidates), the peer table, and the table incoming positions
-/// get written into.
+/// socket (to forward gathered ICE candidates), the peer table, and the tables incoming positions
+/// and combat events get written into.
 struct Context {
     ws_sink: WsSink,
     peers: RwLock<HashMap<PeerId, PeerLink>>,
     remote_mario: RemoteMarioTable,
+    incoming_combat: Arc<RwLock<Vec<CombatEvent>>>,
 }
 
 type WsStream = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
@@ -121,13 +149,25 @@ impl PeerConnectionEventHandler for RelayHandler {
         send_client_message(&self.context.ws_sink, &ClientMessage::IceCandidate { to: self.peer_id, candidate }).await;
     }
 
-    /// Only fires on the answering side. The offerer already holds its own data channel directly
-    /// from `create_data_channel`'s return value.
+    /// Only fires on the answering side, once per channel the offerer created. The offerer already
+    /// holds its own data channel handles directly from `create_data_channel`'s return values.
     async fn on_data_channel(&self, data_channel: Arc<dyn DataChannel>) {
-        if let Some(link) = self.context.peers.read().get(&self.peer_id) {
-            *link.channel.write() = Some(data_channel.clone());
+        let label = data_channel.label().await.unwrap_or_default();
+        match label.as_str() {
+            POSITION_DATA_CHANNEL_LABEL => {
+                if let Some(link) = self.context.peers.read().get(&self.peer_id) {
+                    *link.position_channel.write() = Some(data_channel.clone());
+                }
+                spawn_position_receive_loop(self.peer_id, data_channel, self.context.remote_mario.clone());
+            }
+            COMBAT_DATA_CHANNEL_LABEL => {
+                if let Some(link) = self.context.peers.read().get(&self.peer_id) {
+                    *link.combat_channel.write() = Some(data_channel.clone());
+                }
+                spawn_combat_receive_loop(self.peer_id, data_channel, self.context.incoming_combat.clone());
+            }
+            other => tracing::warn!("mario relay: {:?} opened a data channel with an unrecognized label {other:?}", self.peer_id),
         }
-        spawn_receive_loop(self.peer_id, data_channel, self.context.remote_mario.clone());
     }
 }
 
@@ -165,7 +205,8 @@ fn position_channel_init() -> RTCDataChannelInit {
     RTCDataChannelInit { ordered: false, max_retransmits: Some(0), ..Default::default() }
 }
 
-/// This instance is the newcomer to `peer_id`'s room membership, so this instance offers.
+/// This instance is the newcomer to `peer_id`'s room membership, so this instance offers, creating
+/// both data channels (see this module's own doc comment for why there are two).
 async fn open_offer(peer_id: PeerId, context: Arc<Context>) {
     let connection = match new_peer_connection(peer_id, context.clone()).await {
         Ok(connection) => connection,
@@ -175,17 +216,30 @@ async fn open_offer(peer_id: PeerId, context: Arc<Context>) {
         }
     };
 
-    let data_channel = match connection.create_data_channel(DATA_CHANNEL_LABEL, Some(position_channel_init())).await {
+    let position_channel = match connection.create_data_channel(POSITION_DATA_CHANNEL_LABEL, Some(position_channel_init())).await {
         Ok(data_channel) => data_channel,
         Err(error) => {
-            tracing::warn!("mario relay: failed to create a data channel to {peer_id:?}: {error}");
+            tracing::warn!("mario relay: failed to create a position data channel to {peer_id:?}: {error}");
             return;
         }
     };
-    spawn_receive_loop(peer_id, data_channel.clone(), context.remote_mario.clone());
+    let combat_channel = match connection.create_data_channel(COMBAT_DATA_CHANNEL_LABEL, None).await {
+        Ok(data_channel) => data_channel,
+        Err(error) => {
+            tracing::warn!("mario relay: failed to create a combat data channel to {peer_id:?}: {error}");
+            return;
+        }
+    };
+    spawn_position_receive_loop(peer_id, position_channel.clone(), context.remote_mario.clone());
+    spawn_combat_receive_loop(peer_id, combat_channel.clone(), context.incoming_combat.clone());
     context.peers.write().insert(
         peer_id,
-        PeerLink { connection: connection.clone(), channel: RwLock::new(Some(data_channel)), ice_gate: parking_lot::Mutex::new(IceGate::default()) },
+        PeerLink {
+            connection: connection.clone(),
+            position_channel: RwLock::new(Some(position_channel)),
+            combat_channel: RwLock::new(Some(combat_channel)),
+            ice_gate: parking_lot::Mutex::new(IceGate::default()),
+        },
     );
 
     let offer = match connection.create_offer(None).await {
@@ -244,7 +298,12 @@ async fn accept_offer(peer_id: PeerId, sdp: String, context: Arc<Context>) {
     };
     context.peers.write().insert(
         peer_id,
-        PeerLink { connection: connection.clone(), channel: RwLock::new(None), ice_gate: parking_lot::Mutex::new(IceGate::default()) },
+        PeerLink {
+            connection: connection.clone(),
+            position_channel: RwLock::new(None),
+            combat_channel: RwLock::new(None),
+            ice_gate: parking_lot::Mutex::new(IceGate::default()),
+        },
     );
 
     if let Err(error) = connection.set_remote_description(offer).await {
@@ -269,10 +328,10 @@ async fn accept_offer(peer_id: PeerId, sdp: String, context: Arc<Context>) {
     send_client_message(&context.ws_sink, &ClientMessage::Answer { to: peer_id, sdp }).await;
 }
 
-/// Drains one data channel's events for as long as it stays open, writing every position packet
-/// straight into `remote_mario`. Newest write wins, which is correct for an unordered channel where
-/// an older packet arriving late is just noise.
-fn spawn_receive_loop(peer_id: PeerId, channel: Arc<dyn DataChannel>, remote_mario: RemoteMarioTable) {
+/// Drains one position data channel's events for as long as it stays open, writing every position
+/// packet straight into `remote_mario`. Newest write wins, which is correct for an unordered
+/// channel where an older packet arriving late is just noise.
+fn spawn_position_receive_loop(peer_id: PeerId, channel: Arc<dyn DataChannel>, remote_mario: RemoteMarioTable) {
     tokio::spawn(async move {
         while let Some(event) = channel.poll().await {
             match event {
@@ -285,11 +344,31 @@ fn spawn_receive_loop(peer_id: PeerId, channel: Arc<dyn DataChannel>, remote_mar
                 _ => {}
             }
         }
-        tracing::debug!("mario relay: data channel with {peer_id:?} ended");
+        tracing::debug!("mario relay: position channel with {peer_id:?} ended");
     });
 }
 
-/// Every `SEND_INTERVAL`, snapshots `local_mario` and pushes it out every currently open data
+/// Drains one combat data channel's events for as long as it stays open, appending every combat
+/// event to `incoming_combat` (pushed, not keyed like `remote_mario` — unlike position, more than
+/// one distinct hit can land in the same tick and every one of them matters, not just the latest).
+fn spawn_combat_receive_loop(peer_id: PeerId, channel: Arc<dyn DataChannel>, incoming_combat: Arc<RwLock<Vec<CombatEvent>>>) {
+    tokio::spawn(async move {
+        while let Some(event) = channel.poll().await {
+            match event {
+                DataChannelEvent::OnMessage(message) => {
+                    let Ok(text) = String::from_utf8(message.data.to_vec()) else { continue };
+                    let Ok(combat_event) = serde_json::from_str::<CombatEvent>(&text) else { continue };
+                    incoming_combat.write().push(combat_event);
+                }
+                DataChannelEvent::OnClose => break,
+                _ => {}
+            }
+        }
+        tracing::debug!("mario relay: combat channel with {peer_id:?} ended");
+    });
+}
+
+/// Every `SEND_INTERVAL`, snapshots `local_mario` and pushes it out every currently open position
 /// channel, unconditionally, whether or not anything moved. A future authoritative server sitting
 /// behind this needs a steady stream, not change-detected updates.
 fn spawn_send_loop(context: Arc<Context>, local_mario: Arc<RwLock<Vec<PositionPacket>>>) {
@@ -304,7 +383,7 @@ fn spawn_send_loop(context: Arc<Context>, local_mario: Arc<RwLock<Vec<PositionPa
             if snapshot.is_empty() {
                 continue;
             }
-            let channels: Vec<Arc<dyn DataChannel>> = context.peers.read().values().filter_map(|link| link.channel.read().clone()).collect();
+            let channels: Vec<Arc<dyn DataChannel>> = context.peers.read().values().filter_map(|link| link.position_channel.read().clone()).collect();
             if channels.is_empty() {
                 continue;
             }
@@ -325,7 +404,45 @@ fn spawn_send_loop(context: Arc<Context>, local_mario: Arc<RwLock<Vec<PositionPa
     });
 }
 
-async fn run(relay_url: String, room: String, local_mario: Arc<RwLock<Vec<PositionPacket>>>, remote_mario: RemoteMarioTable) {
+/// Unlike position, combat events are one-shot, not continuously-resent state, so this polls a
+/// short fixed interval just to batch up whatever landed since the last tick and drains the queue
+/// rather than resending a persistent snapshot every tick. Broadcasts every event to every
+/// currently open combat channel; each receiving instance decides for itself whether the named
+/// target is one of its own local players (see `physics::update_mario_physics`) — this loop has no
+/// idea which peer owns which candidate, and doesn't need to.
+fn spawn_combat_send_loop(context: Arc<Context>, outgoing_combat: Arc<RwLock<Vec<CombatEvent>>>) {
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(SEND_INTERVAL);
+
+        loop {
+            ticker.tick().await;
+
+            let pending = std::mem::take(&mut *outgoing_combat.write());
+            if pending.is_empty() {
+                continue;
+            }
+            let channels: Vec<Arc<dyn DataChannel>> = context.peers.read().values().filter_map(|link| link.combat_channel.read().clone()).collect();
+
+            for event in pending {
+                let Ok(text) = serde_json::to_string(&event) else { continue };
+                for channel in &channels {
+                    if let Err(error) = channel.send_text(&text).await {
+                        tracing::warn!("mario relay: combat event send to a peer failed: {error}");
+                    }
+                }
+            }
+        }
+    });
+}
+
+async fn run(
+    relay_url: String,
+    room: String,
+    local_mario: Arc<RwLock<Vec<PositionPacket>>>,
+    remote_mario: RemoteMarioTable,
+    outgoing_combat: Arc<RwLock<Vec<CombatEvent>>>,
+    incoming_combat: Arc<RwLock<Vec<CombatEvent>>>,
+) {
     let (stream, _) = match tokio_tungstenite::connect_async(&relay_url).await {
         Ok(connected) => connected,
         Err(error) => {
@@ -336,10 +453,11 @@ async fn run(relay_url: String, room: String, local_mario: Arc<RwLock<Vec<Positi
 
     let (sink, mut source) = stream.split();
     let ws_sink: WsSink = Arc::new(tokio::sync::Mutex::new(sink));
-    let context = Arc::new(Context { ws_sink: ws_sink.clone(), peers: RwLock::new(HashMap::new()), remote_mario });
+    let context = Arc::new(Context { ws_sink: ws_sink.clone(), peers: RwLock::new(HashMap::new()), remote_mario, incoming_combat });
 
     send_client_message(&ws_sink, &ClientMessage::Join { room }).await;
     spawn_send_loop(context.clone(), local_mario);
+    spawn_combat_send_loop(context.clone(), outgoing_combat);
 
     while let Some(message) = source.next().await {
         let text = match message {
@@ -427,9 +545,19 @@ async fn run(relay_url: String, room: String, local_mario: Arc<RwLock<Vec<Positi
 }
 
 /// Spawns the whole peer-sync task onto `runtime`. `local_mario` is refreshed by a Bevy system
-/// elsewhere every physics tick with this instance's own currently owned positions. This task's send
-/// loop reads whatever's there on its own fixed interval, stamping a fresh `seq` per `candidate_id`
-/// right before sending. `remote_mario` is written to as packets arrive from any connected peer.
-pub fn spawn(runtime: tokio::runtime::Handle, relay_url: String, room: String, local_mario: Arc<RwLock<Vec<PositionPacket>>>, remote_mario: RemoteMarioTable) {
-    runtime.spawn(run(relay_url, room, local_mario, remote_mario));
+/// elsewhere every physics tick with this instance's own currently owned positions; `remote_mario`
+/// is written to as position packets arrive from any connected peer. `outgoing_combat` is pushed to
+/// by that same physics system whenever a local swing lands on a remote-tracked target;
+/// `incoming_combat` is written to as combat events arrive, for that system to drain and apply.
+#[allow(clippy::too_many_arguments)]
+pub fn spawn(
+    runtime: tokio::runtime::Handle,
+    relay_url: String,
+    room: String,
+    local_mario: Arc<RwLock<Vec<PositionPacket>>>,
+    remote_mario: RemoteMarioTable,
+    outgoing_combat: Arc<RwLock<Vec<CombatEvent>>>,
+    incoming_combat: Arc<RwLock<Vec<CombatEvent>>>,
+) {
+    runtime.spawn(run(relay_url, room, local_mario, remote_mario, outgoing_combat, incoming_combat));
 }

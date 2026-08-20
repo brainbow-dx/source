@@ -15,6 +15,7 @@ use bevy::ecs::message::MessageWriter;
 use bevy::time::Time;
 
 use crate::persistence::PersistenceWrite;
+use crate::relay;
 use crate::relay::PositionPacket;
 use crate::render::apply_cheat;
 use crate::render::CHEAT_ENTRIES;
@@ -631,11 +632,23 @@ pub fn update_mario_physics(
         }
     }
 
+    // Combat events a remote attacker landed on one of this instance's own local players (see
+    // `relay`'s own doc comment: combat is attacker-authoritative, so this instance is the only
+    // one with the standing to apply a death to a player it actually owns). Applied before local
+    // hit detection below purely for read order; the two never touch the same player in one tick
+    // since a dead player can't be found as anyone's local target anyway.
+    for event in std::mem::take(&mut *state.incoming_combat_events.write()) {
+        let Some((_, _, target)) = mario.iter_mut().find(|(_, candidate_id, _)| *candidate_id == event.target_candidate_id) else {
+            continue; // Not one of this instance's own players; nothing to do.
+        };
+        apply_local_death(target, &event.target_candidate_id, -event.dx, -event.dy, &state, &mut commands, &sfx);
+    }
+
     // Hit detection: any player whose swing is still live and hasn't already landed a hit checks
-    // every other local player for contact. Cross-instance hits aren't handled here: this instance
-    // has no authority over a remote player's state, and their networked position lags real time
-    // slightly regardless. That needs a real damage-event message over the relay's data channel,
-    // not local-only position math.
+    // every other player for contact, local first, then remote-tracked ones. A remote target's
+    // death can't be applied here directly, this instance has no authority over a player it
+    // doesn't own (see this loop's own remote branch, and `relay`'s doc comment) — instead it
+    // decides the hit and hands it off as a `CombatEvent` for the target's own instance to apply.
     for attacker_index in 0..mario.len() {
         if !mario[attacker_index].2.alive {
             continue;
@@ -653,59 +666,56 @@ pub fn update_mario_physics(
                 if target_index == attacker_index || !target.alive {
                     return false;
                 }
-                let (delta_x, delta_y) = (target.x - attacker_x, target.y - attacker_y);
-                let distance = (delta_x * delta_x + delta_y * delta_y).sqrt();
-                if distance > MARIO_ATTACK_REACH || distance <= f32::EPSILON {
-                    return false;
-                }
-                let alignment = (delta_x / distance) * effect.dx + (delta_y / distance) * effect.dy;
-                alignment > MARIO_ATTACK_DIRECTION_COS_THRESHOLD
+                attack_cone_hits(attacker_x, attacker_y, effect, target.x, target.y)
             })
             .map(|(target_index, _)| target_index);
 
-        let Some(target_index) = hit_target_index else { continue };
+        if let Some(target_index) = hit_target_index {
+            mario[attacker_index].2.attack_effect.as_mut().unwrap().has_hit = true;
+            mario[attacker_index].2.kills += 1;
+            play_attack_impact_sfx(&mut commands, &sfx, effect.heavy);
+
+            // The target gets the heavier rumble, since they're the one getting destroyed. The
+            // attacker gets a lighter confirmation tap that the swing landed.
+            rumble.write(bevy::input::gamepad::GamepadRumbleRequest::Add {
+                gamepad: mario[target_index].0,
+                intensity: MARIO_HIT_RUMBLE_TARGET_INTENSITY,
+                duration: MARIO_HIT_RUMBLE_TARGET_DURATION,
+            });
+            rumble.write(bevy::input::gamepad::GamepadRumbleRequest::Add {
+                gamepad: mario[attacker_index].0,
+                intensity: MARIO_HIT_RUMBLE_ATTACKER_INTENSITY,
+                duration: MARIO_HIT_RUMBLE_ATTACKER_DURATION,
+            });
+
+            let target_candidate_id = mario[target_index].1.clone();
+            apply_local_death(&mut mario[target_index].2, &target_candidate_id, -effect.dx, -effect.dy, &state, &mut commands, &sfx);
+            continue;
+        }
+
+        // No local target in range. Check remote-tracked players too — the attack cone math is
+        // identical, only the position source differs (a `PositionPacket`'s last-known spot
+        // instead of a live local `MarioState`, unavoidably a beat stale).
+        let remote_target = state.remote_mario.read().iter().find_map(|(candidate_id, packet)| {
+            attack_cone_hits(attacker_x, attacker_y, effect, packet.x, packet.y).then(|| candidate_id.clone())
+        });
+        let Some(target_candidate_id) = remote_target else { continue };
 
         mario[attacker_index].2.attack_effect.as_mut().unwrap().has_hit = true;
         mario[attacker_index].2.kills += 1;
-        sfx::play(&mut commands, if effect.heavy { &sfx.heavy_hit } else { &sfx.hit_crunch });
-        sfx::play(&mut commands, &sfx.hit_hurt);
-
-        // The target gets the heavier rumble, since they're the one getting destroyed. The
-        // attacker gets a lighter confirmation tap that the swing landed.
-        rumble.write(bevy::input::gamepad::GamepadRumbleRequest::Add {
-            gamepad: mario[target_index].0,
-            intensity: MARIO_HIT_RUMBLE_TARGET_INTENSITY,
-            duration: MARIO_HIT_RUMBLE_TARGET_DURATION,
-        });
+        play_attack_impact_sfx(&mut commands, &sfx, effect.heavy);
         rumble.write(bevy::input::gamepad::GamepadRumbleRequest::Add {
             gamepad: mario[attacker_index].0,
             intensity: MARIO_HIT_RUMBLE_ATTACKER_INTENSITY,
             duration: MARIO_HIT_RUMBLE_ATTACKER_DURATION,
         });
-
-        // Every connected hit is a full kill: there's no partial damage scale.
-        let (death_x, death_y) = (mario[target_index].2.x, mario[target_index].2.y);
-        mario[target_index].2.alive = false;
-        sfx::play(&mut commands, &sfx.death);
-        mario[target_index].2.death_effect =
-            Some(MarioDeathEffect { x: death_x, y: death_y, remaining: MARIO_DEATH_EFFECT_DURATION, burst_dx: -effect.dx, burst_dy: -effect.dy });
-        mario[target_index].2.lives = mario[target_index].2.lives.saturating_sub(1);
-        mario[target_index].2.respawn_remaining = if mario[target_index].2.lives > 0 { Some(MARIO_RESPAWN_SECONDS) } else { None };
-
-        // Every lost life becomes a permanent floating ghost, regardless of whether this death
-        // exhausted this player's lives.
-        let target_candidate_id = mario[target_index].1.clone();
-        let (target_name, target_color) = {
-            let connected_players = state.connected_players.read();
-            connected_players
-                .iter()
-                .find(|(id, ..)| *id == target_candidate_id)
-                .map(|(_, name, color)| (name.clone(), *color))
-                .unwrap_or_else(|| (target_candidate_id.clone(), mario_player_color(target_index)))
-        };
-        if let Some(sender) = state.persistence_writes.read().as_ref() {
-            let _ = sender.send(PersistenceWrite::Defeat { candidate_id: target_candidate_id, name: target_name, color: target_color });
-        }
+        state.outgoing_combat_events.write().push(relay::CombatEvent {
+            attacker_candidate_id: mario[attacker_index].1.clone(),
+            target_candidate_id,
+            heavy: effect.heavy,
+            dx: effect.dx,
+            dy: effect.dy,
+        });
     }
 
     for (_, _, mario_state) in mario.iter_mut() {
@@ -735,6 +745,60 @@ pub fn update_mario_physics(
             jumps_used: mario_state.jumps_used,
         })
         .collect();
+}
+
+/// The attack-cone check `update_mario_physics`'s hit detection runs against both a local target's
+/// live `MarioState` and a remote target's last-known `PositionPacket` — same geometry either way,
+/// only the position source differs, so both call this instead of duplicating it.
+fn attack_cone_hits(attacker_x: f32, attacker_y: f32, effect: MarioAttackEffect, target_x: f32, target_y: f32) -> bool {
+    let (delta_x, delta_y) = (target_x - attacker_x, target_y - attacker_y);
+    let distance = (delta_x * delta_x + delta_y * delta_y).sqrt();
+    if distance > MARIO_ATTACK_REACH || distance <= f32::EPSILON {
+        return false;
+    }
+    let alignment = (delta_x / distance) * effect.dx + (delta_y / distance) * effect.dy;
+    alignment > MARIO_ATTACK_DIRECTION_COS_THRESHOLD
+}
+
+/// The attacker-side "my swing just connected" feedback: shared by a local hit and a hit on a
+/// remote-tracked target, since the attacker's own instance always plays this immediately either
+/// way, it's only whether the *target*'s death gets applied locally or handed off that differs.
+fn play_attack_impact_sfx(commands: &mut Commands, sfx: &MarioSfx, heavy: bool) {
+    sfx::play(commands, if heavy { &sfx.heavy_hit } else { &sfx.hit_crunch });
+    sfx::play(commands, &sfx.hit_hurt);
+}
+
+/// Applies a death to `target`, one of this instance's own locally-owned players — never a remote
+/// one, this instance has no authority over those (see `relay`'s own doc comment). Shared by a
+/// locally-detected hit and an incoming `CombatEvent` naming a local player as the target, so both
+/// paths apply the exact same rules: a full kill, no partial damage, a permanent ghost recorded
+/// exactly once. Does nothing if `target` is already dead, since a duplicate incoming combat event
+/// (unexpected on a reliable channel, but cheap to guard regardless) shouldn't double-kill.
+fn apply_local_death(target: &mut MarioState, target_candidate_id: &str, burst_dx: f32, burst_dy: f32, state: &GameState, commands: &mut Commands, sfx: &MarioSfx) {
+    if !target.alive {
+        return;
+    }
+
+    let (death_x, death_y) = (target.x, target.y);
+    target.alive = false;
+    sfx::play(commands, &sfx.death);
+    target.death_effect = Some(MarioDeathEffect { x: death_x, y: death_y, remaining: MARIO_DEATH_EFFECT_DURATION, burst_dx, burst_dy });
+    target.lives = target.lives.saturating_sub(1);
+    target.respawn_remaining = if target.lives > 0 { Some(MARIO_RESPAWN_SECONDS) } else { None };
+
+    // Every lost life becomes a permanent floating ghost, regardless of whether this death
+    // exhausted this player's lives.
+    let (target_name, target_color) = {
+        let connected_players = state.connected_players.read();
+        connected_players
+            .iter()
+            .find(|(id, ..)| id == target_candidate_id)
+            .map(|(_, name, color)| (name.clone(), *color))
+            .unwrap_or_else(|| (target_candidate_id.to_string(), mario_player_color(0)))
+    };
+    if let Some(sender) = state.persistence_writes.read().as_ref() {
+        let _ = sender.send(PersistenceWrite::Defeat { candidate_id: target_candidate_id.to_string(), name: target_name, color: target_color });
+    }
 }
 
 /// Spawns the single static platform this example plays on, once, at startup. Placed relative to
