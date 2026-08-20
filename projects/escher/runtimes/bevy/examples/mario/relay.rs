@@ -435,6 +435,29 @@ fn spawn_combat_send_loop(context: Arc<Context>, outgoing_combat: Arc<RwLock<Vec
     });
 }
 
+/// How many times, and how far apart, a fresh connection to the relay's WebSocket is retried
+/// before giving up. Covers two real cases, not just flakiness: a `--host` instance dialing its
+/// own just-spawned embedded relay server (`main.rs`'s `--host`) before that server has finished
+/// binding its listener, and a `--connect` peer starting up slightly before the host they're
+/// joining has. `3s` total is a generous grace period for either without making a genuinely
+/// unreachable relay hang around annoyingly long before falling back to local-only play.
+const CONNECT_RETRY_ATTEMPTS: u32 = 15;
+const CONNECT_RETRY_DELAY: Duration = Duration::from_millis(200);
+
+#[allow(clippy::type_complexity)]
+async fn connect_with_retry(
+    relay_url: &str,
+) -> Result<(WsStream, tokio_tungstenite::tungstenite::handshake::client::Response), tokio_tungstenite::tungstenite::Error> {
+    for attempt in 0..CONNECT_RETRY_ATTEMPTS {
+        match tokio_tungstenite::connect_async(relay_url).await {
+            Ok(connected) => return Ok(connected),
+            Err(error) if attempt + 1 == CONNECT_RETRY_ATTEMPTS => return Err(error),
+            Err(_) => tokio::time::sleep(CONNECT_RETRY_DELAY).await,
+        }
+    }
+    unreachable!("the loop above always returns on its last attempt")
+}
+
 async fn run(
     relay_url: String,
     room: String,
@@ -443,10 +466,10 @@ async fn run(
     outgoing_combat: Arc<RwLock<Vec<CombatEvent>>>,
     incoming_combat: Arc<RwLock<Vec<CombatEvent>>>,
 ) {
-    let (stream, _) = match tokio_tungstenite::connect_async(&relay_url).await {
+    let (stream, _) = match connect_with_retry(&relay_url).await {
         Ok(connected) => connected,
         Err(error) => {
-            tracing::warn!("mario relay: could not reach the relay at {relay_url}: {error}, continuing without remote sync");
+            tracing::warn!("mario relay: could not reach the relay at {relay_url} after retrying: {error}, continuing without remote sync");
             return;
         }
     };
@@ -542,6 +565,21 @@ async fn run(
     }
 
     tracing::info!("mario relay: relay connection ended");
+}
+
+/// Starts a real `atlas_relay::serve` in-process, bound to every network interface (`0.0.0.0`)
+/// rather than just loopback, so a peer elsewhere on the LAN can actually reach it — the
+/// embedded-server half of `--host` (`main.rs`). Detached: nothing here ever stops it, matching
+/// `atlas_relay::serve`'s own "runs until the process is killed" contract. This instance still
+/// connects to it as an ordinary client afterward via its own regular `spawn` call below, the same
+/// as any other peer would; it doesn't get any special local-only shortcut.
+pub fn spawn_embedded_server(runtime: tokio::runtime::Handle, port: u16) {
+    runtime.spawn(async move {
+        let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
+        if let Err(error) = atlas_relay::serve(addr).await {
+            tracing::warn!("mario relay: embedded relay server failed: {error}");
+        }
+    });
 }
 
 /// Spawns the whole peer-sync task onto `runtime`. `local_mario` is refreshed by a Bevy system

@@ -190,10 +190,16 @@ pub enum PersistenceWrite {
 /// through the one writer task, in order, so nothing else ever touches the connection directly.
 /// Failures anywhere in here are logged and swallowed: local, single-player play keeps working with
 /// no `sqld` reachable at all.
-pub fn spawn_connect_persistence(state: crate::GameState) {
+///
+/// `url` is this instance's own resolved choice (see `main.rs`'s `--sqld`/`--connect`), checked
+/// before falling back to the same `atlas::env::SYNC_URL_KEY` convention Anvil and other Brainbow
+/// apps already use to discover a shared `sqld`, in turn before `Persistence::connect`'s own
+/// `DEFAULT_SQLD_URL` fallback.
+pub fn spawn_connect_persistence(state: crate::GameState, url: Option<String>) {
     let outer_runtime = state.runtime.clone();
     outer_runtime.spawn(async move {
-        let store = match Persistence::connect(std::env::var(atlas::env::SYNC_URL_KEY).ok().as_deref()).await {
+        let url = url.or_else(|| std::env::var(atlas::env::SYNC_URL_KEY).ok());
+        let store = match Persistence::connect(url.as_deref()).await {
             Ok(store) => store,
             Err(error) => {
                 tracing::warn!("Could not connect to sqld, running without persistence: {error}");

@@ -1,6 +1,8 @@
 //! A small terminal game proving Escher's terminal-plus-Bevy stack for game dev: a jump-and-attack
 //! platformer, one square per connected gamepad, with permanent ghosts for every lost life and
-//! optional cross-machine multiplayer over `atlas-relay`.
+//! optional cross-machine multiplayer over `atlas-relay`. For a LAN session: one machine runs
+//! `--host` (starts its own embedded relay signaling server, reachable over the whole LAN, not
+//! just loopback), everyone else runs `--connect <that machine's LAN IP>`.
 //!
 //! Controls (gamepad only): left stick or d-pad to move, South to jump (again in the air for a
 //! double jump, or to wall-kick off a wall), East to attack, Start to open the pause menu. Ctrl+C
@@ -79,10 +81,39 @@ const BACKDROP_TEXT: &str =
 #[derive(clap::Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    /// The `atlas-relay` WebSocket this instance signals position sync through. No relay reachable
-    /// at this address just means no remote players show up: local play keeps working regardless.
-    #[arg(long, default_value = "ws://127.0.0.1:9200/ws")]
-    relay: String,
+    /// Starts this instance as the host for a multi-machine session: an embedded `atlas-relay`
+    /// signaling server (`main`'s own `spawn_embedded_relay_server`), bound to every network
+    /// interface rather than just loopback so a peer elsewhere on the LAN can actually reach it,
+    /// with this instance's own relay/`sqld` URLs defaulting to itself. A peer then only needs
+    /// `--connect <this-machine's-LAN-IP>`, not separately-managed relay/sqld addresses. Mutually
+    /// exclusive with `--connect`: a host doesn't join anything, it's the thing peers connect to.
+    #[arg(long, conflicts_with = "connect")]
+    host: bool,
+
+    /// Joins an existing `--host` instance at this LAN address, deriving both the relay URL and
+    /// the `sqld` URL from it (`ws://<addr>:<port>/ws`, `http://<addr>:8081`) — the easy path for
+    /// "there's a host running over there, connect to it," so a peer doesn't need to separately
+    /// know or type both addresses. `--relay`/`--sqld` below still override either individually if
+    /// a session's actual topology doesn't put both services on the same machine.
+    #[arg(long)]
+    connect: Option<String>,
+
+    /// Port the embedded relay server listens on (`--host`) or is reached at (`--connect`).
+    /// Irrelevant if `--relay` is set explicitly.
+    #[arg(long, default_value_t = 9200)]
+    port: u16,
+
+    /// The `atlas-relay` WebSocket this instance signals position/combat sync through, overriding
+    /// whatever `--host`/`--connect` would otherwise derive. No relay reachable at this address
+    /// just means no remote players show up: local play keeps working regardless.
+    #[arg(long)]
+    relay: Option<String>,
+
+    /// The `sqld` HTTP endpoint for ghost/gamepad-ownership persistence, overriding whatever
+    /// `--host`/`--connect` would otherwise derive. No `sqld` reachable just means no persistence:
+    /// local play keeps working regardless.
+    #[arg(long)]
+    sqld: Option<String>,
 
     /// The `atlas-relay` room this instance's positions are broadcast and received in. Every
     /// instance in the same session needs to agree on this to see each other move.
@@ -93,6 +124,17 @@ struct Args {
     /// leaves. Defaults to this machine's hostname.
     #[arg(long)]
     name: Option<String>,
+}
+
+/// Best-effort local LAN IP for the `--host` startup banner, purely informational — binding itself
+/// already uses `0.0.0.0` regardless of whether this succeeds. The classic trick: "connect" a UDP
+/// socket to an external address (`connect` on a connectionless UDP socket never actually sends a
+/// packet, it's just a local routing-table lookup) and read back which local address the OS would
+/// have used to reach it, which is whichever interface actually has a real route out.
+fn local_lan_ip() -> Option<std::net::IpAddr> {
+    let socket = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
+    socket.connect("8.8.8.8:80").ok()?;
+    socket.local_addr().ok().map(|addr| addr.ip())
 }
 
 fn main() -> Result<ExitCode> {
@@ -129,11 +171,29 @@ fn main() -> Result<ExitCode> {
     // independent of the render loop's own occasional blocking calls.
     let runtime = Arc::new(tokio::runtime::Builder::new_multi_thread().enable_all().build()?);
 
+    // Resolved once, in this order, for both the relay and `sqld`: an explicit `--relay`/`--sqld`
+    // always wins; otherwise `--host` points both at this machine (`sqld` still falls all the way
+    // back to `spawn_connect_persistence`'s own default rather than being forced, since a host
+    // might not be running `sqld` at all); otherwise `--connect <addr>` derives both from that one
+    // address; otherwise (plain local play) the same loopback default this always had.
+    let relay_url = args.relay.clone().unwrap_or_else(|| match (args.host, &args.connect) {
+        (true, _) => format!("ws://127.0.0.1:{}/ws", args.port),
+        (false, Some(host)) => format!("ws://{host}:{}/ws", args.port),
+        (false, None) => format!("ws://127.0.0.1:{}/ws", args.port),
+    });
+    let sqld_url = args.sqld.clone().or_else(|| args.connect.clone().map(|host| format!("http://{host}:8081")));
+
+    if args.host {
+        relay::spawn_embedded_server(runtime.handle().clone(), args.port);
+        let lan_ip = local_lan_ip().map(|ip| ip.to_string()).unwrap_or_else(|| "<this-machine's-LAN-IP>".to_string());
+        tracing::info!("Hosting: a peer on the same LAN joins with `--connect {lan_ip} --room {}`", args.room);
+    }
+
     let state = GameState::new(runtime.clone(), name, identity_uuid);
-    persistence::spawn_connect_persistence(state.clone());
+    persistence::spawn_connect_persistence(state.clone(), sqld_url);
     relay::spawn(
         runtime.handle().clone(),
-        args.relay.clone(),
+        relay_url,
         args.room.clone(),
         state.local_mario_snapshot.clone(),
         state.remote_mario.clone(),
