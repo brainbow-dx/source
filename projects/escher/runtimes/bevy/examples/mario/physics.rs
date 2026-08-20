@@ -18,6 +18,8 @@ use crate::persistence::PersistenceWrite;
 use crate::relay::PositionPacket;
 use crate::render::apply_cheat;
 use crate::render::CHEAT_ENTRIES;
+use crate::sfx;
+use crate::sfx::MarioSfx;
 use crate::GameState;
 
 /// One player's live physics and combat state. `x`/`y` are fractions of the play area's own
@@ -497,6 +499,8 @@ pub fn update_mario_physics(
     colliders: Query<&MarioCollider>,
     time: Res<Time>,
     mut rumble: MessageWriter<bevy::input::gamepad::GamepadRumbleRequest>,
+    mut commands: Commands,
+    sfx: Res<MarioSfx>,
 ) {
     let dt = time.delta_secs().clamp(1.0 / 60.0, 0.1);
 
@@ -573,7 +577,19 @@ pub fn update_mario_physics(
 
         match mario.iter_mut().find(|(existing, ..)| *existing == entity) {
             Some((_, _, mario_state)) if mario_state.alive => {
-                mario_state.step(dt, move_input, attack_stick_y, jump_pressed, jump_held, attack_pressed, crouch_held, body_height, body_width)
+                // `step` doesn't report what it did, so a jump/attack sound needs the before/after
+                // diff: `jumps_used` only goes up on a jump actually firing (not just the button
+                // being held), and `attack_effect` only goes from `None` to `Some` the instant a
+                // new swing fires, not on every tick it stays visible.
+                let jumps_used_before = mario_state.jumps_used;
+                let had_attack_effect = mario_state.attack_effect.is_some();
+                mario_state.step(dt, move_input, attack_stick_y, jump_pressed, jump_held, attack_pressed, crouch_held, body_height, body_width);
+                if mario_state.jumps_used > jumps_used_before {
+                    sfx::play(&mut commands, &sfx.jump);
+                }
+                if mario_state.attack_effect.is_some() && !had_attack_effect {
+                    sfx::play(&mut commands, &sfx.attack);
+                }
             }
             // Dead with lives left: just counts down to a respawn. Dead with no lives left
             // (`respawn_remaining` already `None`) falls through to this arm and does nothing.
@@ -637,6 +653,8 @@ pub fn update_mario_physics(
 
         mario[attacker_index].2.attack_effect.as_mut().unwrap().has_hit = true;
         mario[attacker_index].2.kills += 1;
+        sfx::play(&mut commands, &sfx.hit_crunch);
+        sfx::play(&mut commands, &sfx.hit_hurt);
 
         // The target gets the heavier rumble, since they're the one getting destroyed. The
         // attacker gets a lighter confirmation tap that the swing landed.
@@ -654,6 +672,7 @@ pub fn update_mario_physics(
         // Every connected hit is a full kill: there's no partial damage scale.
         let (death_x, death_y) = (mario[target_index].2.x, mario[target_index].2.y);
         mario[target_index].2.alive = false;
+        sfx::play(&mut commands, &sfx.death);
         mario[target_index].2.death_effect =
             Some(MarioDeathEffect { x: death_x, y: death_y, remaining: MARIO_DEATH_EFFECT_DURATION, burst_dx: -effect.dx, burst_dy: -effect.dy });
         mario[target_index].2.lives = mario[target_index].2.lives.saturating_sub(1);

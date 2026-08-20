@@ -9,6 +9,11 @@ default = ["terminal"]
 # launched from, alongside the game window, driven from Bevy's own schedule rather than a
 # competing event loop. See `src/terminal.rs` and `src/legacy/README.md`.
 terminal = ["dep:ratatui", "dep:crossterm", "dep:smallvec", "dep:escher-terminal", "dep:parking_lot"]
+# Pulls in `bevy_audio` plus its `wav` decoder. Off by default, same reasoning as `3d` being
+# dropped from `bevy`'s own default feature set below: most consumers of this crate don't play
+# sound, so audio's own dependency weight (`cpal`, `rodio`, etc.) shouldn't be forced on them.
+# Only `examples/mario` (see its `sfx.rs`) needs this; its `[[example]]` entry below requires it.
+audio = ["bevy/bevy_audio", "bevy/wav"]
 debug = []
 verbose = []
 
@@ -57,3 +62,8 @@ futures-util = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true, features = ["std"] }
 hostname = { workspace = true }
+
+[[example]]
+name = "mario"
+path = "examples/mario/main.rs"
+required-features = ["audio"]

@@ -13,6 +13,7 @@ mod physics;
 mod relay;
 mod render;
 mod scene;
+mod sfx;
 
 use std::collections::HashSet;
 use std::io::Stdout;
@@ -253,7 +254,7 @@ struct MarioTerminalPlugin;
 
 impl Plugin for MarioTerminalPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, (terminal_startup, physics::spawn_platform));
+        app.add_systems(Startup, (terminal_startup, physics::spawn_platform, sfx::setup_mario_sfx));
         app.add_systems(PreUpdate, terminal_draw);
         app.add_systems(Update, (physics::update_mario_physics, scene::spawn_scene_window_on_toggle, scene::sync_scene_sprites).chain());
         app.add_systems(Last, terminal_exit);
