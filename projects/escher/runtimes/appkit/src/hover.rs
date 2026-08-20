@@ -1,8 +1,8 @@
 //! Pointing-hand cursor + hover-state notification for any native view. `NSTrackingArea`'s
-//! `owner` must be a real Objective-C object responding to `mouseEntered:`/`mouseExited:` — this
+//! `owner` must be a real Objective-C object responding to `mouseEntered:`/`mouseExited:`. This
 //! is that object, mirroring why `crate::action::ActionTarget` exists (bridging an AppKit
 //! callback mechanism into a plain Rust closure). Works on stock `NSButton`/`NSView` instances
-//! without subclassing them — the tracking area (not the view itself) is what needs a custom
+//! without subclassing them. The tracking area, not the view itself, is what needs a custom
 //! owner.
 
 use std::cell::RefCell;
@@ -28,11 +28,11 @@ define_class!(
     unsafe impl NSObjectProtocol for HoverTarget {}
 
     impl HoverTarget {
-        // SAFETY: matches `NSResponder`'s real `mouseEntered:`/`mouseExited:` signatures —
+        // SAFETY: matches `NSResponder`'s real `mouseEntered:`/`mouseExited:` signatures.
         // `event` is never read, only used to know *that* the pointer crossed the tracking area.
         // `.set()`, not `.push()`/`.pop()`: a push/pop stack only stays correct if every push is
         // matched by exactly one pop, which `NSTrackingArea`'s `.activeInKeyWindow` option can't
-        // guarantee — the window losing key status (Cmd+Tab away, a click outside it) while
+        // guarantee. The window losing key status (Cmd+Tab away, a click outside it) while
         // hovered skips `mouseExited:` entirely, leaving an unpaired push on the stack and the
         // pointing-hand cursor stuck until *something else* happens to pop it back off. `.set()`
         // instead assigns the cursor outright on every transition, so there's no accumulated state

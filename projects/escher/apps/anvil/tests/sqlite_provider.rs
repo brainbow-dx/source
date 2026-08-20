@@ -1,10 +1,10 @@
 //! Guards against `escher/patches/libsqlite3-sys`'s fix silently stopping to apply. That patch
 //! only takes effect for dependency requests it satisfies (see its own `Cargo.toml`'s pinned
-//! version) — if a future update ever needs a newer `libsqlite3-sys` than it declares, Cargo
+//! version). If a future update ever needs a newer `libsqlite3-sys` than it declares, Cargo
 //! quietly falls back to the real, upstream-vanilla crate instead of erroring, which reintroduces
-//! the segfault the patch exists to prevent (two different vendored SQLite forks in one binary —
-//! see the patch crate's own `src/lib.rs` doc comment). This only runs via `cargo test` (a
-//! build/CI-time gate) — it is never compiled into a shipped release binary.
+//! the segfault the patch exists to prevent. That means two different vendored SQLite forks in one
+//! binary; see the patch crate's own `src/lib.rs` doc comment. This only runs via `cargo test`, a
+//! build/CI-time gate. It is never compiled into a shipped release binary.
 
 #[test]
 fn embedded_sqlite_is_libsqls_own_fork() {

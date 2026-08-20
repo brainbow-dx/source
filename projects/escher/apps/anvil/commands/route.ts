@@ -1,39 +1,39 @@
 // Routes text the shell fallback rejected outright (see `AppState::spawn_shell_command`'s
-// `ShellOutcome::Rejected` handling in `main.rs`) through a chain of increasingly capable agents —
-// not a replacement for real command dispatch, just a catch for "that wasn't gibberish, it just
+// `ShellOutcome::Rejected` handling in `main.rs`) through a chain of increasingly capable agents.
+// It's not a replacement for real command dispatch, just a catch for "that wasn't gibberish, it just
 // wasn't spelled as a slash command." Not discovered as a slash command itself
-// (`discover_js_commands` only scans for `.js`, this is `.ts` — same reason `commands/shape.tsx`
+// (`discover_js_commands` only scans for `.js`, this is `.ts`. Same reason `commands/shape.tsx`
 // isn't auto-discovered either).
 //
-// Rust doesn't know anything about routing at all, not even what a "command" is — `main.rs`
+// Rust doesn't know anything about routing at all, not even what a "command" is. `main.rs`
 // doesn't build a tool list and hand it in. This script takes the raw rejected text as its one
 // argument and does
 // everything itself: discovers what's routable by scanning `commands/` (this file's own
-// directory — `Deno.cwd()` is `apps/anvil`, set by `AppState::spawn_shell_command` via
+// directory; `Deno.cwd()` is `apps/anvil`, set by `AppState::spawn_shell_command` via
 // `run_reject_router`, the same convention Rust's own `discover_js_commands` uses) plus the two
-// commands that aren't backed by a script file at all (`task`/`scene` — hardcoded in `main.rs`'s
+// commands that aren't backed by a script file at all (`task`/`scene`, hardcoded in `main.rs`'s
 // `builtin_commands`, mirrored here since there's no file to discover them from).
 //
 // Three tiers, each strictly more expensive/capable than the last, tried in order until one
 // produces something:
-//   1. `tier1LocalToolRouter` — a fast local Ollama tool-call gut check against Anvil's own real
+//   1. `tier1LocalToolRouter`: a fast local Ollama tool-call gut check against Anvil's own real
 //      command list, tested against a real local Ollama instance, not hypothetical. If a tool
 //      clearly matches, that's the answer. If the model replies with plain text instead of
 //      calling a tool, that reply becomes the "updated message" tier 2 receives instead of the
-//      original — a first-pass rephrase/clarification, not a second opinion on whether a tool
+//      original. It's a first-pass rephrase/clarification, not a second opinion on whether a tool
 //      matches.
-//   2/3. `escalateTo` — pluggable, not yet backed by anything real, built out ahead of time so a
+//   2/3. `escalateTo`: pluggable, not yet backed by anything real, built out ahead of time so a
 //      real tier 2/3 is a config change later, not new code. Each is a plain HTTP POST to a
 //      configured URL, `{"message": "..."}` in, the exact same `{"replace": string | null}` shape
-//      this whole script already emits back out — so wiring a real tier 2/3 (a bigger local
+//      this whole script already emits back out. So wiring a real tier 2/3 (a bigger local
 //      model, `eden` once it has a working inference backend, a hosted API behind a small proxy)
 //      later needs zero changes here or on the Rust side, just standing up a service at
 //      `ANVIL_TIER2_URL`/`ANVIL_TIER3_URL`. Unset (the default) skips straight through, so
 //      behavior stays tier 1 (or nothing) unchanged until one is configured.
 //
 // Prints exactly one JSON line: `{"replace": "/command args", "reply": null}` if a real command
-// matched, or `{"replace": null, "reply": "..."}` — tier 1's own conversational reply (a typo
-// correction, an answer to a greeting/question, whatever) — when nothing resolved to a command
+// matched, or `{"replace": null, "reply": "..."}` (tier 1's own conversational reply: a typo
+// correction, an answer to a greeting/question, whatever) when nothing resolved to a command
 // but the model still had something worth telling the user, or `{"replace": null, "reply": null}`
 // if there's truly nothing (including if every configured tier is unreachable, times out, or
 // returns something unparseable). A missing suggestion is always a silent, safe outcome for the
@@ -41,10 +41,10 @@
 
 const OLLAMA_URL = Deno.env.get("ANVIL_OLLAMA_URL") ?? "http://localhost:11434/api/chat";
 // Whatever's configured, this should be a model that actually reports `"tools"` in its
-// `/api/tags` capabilities — `gpt-oss:latest` does, and reliably makes correct tool calls for
+// `/api/tags` capabilities. `gpt-oss:latest` does, and reliably makes correct tool calls for
 // this exact use case.
 const MODEL = Deno.env.get("ANVIL_OLLAMA_MODEL") ?? "gpt-oss:latest";
-// Unset by default — see this file's own top doc comment for the escalation contract each of
+// Unset by default. See this file's own top doc comment for the escalation contract each of
 // these is expected to speak.
 const TIER2_URL = Deno.env.get("ANVIL_TIER2_URL");
 const TIER3_URL = Deno.env.get("ANVIL_TIER3_URL");
@@ -58,7 +58,7 @@ interface Tool {
 }
 
 // `main.rs`'s `builtin_commands()` hardcodes these three as native Rust behavior with `script:
-// None` — including `shape`, even though `commands/shape.tsx` is its real implementation file:
+// None`, including `shape`, even though `commands/shape.tsx` is its real implementation file:
 // it runs through its own bespoke `spawn_shape_command` path, not the generic file-discovery one,
 // so it belongs here, not in the directory scan below. Descriptions mirror `main.rs` verbatim so
 // the router's idea of what these do doesn't drift from the real thing.
@@ -71,7 +71,7 @@ const NATIVE_TOOLS: Tool[] = [
 async function discoverTools(): Promise<Tool[]> {
   const tools = [...NATIVE_TOOLS];
   try {
-    // Only `.js`, matching `discover_js_commands` on the Rust side exactly — `.ts`/`.tsx` files
+    // Only `.js`, matching `discover_js_commands` on the Rust side exactly. `.ts`/`.tsx` files
     // (this script itself, `shape.tsx`) are deliberately not auto-discovered there either.
     for await (const entry of Deno.readDir("commands")) {
       if (!entry.isFile || !entry.name.endsWith(".js")) continue;
@@ -83,8 +83,8 @@ async function discoverTools(): Promise<Tool[]> {
       });
     }
   } catch {
-    // Missing/unreadable `commands/` just means no discovered tools beyond the native ones —
-    // same "optional, not load-bearing" stance `discover_js_commands` takes on the Rust side.
+    // Missing/unreadable `commands/` just means no discovered tools beyond the native ones.
+    // Same "optional, not load-bearing" stance `discover_js_commands` takes on the Rust side.
   }
   return tools;
 }
@@ -107,9 +107,9 @@ function toOllamaTools(tools: Tool[]) {
 }
 
 interface Tier1Result {
-  /// A tool clearly matched — the final answer, nothing else runs.
+  /// A tool clearly matched. That's the final answer, nothing else runs.
   command: string | null;
-  /// Set only when the model replied with plain text instead of calling a tool — a first-pass
+  /// Set only when the model replied with plain text instead of calling a tool. It's a first-pass
   /// rephrase of `input` for tier 2 to consider instead of the raw original. `null` (not just
   /// falling back to `input`) when the model gave nothing usable either way, so a caller can tell
   /// "rephrased to nothing new" apart from "here's a real rephrase."
@@ -159,7 +159,7 @@ async function tier1LocalToolRouter(input: string, tools: Tool[]): Promise<Tier1
   return { command: null, updatedMessage: content || null };
 }
 
-/// A pluggable tier 2/3 escalation step — see this file's own top doc comment for the contract.
+/// A pluggable tier 2/3 escalation step. See this file's own top doc comment for the contract.
 /// `url` unset means this tier doesn't exist yet, so this is a no-op;
 /// unreachable/timed-out/unparseable all collapse to the same "this tier had nothing" outcome as
 /// a deliberate no-op, same stance every tier in this chain already takes.
@@ -188,12 +188,12 @@ try {
 
   const tier1 = await tier1LocalToolRouter(input, tools);
   // Tier 2/3 both consider whatever tier 1's own rephrase settled on, falling back to the raw
-  // input untouched when tier 1 had nothing to add — either way, "the original message itself or
+  // input untouched when tier 1 had nothing to add. Either way, it's "the original message itself or
   // an updated message," never both at once.
   const messageForEscalation = tier1.updatedMessage ?? input;
 
   const replace = tier1.command ?? (await escalateTo(TIER2_URL, messageForEscalation)) ?? (await escalateTo(TIER3_URL, messageForEscalation));
-  // Only surfaced once nothing resolved to a real command to run — tier 1's own reply is the one
+  // Only surfaced once nothing resolved to a real command to run. Tier 1's own reply is the one
   // thing left worth showing the user instead of silently doing nothing.
   const reply = replace ? null : tier1.updatedMessage;
   console.log(JSON.stringify({ replace: replace ?? null, reply }));

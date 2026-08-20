@@ -32,6 +32,8 @@ sys_traits = { workspace = true }
 tempfile = { workspace = true }
 rustls = { workspace = true }
 eyre = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync", "time"] }
 

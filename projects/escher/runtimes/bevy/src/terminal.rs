@@ -1,8 +1,8 @@
 //! A real `escher-terminal` `Scaffold` UI drawn to the OS terminal the Bevy app was launched
 //! from, not the game window itself, driven by Bevy's own `PreUpdate`/`Last` schedule instead
 //! of a separate event loop. `TerminalSurface::draw` (see `escher_core::surface::Surface`)
-//! polls `crossterm` itself each call, so nothing else in this plugin also polls it directly —
-//! two independent pollers would race for the same event stream, each frame's event going to
+//! polls `crossterm` itself each call, so nothing else in this plugin also polls it directly.
+//! Two independent pollers would race for the same event stream, each frame's event going to
 //! whichever happened to run first.
 
 use std::io::Stdout;
@@ -71,7 +71,7 @@ impl Plugin for TerminalPlugin {
 pub struct TerminalProvider {
     terminal: TerminalSurface<CrosstermBackend<Stdout>>,
     /// What's been typed into the command line so far. Shared with the `CrosstermEvent` handler
-    /// registered on the `Scaffold` each `draw_ui` call builds fresh — that handler runs inside
+    /// registered on the `Scaffold` each `draw_ui` call builds fresh. That handler runs inside
     /// `TerminalSurface::draw`'s own dispatch, not as a Bevy system, so it can't take a
     /// `MessageWriter` directly. It writes here instead; `draw_ui` reads it back to render.
     input: Arc<RwLock<String>>,
@@ -168,7 +168,7 @@ impl TerminalProvider {
     }
 
     /// Draws the terminal's `Scaffold` UI for this frame and dispatches whatever input arrived,
-    /// via `TerminalSurface::draw_with_poll_timeout` — a zero timeout, not the library's own
+    /// via `TerminalSurface::draw_with_poll_timeout`, a zero timeout, not the library's own
     /// ~33ms default: this runs as a Bevy `PreUpdate` system, one call per tick, and Bevy's own
     /// reactive scheduling already decides when a tick is worth running at all, so blocking here
     /// too would stall Bevy's entire main thread on every tick that doesn't happen to have an
@@ -268,25 +268,25 @@ impl TerminalProvider {
 ///
 /// After a successful peek, waits for the pending input to actually drain (re-peeking every 2ms,
 /// short enough to notice drain-completion promptly without being a tight busy-spin) before going
-/// back to the long idle poll — but re-sends `WakeUp` roughly every 16ms for as long as the queue
+/// back to the long idle poll. It re-sends `WakeUp` roughly every 16ms for as long as the queue
 /// stays nonempty, rather than a single wake and then silence. That periodic re-wake is load-
 /// bearing, not a nicety: `assistant_terminal_draw`'s own drain loop (`apps/anvil`) deliberately
-/// caps how many times it renders per tick now (see its own comment for why — rendering as fast as
+/// caps how many times it renders per tick now (see its own comment for why; rendering as fast as
 /// raw input arrives during a sustained fast drag measured well over 100fps of real, wasted
 /// terminal repaints), so a single tick is no longer expected to fully drain a long burst by
 /// itself. Without this thread keeping Bevy ticked at a steady cadence throughout, a burst longer
-/// than one tick's small cap would stall instead of finishing — this re-wake is what keeps a
+/// than one tick's small cap would stall instead of finishing. This re-wake is what keeps a
 /// sustained drag's *latest* position dispatched promptly every tick while its actual repaint rate
 /// stays capped, rather than either stalling or spiking.
 ///
 /// The 1s `poll` timeout below also doubles as a once-a-second heartbeat wake, even when it times
 /// out with nothing pending: without it, anything that only refreshes as a side effect of a real
-/// draw — Anvil's fps readout is what surfaced this — silently goes stale the moment input stops,
+/// draw (Anvil's fps readout is what surfaced this) silently goes stale the moment input stops,
 /// frozen at whatever it last measured, since nothing else prompts another tick until nearly a
 /// minute of true idle passes (`WinitSettings::desktop_app()`'s own fallback, per this comment's
 /// own opening paragraph). One extra `WakeUp`/tick a second is negligible next to that.
 /// The actual watching logic (peek stdin, decide when to re-wake) is Bevy/winit-agnostic and
-/// lives in `escher_terminal::watch` — this is a thin wrapper supplying the one winit-specific
+/// lives in `escher_terminal::watch`; this is a thin wrapper supplying the one winit-specific
 /// piece, waking this app's own event loop. `EventLoopProxy::send_event` returning `Err` means
 /// the event loop itself is already gone, mapped to `false` (stop watching) for `watch`'s own
 /// generic `on_wake: impl Fn() -> bool` contract.
@@ -300,12 +300,12 @@ pub fn spawn_input_watcher(event_loop_proxy: winit::event_loop::EventLoopProxy<b
 /// `spawn_input_watcher` above: `WinitSettings::desktop_app()` only ticks Bevy's `Update` schedule
 /// reactively, so a bare `signal_hook::flag::register_usize` handler (which only sets an atomic
 /// from inside the actual restricted signal-handler context, with no way to also wake anything)
-/// could sit unnoticed for as long as that reactive mode's own idle-fallback interval — measured,
+/// could sit unnoticed for as long as that reactive mode's own idle-fallback interval. Measured,
 /// ~13s, not the near-instant response signal handling is supposed to give. Running on a real
 /// background thread via `Signals::forever()` instead means it can call `EventLoopProxy::
 /// send_event` directly, forcing an immediate tick; re-measured after this fix, ~125ms.
 ///
-/// Thin winit-specific wrapper — see `escher_terminal::watch::spawn_signal_watcher`'s own doc
+/// Thin winit-specific wrapper; see `escher_terminal::watch::spawn_signal_watcher`'s own doc
 /// comment for the actual (Bevy/winit-agnostic) watching, origin-logging, and flag contract; this
 /// only supplies the "wake this app's own event loop" callback.
 #[cfg(unix)]
@@ -315,7 +315,7 @@ pub fn spawn_signal_watcher(event_loop_proxy: winit::event_loop::EventLoopProxy<
     })
 }
 
-/// Re-exported unchanged — call after terminal cleanup, at the very end of handling an `AppExit`
+/// Re-exported unchanged. Call after terminal cleanup, at the very end of handling an `AppExit`
 /// a signal caused, so the process actually terminates with that signal's conventional exit
 /// status instead of returning as if this were a normal exit.
 #[cfg(unix)]
@@ -339,7 +339,7 @@ impl From<BackendEvent> for TerminalEvent {
 #[derive(Debug, Message)]
 pub enum TerminalError {
     IoError(std::io::Error),
-    /// `TerminalSurface::try_default()` failed — `color_eyre::Report` isn't `Clone`/`PartialEq`
+    /// `TerminalSurface::try_default()` failed. `color_eyre::Report` isn't `Clone`/`PartialEq`
     /// like a `Message` needs, so its display text is captured instead of the error itself.
     SurfaceError(String),
 }

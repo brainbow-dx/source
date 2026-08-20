@@ -134,7 +134,7 @@ impl Selection {
     }
 }
 
-/// Which edge of a floating overlay a drag started on — whether the user grabbed the body
+/// Which edge of a floating overlay a drag started on. The user could have grabbed the body
 /// (move) or the resize handle in the bottom-right corner (resize). See `TerminalSurface::
 /// overlay_drag_mode` for how a `Down` point is classified into one of these.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -144,7 +144,7 @@ enum OverlayDragMode {
 }
 
 /// A click-drag move/resize of the floating overlay, tracked across frames the same way
-/// `Selection` is (see its own doc comment) — a drag spans many `Drag` events between the
+/// `Selection` is (see its own doc comment). A drag spans many `Drag` events between the
 /// `Down` that starts it and the `Up` that ends it. Unlike `Selection`, this doesn't need an
 /// `ordered()`-style helper: `anchor`/`start_bounds` are combined with the *current* mouse
 /// point fresh on every `Drag`/`Up` event (see `TerminalSurface::resolve_overlay_drag`) rather
@@ -152,11 +152,11 @@ enum OverlayDragMode {
 #[derive(Debug, Clone, Copy)]
 struct OverlayDrag {
     mode: OverlayDragMode,
-    /// Mouse position at `Down` — every subsequent `Drag`/`Up` point is compared against this
+    /// Mouse position at `Down`. Every subsequent `Drag`/`Up` point is compared against this
     /// to get a delta, rather than against the previous frame's point, so small per-frame
     /// rounding/clamping can never accumulate drift over a long drag.
     anchor: (u16, u16),
-    /// The overlay's own `Rect` at the moment the drag started (already resolved — either a
+    /// The overlay's own `Rect` at the moment the drag started (already resolved: either a
     /// prior override or `overlay_rect`'s computed default). The delta from `anchor` is applied
     /// on top of *this*, not the previous frame's (possibly already-clamped) `Rect`, for the
     /// same drift-proofing reason as `anchor` itself.
@@ -172,30 +172,30 @@ pub struct TerminalSurface<B: Backend> {
     selection: Option<Selection>,
     /// The user's live drag/resize override for the overlay's position and size, `None` until
     /// they first interact with it (at which point it's seeded from whatever `overlay_rect`
-    /// would have computed, so it doesn't jump — see `resolve_overlay_rect`), and persisting
+    /// would have computed, so it doesn't jump; see `resolve_overlay_rect`), and persisting
     /// from then on for the rest of the session. There's deliberately no reset-to-default path
-    /// yet (double-click, say) — out of scope for this pass.
+    /// yet (double-click, say). That's out of scope for this pass.
     overlay_bounds: Option<Rect>,
     /// Only `Some` while a move/resize drag is actually in progress, between the `Down` that
-    /// starts it and the `Up` that ends it (which clears it back to `None`) — unlike
+    /// starts it and the `Up` that ends it (which clears it back to `None`). Unlike
     /// `overlay_bounds`, this has no reason to outlive the gesture itself.
     overlay_drag: Option<OverlayDrag>,
-    /// The overlay's actual resolved position as of the last `draw`/`draw_with_poll_timeout` call
-    /// — `overlay_bounds`, when the user's dragged it at least once, otherwise wherever
+    /// The overlay's actual resolved position as of the last `draw`/`draw_with_poll_timeout` call.
+    /// That's `overlay_bounds`, when the user's dragged it at least once, otherwise wherever
     /// `overlay_rect`'s own default (bottom-right-anchored) computation currently places it. Unlike
     /// `overlay_bounds`, this is never `None` once at least one frame has drawn an overlay at all,
     /// which is the whole reason it exists: a caller that needs "where is the overlay *actually*
     /// on screen right now" (e.g. `apps/anvil`'s Mario colliding with it) needs this, not
-    /// `overlay_bounds`, which stays `None` until the user drags the overlay at least once — a
+    /// `overlay_bounds`, which stays `None` until the user drags the overlay at least once. A
     /// caller reading `overlay_bounds` for collision purposes would pass straight through the
     /// overlay with no collision at all until the first drag.
     last_overlay_rect: Option<Rect>,
     /// Whether a bare Escape keypress exits the app immediately, before the `Scaffold`'s own
-    /// handlers ever see it. `true` by default — most callers (the examples in this crate) have
+    /// handlers ever see it. `true` by default. Most callers (the examples in this crate) have
     /// no other quit key, so this is their only way out. A caller with its own real navigation
     /// model for Escape (e.g. `apps/anvil`: "back out of whichever mode you're in," with its own
-    /// separate real exit path via Ctrl+C/a signal) sets this `false` via `with_exit_on_escape` —
-    /// with this hardcoded on, a caller's own `KeyCode::Esc` handler is dead code that can never
+    /// separate real exit path via Ctrl+C/a signal) sets this `false` via `with_exit_on_escape`.
+    /// With this hardcoded on, a caller's own `KeyCode::Esc` handler is dead code that can never
     /// run, since this dispatch step returns `Exit` and quits the whole app before the event ever
     /// reaches it.
     exit_on_escape: bool,
@@ -223,7 +223,7 @@ impl<B: Backend> TerminalSurface<B> {
         })
     }
 
-    /// Opts out of the default "bare Escape exits the app" behavior — see `exit_on_escape`'s own
+    /// Opts out of the default "bare Escape exits the app" behavior. See `exit_on_escape`'s own
     /// doc comment for why a caller would want this.
     pub fn with_exit_on_escape(mut self, exit_on_escape: bool) -> Self {
         self.exit_on_escape = exit_on_escape;
@@ -247,7 +247,7 @@ impl TerminalSurface<CrosstermBackend<Stdout>> {
 
 impl<B: Backend> TerminalSurface<B> {
     /// The overlay's current live override, when the user has moved/resized it at least once
-    /// this session — see `overlay_bounds`'s own field doc comment. A caller wanting to persist
+    /// this session. See `overlay_bounds`'s own field doc comment. A caller wanting to persist
     /// the overlay's position (across restarts, say) reads this each frame rather than reaching
     /// into `dispatch`/`handle_mouse_event` directly, since those are where it gets written but
     /// have no reason to know anything about persistence themselves.
@@ -255,7 +255,7 @@ impl<B: Backend> TerminalSurface<B> {
         self.overlay_bounds
     }
 
-    /// The overlay's actual resolved position as of the last draw — see `last_overlay_rect`'s own
+    /// The overlay's actual resolved position as of the last draw. See `last_overlay_rect`'s own
     /// field doc comment for why a caller that needs "where is it *really* on screen" (not just
     /// "has the user ever dragged it") should read this instead of `overlay_bounds` above. `None`
     /// only if the scaffold drawn so far has never had an overlay attached at all.
@@ -263,7 +263,7 @@ impl<B: Backend> TerminalSurface<B> {
         self.last_overlay_rect
     }
 
-    /// Seeds the overlay's live override — meant to be called once, right after construction,
+    /// Seeds the overlay's live override. Meant to be called once, right after construction,
     /// with whatever a caller loaded from its own persistence layer, before the first `draw()`.
     /// Setting it later works too (there's nothing time-sensitive about it), it just won't be
     /// visible until the next frame, same as any other state written outside `draw()`.
@@ -295,7 +295,7 @@ impl Surface for TerminalSurface<CrosstermBackend<Stdout>> {
     /// logic, since the frame computing its next state just wasn't being asked for that often.
     /// ~30fps keeps animation smooth without busy-looping. Only the right default for a caller
     /// that owns its own event loop and calls `draw` back-to-back in a tight `loop` (`app.rs`'s
-    /// `TerminalApp::run`) — see `draw_with_poll_timeout`'s own doc comment for the Bevy-hosted
+    /// `TerminalApp::run`). See `draw_with_poll_timeout`'s own doc comment for the Bevy-hosted
     /// case, where blocking here at all is actively wrong.
     fn draw<F>(&mut self, draw_scaffold_fn: F) -> Result<TerminalAction>
     where
@@ -306,11 +306,11 @@ impl Surface for TerminalSurface<CrosstermBackend<Stdout>> {
 }
 
 impl TerminalSurface<CrosstermBackend<Stdout>> {
-    /// Same as `Surface::draw`, with the input-poll timeout exposed instead of hardcoded — a
+    /// Same as `Surface::draw`, with the input-poll timeout exposed instead of hardcoded. A
     /// standalone event loop (`TerminalApp::run`) wants `draw` to block for a while so it isn't
     /// busy-looping, but a caller whose *own* scheduler already decides when to call this (an
     /// escher-bevy-hosted app, one call per Bevy tick) needs the opposite: blocking here at all
-    /// stalls Bevy's entire main thread — rendering, animation, everything — for up to the full
+    /// stalls Bevy's entire main thread (rendering, animation, everything) for up to the full
     /// timeout on every tick that doesn't happen to have a terminal event already waiting, on top
     /// of whatever Bevy's own scheduling already decided this tick was worth running for. Pass
     /// `Duration::ZERO` in that case: check once for an already-pending event, dispatch it if
@@ -347,7 +347,7 @@ impl TerminalSurface<CrosstermBackend<Stdout>> {
         // closure only ever needs to *read* the current selection to paint its highlight.
         let selection_snapshot = self.selection;
 
-        // Same reasoning as `selection_snapshot` — the closure only ever needs to *read* the
+        // Same reasoning as `selection_snapshot`: the closure only ever needs to *read* the
         // live drag/resize override to position the overlay this frame; any writes to it happen
         // later, in `dispatch`, once the frame (and this borrow of `self.terminal`) is done.
         let overlay_bounds_snapshot = self.overlay_bounds;
@@ -368,7 +368,7 @@ impl TerminalSurface<CrosstermBackend<Stdout>> {
         })?;
 
         // Same computation as inside the draw closure above, just needed again out here for the
-        // copy calls below and for mouse hit-testing — cheap and pure (only depends on the
+        // copy calls below and for mouse hit-testing. Cheap and pure (only depends on the
         // scaffold, the frame area, and `self.overlay_bounds`, none of which the closure above
         // mutated), not worth threading a value out of the closure for.
         let overlay_rect = scaffold.get_overlay().map(|overlay| Self::resolve_overlay_rect(self.overlay_bounds, overlay, &completed_frame.area));
@@ -381,17 +381,17 @@ impl TerminalSurface<CrosstermBackend<Stdout>> {
             let mut event = ratatui::crossterm::event::read()?;
 
             // Coalesces a burst of consecutive mouse-drag events into just the latest one. A
-            // fast drag can queue up dozens of `Drag` events between one render and the next —
-            // a synthetic fast-drag test hit 42 events causing 42 full re-renders in a single
-            // Bevy tick, 122ms total, a real user-visible stutter — and every intermediate
+            // fast drag can queue up dozens of `Drag` events between one render and the next.
+            // A synthetic fast-drag test hit 42 events causing 42 full re-renders in a single
+            // Bevy tick, 122ms total, a real user-visible stutter. Every intermediate
             // position between "drag started" and "drag as of right now" is never actually seen
             // on screen anyway, only the final one each render reflects.
             // Safe to just discard the skipped ones: `handle_mouse_event`'s `Up` branch resolves
             // the drag's final resting position from the `Up` event's own point, not from
             // whatever `Drag` event happened to precede it, so dropping an intermediate (or even
             // the very last pre-`Up`) `Drag` position changes nothing about where a drag actually
-            // ends. Every other event kind still dispatches exactly one at a time, unchanged —
-            // this loop only ever runs while both the current candidate *and* the next queued
+            // ends. Every other event kind still dispatches exactly one at a time, unchanged.
+            // This loop only ever runs while both the current candidate *and* the next queued
             // event are `Drag(Left)`.
             while let CrosstermEvent::Mouse(MouseEvent { kind: MouseEventKind::Drag(MouseButton::Left), .. }) = &event {
                 if !crossterm::event::poll(Duration::ZERO)? {
@@ -453,12 +453,12 @@ impl TerminalSurface<CrosstermBackend<Stdout>> {
     }
 }
 
-/// The bottom-right resize grip's size, in cells — small and unobtrusive, matching the couple-
+/// The bottom-right resize grip's size, in cells. Small and unobtrusive, matching the couple-
 /// of-cells convention normal terminal window managers (tmux/iTerm2 pane corners) use for the
 /// same purpose, not a large, obvious handle that would eat into the overlay's own content area.
 const RESIZE_HANDLE_SIZE: u16 = 2;
 
-/// The smallest the overlay can be resized down to — small enough to still comfortably show a
+/// The smallest the overlay can be resized down to. Small enough to still comfortably show a
 /// couple of characters of a task label, too small to become a degenerate sliver that's fiddly
 /// to grab or resize back up from.
 const OVERLAY_MIN_WIDTH: u16 = 12;
@@ -524,7 +524,7 @@ impl TerminalSurface<CrosstermBackend<Stdout>> {
     /// The overlay's actual `Rect` for this frame: `overlay_bounds`, the user's own live
     /// drag/resize override, when they've set one, otherwise `overlay_rect`'s computed
     /// bottom-right-anchored default (which is also exactly what the override gets seeded from
-    /// the moment a drag/resize starts — see `OverlayDrag`/`handle_mouse_event` — so the switch
+    /// the moment a drag/resize starts, see `OverlayDrag`/`handle_mouse_event`, so the switch
     /// from default to override is never a visible jump). Both `draw()` call sites that used to
     /// call `overlay_rect` directly call this instead, so rendering, hit-testing, and the
     /// selection/clipboard exclusion logic all agree on where the overlay actually is.
@@ -978,8 +978,8 @@ impl TerminalSurface<CrosstermBackend<Stdout>> {
         Ok(TerminalAction::NoOp)
     }
 
-    /// Left-button down first checks whether it landed on the overlay (via `overlay_drag_mode`)
-    /// — if so, it starts a move/resize drag instead of a text selection, so grabbing the
+    /// Left-button down first checks whether it landed on the overlay (via `overlay_drag_mode`).
+    /// If so, it starts a move/resize drag instead of a text selection, so grabbing the
     /// floating window's body or corner never also highlights its own text underneath the drag.
     /// Otherwise it starts a selection only if it landed on a content-bearing node (text, not
     /// chrome, see `hit_test_content`); anything else clears whatever selection already existed,
@@ -987,7 +987,7 @@ impl TerminalSurface<CrosstermBackend<Stdout>> {
     /// narrowed from the whole node down to just the paragraph the click landed in (see
     /// `group_bounds`), so a drag can't wander into a sibling paragraph in the same node any more
     /// than it can wander into a different node entirely. Landing on a node with a registered
-    /// `ClickEvent` handler fires it either way — selection, overlay drag, or neither — matching
+    /// `ClickEvent` handler fires it either way: selection, overlay drag, or neither, matching
     /// the "a plain click still reaches its handler, only an actual drag means something else"
     /// principle a click on the overlay follows too (nothing moves until a `Drag` event actually
     /// arrives; a `Down` immediately followed by `Up` at the same point never does). Drag/up
@@ -1014,7 +1014,7 @@ impl TerminalSurface<CrosstermBackend<Stdout>> {
                     if let (Some(mode), Some(bounds)) = (drag_mode, overlay_rect) {
                         *overlay_drag = Some(OverlayDrag { mode, anchor: point, start_bounds: bounds });
                         // A drag that starts on the overlay itself is window chrome, not a text
-                        // selection over its content — without this, the same click would also
+                        // selection over its content. Without this, the same click would also
                         // start selecting the overlay's own text underneath the move/resize.
                         *selection = None;
                     } else {
@@ -1023,8 +1023,8 @@ impl TerminalSurface<CrosstermBackend<Stdout>> {
                         // The overlay is excluded from group-boundary detection too, unless the
                         // click actually landed on the overlay itself (its own glyphs shouldn't
                         // make an otherwise-blank transcript row look non-blank, but the
-                        // overlay's own content is real content when that's what was clicked) —
-                        // moot here in practice since a click on the overlay always takes the
+                        // overlay's own content is real content when that's what was clicked).
+                        // Moot here in practice since a click on the overlay always takes the
                         // `drag_mode` branch above instead, but kept for the same reasoning
                         // `group_bounds`'s `exclude` parameter documents elsewhere.
                         let exclude = overlay_rect.filter(|area| !rect_contains(*area, point.0, point.1));
@@ -1061,10 +1061,10 @@ impl TerminalSurface<CrosstermBackend<Stdout>> {
     }
 
     /// Classifies a `Down` point that's landed inside the overlay's own `bounds` as either a
-    /// resize (the bottom-right corner, `RESIZE_HANDLE_SIZE` cells square — matching the small,
+    /// resize (the bottom-right corner, `RESIZE_HANDLE_SIZE` cells square, matching the small,
     /// unobtrusive grip convention of a normal terminal window manager, e.g. tmux/iTerm2's own
     /// pane-resize corners) or a move (anywhere else in the overlay). Returns `None` when
-    /// `point` isn't inside `bounds` at all — not the overlay's concern. `RESIZE_HANDLE_SIZE` is
+    /// `point` isn't inside `bounds` at all: not the overlay's concern. `RESIZE_HANDLE_SIZE` is
     /// clamped down to whatever's smaller than the overlay's own current size so a
     /// `OVERLAY_MIN_WIDTH`/`OVERLAY_MIN_HEIGHT`-sized overlay doesn't end up entirely a resize
     /// handle with nowhere left to grab for a move.
@@ -1085,12 +1085,12 @@ impl TerminalSurface<CrosstermBackend<Stdout>> {
         }
     }
 
-    /// Marks the resize handle with a distinct corner glyph so it's actually discoverable —
-    /// without this, the handle is a real hit-region (`overlay_drag_mode` above) that's visually
+    /// Marks the resize handle with a distinct corner glyph so it's actually discoverable.
+    /// Without this, the handle is a real hit-region (`overlay_drag_mode` above) that's visually
     /// indistinguishable from the rest of the rounded border, nothing hints that specifically
     /// the bottom-right corner (as opposed to the rest of the overlay's edge) drags differently.
-    /// Only the single corner-most cell is swapped, not the whole `RESIZE_HANDLE_SIZE` region —
-    /// recoloring every cell in the hit-region would dim a visible stretch of the border for a
+    /// Only the single corner-most cell is swapped, not the whole `RESIZE_HANDLE_SIZE` region.
+    /// Recoloring every cell in the hit-region would dim a visible stretch of the border for a
     /// grip that only needs one glyph to read as intentional, and the hit-test itself already
     /// uses the wider region so the visual can stay minimal without shrinking the grabbable
     /// area. Drawn after `render` so it always wins over whatever glyph the border would have
@@ -1113,8 +1113,8 @@ impl TerminalSurface<CrosstermBackend<Stdout>> {
     /// `OVERLAY_MIN_WIDTH`/`OVERLAY_MIN_HEIGHT` or grow past whatever room is actually left
     /// between the overlay's fixed top-left corner and the frame's far edge. Computing every
     /// frame from `drag.anchor`/`drag.start_bounds` rather than incrementally off the previous
-    /// frame's (already-clamped) `Rect` means clamping can never compound drift over a long drag
-    /// — the same reasoning `OverlayDrag`'s own doc comment gives for storing those fields in
+    /// frame's (already-clamped) `Rect` means clamping can never compound drift over a long drag.
+    /// That's the same reasoning `OverlayDrag`'s own doc comment gives for storing those fields in
     /// the first place.
     fn resolve_overlay_drag(drag: &OverlayDrag, point: (u16, u16), frame_bounds: Rect) -> Rect {
         let dx = point.0 as i32 - drag.anchor.0 as i32;
@@ -1180,7 +1180,7 @@ impl TerminalSurface<CrosstermBackend<Stdout>> {
     /// Narrows `node_bounds` down to the contiguous run of non-blank rows containing
     /// `anchor_row`, the actual paragraph a selection started in, not the whole node. A single
     /// node's content can hold several logical blocks joined by a blank line (e.g. the
-    /// transcript, one message per block) — a row counts as blank when every cell across
+    /// transcript, one message per block). A row counts as blank when every cell across
     /// `node_bounds`'s columns holds no visible character, exactly what that blank-line join
     /// renders as. Falls back to the full `node_bounds` in either direction once no blank row
     /// bounds the group, so content with no internal blank-line breaks is unaffected. `exclude`

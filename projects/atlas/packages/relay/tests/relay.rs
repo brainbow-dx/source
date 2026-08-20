@@ -1,5 +1,5 @@
 //! Drives the relay with two real WebSocket clients (`tokio-tungstenite`, not the server's own
-//! code) — proves the actual wire protocol works, not just that the server's internal types
+//! code). This proves the actual wire protocol works, not just that the server's internal types
 //! compile.
 
 use std::time::Duration;
@@ -10,7 +10,7 @@ use tokio::net::TcpListener;
 use tokio_tungstenite::tungstenite::Message;
 
 /// Every helper here returns `Result` and every test propagates via `?` rather than panicking
-/// mid-helper — a failure then reports as one clear error at the actual assertion site instead of
+/// mid-helper. A failure then reports as one clear error at the actual assertion site instead of
 /// an opaque panic several calls deep inside a shared helper.
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 

@@ -1,5 +1,5 @@
 //! sqld/libsql-backed persistence for Anvil's transcript, tasks, per-instance overlay position,
-//! and per-instance user settings. Pulled out of `main.rs` on its own — see that file's own
+//! and per-instance user settings. Pulled out of `main.rs` on its own. See that file's own
 //! `PersistenceWrite`/`AppState::spawn_connect_persistence` for how the app queues writes and
 //! drives the single-writer task around this; this module only ever knows "connect, load, save."
 
@@ -13,30 +13,30 @@ use libsql::params;
 use crate::ChatMessage;
 use crate::TaskRow;
 
-/// The default target — matches `tools/data/compose.yaml`'s `sqld` service (`8081:8080`).
+/// The default target. Matches `tools/data/compose.yaml`'s `sqld` service (`8081:8080`).
 /// `connect`'s `url` parameter overrides this to sync against someone else's `sqld` primary
 /// instead (see `Args::connect`'s own doc comment).
 const DEFAULT_SQLD_URL: &str = "http://localhost:8081";
 /// The connect/sync calls below have no timeout of their own, so a slow or unresponsive
 /// `sqld` would otherwise hang here indefinitely instead of failing into the documented
-/// in-memory fallback. Was `3` seconds, too short — a fresh embedded
+/// in-memory fallback. Was `3` seconds, too short. A fresh embedded
 /// replica has to replay the *entire* replication log from scratch on every launch (see
 /// `connect_inner`'s own doc comment for why this never reuses a warm local cache), and
 /// against this workspace's actual long-lived `sqld` (accumulated ~19,300 log frames from
-/// ordinary day-to-day use), a real first sync measured at ~3.5s — just over the old timeout,
-/// so it was failing "by a hair" on a perfectly healthy server, not a broken or slow one.
+/// ordinary day-to-day use), a real first sync measured at ~3.5s. That's just over the old
+/// timeout, so it was failing "by a hair" on a perfectly healthy server, not a broken or slow one.
 /// Generous enough to comfortably cover a sync an order of magnitude larger than that before
 /// this is revisited.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// Within a single tool message's `output` lines, a real newline could legitimately appear
-/// in any one line — so joining/splitting on `\n` to store `Vec<String>` in one TEXT column
-/// would corrupt data with embedded newlines. `\u{1e}` (ASCII Record Separator) is exactly
+/// in any one line. Joining/splitting on `\n` to store `Vec<String>` in one TEXT column
+/// would therefore corrupt data with embedded newlines. `\u{1e}` (ASCII Record Separator) is exactly
 /// what it's for and won't collide with anything a task's fake output actually contains.
 const OUTPUT_SEPARATOR: char = '\u{1e}';
 
 pub struct Persistence {
-    /// Kept alongside `connection`, not dropped after `connect_inner`'s initial sync — `sync`
+    /// Kept alongside `connection`, not dropped after `connect_inner`'s initial sync. `sync`
     /// (below) needs it to pull in other peers' writes to the same primary after startup, not
     /// just once.
     database: Database,
@@ -45,7 +45,7 @@ pub struct Persistence {
 
 impl Persistence {
     /// Opens (creating if needed) the local replica, syncs once against `sqld`, and ensures
-    /// the schema exists. `url` overrides the default local target — `None` (the common case)
+    /// the schema exists. `url` overrides the default local target. `None` (the common case)
     /// means `DEFAULT_SQLD_URL`; `Some(_)` is `--connect`, syncing against someone else's
     /// `sqld` primary instead (see `Args::connect`'s own doc comment). Returns `Err` if that
     /// target isn't reachable within `CONNECT_TIMEOUT`, including if it never responds at all.
@@ -61,11 +61,11 @@ impl Persistence {
 
     async fn connect_inner(url: String) -> color_eyre::Result<Self> {
         // Lives in this session's own pid-keyed directory (see `anvil_session_dir`), not a
-        // fixed filename — running `anvil` twice from the same folder
+        // fixed filename. Running `anvil` twice from the same folder
         // should give two instances synced against the same `sqld` primary, each with their
         // own replica, with no flags or separate directories required. The cost is a full
         // re-sync from the primary on every launch rather than reusing a warm local cache
-        // across restarts of the same instance — negligible against a small local `sqld`, and
+        // across restarts of the same instance. That's negligible against a small local `sqld`, and
         // a simple, unconditional guarantee beats detecting file-lock contention and only
         // falling back to a private replica when two instances actually collide.
         let replica_path = crate::anvil_session_dir().join("replica.db");
@@ -86,7 +86,7 @@ impl Persistence {
     }
 
     /// Re-pulls whatever's changed on the primary since the last sync (the initial one in
-    /// `connect_inner`, or a previous call to this) into the local replica file — without
+    /// `connect_inner`, or a previous call to this) into the local replica file. Without
     /// this, a second instance pointed at the same primary (e.g. via `--connect`) never sees
     /// writes made after it started, since `connect_inner` only ever syncs once. The caller
     /// (`AppState::spawn_periodic_resync`) is what decides *when* to call this and what to do
@@ -98,14 +98,14 @@ impl Persistence {
 
     async fn ensure_schema(&self) -> color_eyre::Result<()> {
         // `overlay_state` used to be a single global row (`id INTEGER PRIMARY KEY CHECK (id =
-        // 1)`) shared by every instance connected to the same `sqld` — that's wrong: the
+        // 1)`) shared by every instance connected to the same `sqld`. That's wrong: the
         // transcript/task stream should stay shared across everyone, but
         // *where your overlay window sits* is per-instance, per-person, and one person
         // dragging theirs was silently relocating everyone else's on their next resync. Keyed
         // by `identity` (`Args::identity`) instead now. SQLite can't just `ALTER TABLE` a
         // primary key, so an install that predates this re-keys once: `identity` missing means
         // either the old single-row shape or a brand-new database, both of which are safe to
-        // drop and recreate — a saved window position is the only thing that could be lost,
+        // drop and recreate. A saved window position is the only thing that could be lost,
         // not worth a real migration for.
         let has_identity_column = {
             let mut rows = self.connection.query("SELECT 1 FROM pragma_table_info('overlay_state') WHERE name = 'identity'", ()).await?;
@@ -148,13 +148,13 @@ impl Persistence {
             )
             .await?;
 
-        // `messages` may already exist from before `hidden` was added — `CREATE TABLE IF NOT
+        // `messages` may already exist from before `hidden` was added. `CREATE TABLE IF NOT
         // EXISTS` above is a no-op against an existing table, and SQLite has no `ADD COLUMN IF
-        // NOT EXISTS`. Allowed to fail (already applied) rather than `?`'d — same "run the
+        // NOT EXISTS`. Allowed to fail (already applied) rather than `?`'d. This is the same "run the
         // migration every startup, tolerate it already being there" approach the `CREATE
         // TABLE`s above already take.
         let _ = self.connection.execute("ALTER TABLE messages ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0", ()).await;
-        // Same idea, for `user_settings` gaining the sidebar's own remembered width — `220.0`
+        // Same idea, for `user_settings` gaining the sidebar's own remembered width. `220.0`
         // matches `escher_appkit::bevy::TabStripState::default`'s own starting width, so an
         // install migrating from before this existed sees no visible change until it actually
         // resizes/collapses the sidebar for the first time.
@@ -164,7 +164,7 @@ impl Persistence {
         Ok(())
     }
 
-    /// Wipes every message and task — used by `--reset-data`. Real deletes against the
+    /// Wipes every message and task. Used by `--reset-data`. Real deletes against the
     /// remote `sqld` primary (not just the local replica file), so this actually clears the
     /// data everyone connecting to this `sqld` instance sees, not just this machine's cache.
     pub async fn reset(&self) -> color_eyre::Result<()> {
@@ -212,25 +212,41 @@ impl Persistence {
     }
 
     /// Whether `message` is worth recording for tracing/audit but never worth showing in the
-    /// live transcript on reload — recorded, but not everything logged needs to show up in the
-    /// feed again. `/quit`'s own request/tool-call/reply trio is the one case so far — every
+    /// live transcript on reload. It's recorded, but not everything logged needs to show up in the
+    /// feed again. `/quit`'s own request/tool-call/reply trio is the one case so far. Every
     /// future session otherwise reloads to a stale "someone quit" note nobody needs to see
     /// again. Checked once here, at the one place every message flows through before being
     /// written, via a real `hidden` column and a `WHERE hidden = 0` on `load_messages`'s own
-    /// query — filtering belongs in the SQL, not as an app-side post-filter — rather than
+    /// query. Filtering belongs in the SQL, not as an app-side post-filter, rather than
     /// needing every call site that might produce one of these three to remember to flag it
+    /// itself.
+    ///
+    /// Only covers the `User`/`Tool` legs of that trio by content: the literal `/quit` text the
+    /// user typed, and `quit`'s own command name on the tool-call record. Both are real, stable
+    /// signals about what actually happened, not a value invented purely to be matched back out
+    /// later. The `Assistant` reply leg can't be recognized this way, since `commands/quit.js`
+    /// now returns real, human-chosen text rather than a fixed sentinel (see
+    /// `spec/.agents/proposals/anvil-command-host-api.md`) — its caller knows it came from
+    /// `/quit` from context (`command_name`), not content, and passes that through
+    /// `save_message_with_hidden` directly instead of this function guessing from the message
     /// itself.
     fn is_hidden_from_history(message: &ChatMessage) -> bool {
         match message {
             ChatMessage::User(text) => text.trim() == "/quit",
             ChatMessage::Tool { name, detail, .. } => name == "js" && detail == "quit",
-            ChatMessage::Assistant(text) => text.trim() == crate::QUIT_SENTINEL,
+            ChatMessage::Assistant(_) => false,
             ChatMessage::Trace(_) => false,
         }
     }
 
     pub async fn save_message(&self, message: &ChatMessage) -> color_eyre::Result<()> {
-        let hidden = Self::is_hidden_from_history(message);
+        self.save_message_with_hidden(message, Self::is_hidden_from_history(message)).await
+    }
+
+    /// Same as `save_message`, but the caller decides `hidden` directly instead of it being
+    /// inferred from the message's own content — see `is_hidden_from_history`'s doc comment for
+    /// why the `/quit` reply specifically needs this instead of a content-based guess.
+    pub async fn save_message_with_hidden(&self, message: &ChatMessage, hidden: bool) -> color_eyre::Result<()> {
         match message {
             ChatMessage::User(text) => {
                 self.connection
@@ -277,19 +293,19 @@ impl Persistence {
         Ok(tasks)
     }
 
-    /// Replaces the whole `tasks` table with exactly `tasks`, in order — not a per-row
+    /// Replaces the whole `tasks` table with exactly `tasks`, in order. Not a per-row
     /// upsert. `TaskRow` carries no id a caller could target for an `UPDATE`, and the table
     /// has no unique key on `label` (two tasks can legitimately share a label), so there's no
     /// safe way to address "the row that changed" from here. The in-memory `Vec<TaskRow>` is
     /// the source of truth; this just makes the table match it, the same way `save_tasks`'s
     /// caller already keeps the UI in sync with that same `Vec`.
     ///
-    /// Wrapped in a real transaction, not run as loose statements — every call site goes
+    /// Wrapped in a real transaction, not run as loose statements. Every call site goes
     /// through `with_sqld_timeout` (750ms), and without a transaction a timeout firing
     /// between the `DELETE` committing and the `INSERT` loop finishing would leave the table
     /// permanently short some tasks (the delete already landed; the re-inserts didn't).
-    /// `libsql::Transaction` rolls back automatically if it's dropped without `commit()` —
-    /// exactly what happens when `tokio::time::timeout` drops this future mid-flight — so a
+    /// `libsql::Transaction` rolls back automatically if it's dropped without `commit()`.
+    /// That's exactly what happens when `tokio::time::timeout` drops this future mid-flight, so a
     /// timeout now leaves the previous, still-correct table in place instead of a half-empty
     /// one.
     pub async fn save_tasks(&self, tasks: &[TaskRow]) -> color_eyre::Result<()> {
@@ -306,10 +322,10 @@ impl Persistence {
         Ok(())
     }
 
-    /// `(x, y, width, height)` in plain `u16`s rather than `ratatui::layout::Rect` — this
+    /// `(x, y, width, height)` in plain `u16`s rather than `ratatui::layout::Rect`. This
     /// module deliberately doesn't depend on `ratatui` (see `ChatMessage`/`TaskRow`, defined
     /// outside it for the same reason), the caller reassembles the `Rect` itself. Keyed by
-    /// `identity_uuid` (see `ANVIL_IDENTITY_NAMESPACE`'s doc comment) — see `ensure_schema`'s
+    /// `identity_uuid` (see `ANVIL_IDENTITY_NAMESPACE`'s doc comment). See `ensure_schema`'s
     /// own doc comment for why this is per-identity, not one shared row.
     pub async fn load_overlay_bounds(&self, identity_uuid: &uuid::Uuid) -> color_eyre::Result<Option<(u16, u16, u16, u16)>> {
         let mut rows = self
@@ -329,7 +345,7 @@ impl Persistence {
         }
     }
 
-    /// A per-`identity_uuid` upsert — one row per instance/person, not one shared row (see
+    /// A per-`identity_uuid` upsert. One row per instance/person, not one shared row (see
     /// `ensure_schema`'s own doc comment for why this changed from a single global row).
     pub async fn save_overlay_bounds(&self, identity_uuid: &uuid::Uuid, bounds: (u16, u16, u16, u16)) -> color_eyre::Result<()> {
         let (x, y, width, height) = bounds;
@@ -343,7 +359,7 @@ impl Persistence {
         Ok(())
     }
 
-    /// Defaults to `true` (shown) for an identity with no row yet — a brand new user, or one
+    /// Defaults to `true` (shown) for an identity with no row yet. A brand new user, or one
     /// synced from before this setting existed, sees the overview at least once.
     pub async fn load_show_welcome_overview(&self, identity_uuid: &uuid::Uuid) -> color_eyre::Result<bool> {
         let mut rows = self
@@ -368,7 +384,7 @@ impl Persistence {
         Ok(())
     }
 
-    /// `(width, expanded_width)` — see `escher_appkit::bevy::TabStripState`'s own doc comment for
+    /// `(width, expanded_width)`. See `escher_appkit::bevy::TabStripState`'s own doc comment for
     /// why both, not just `width`, need remembering. `220.0`/`220.0` (that struct's own `Default`)
     /// for an identity with no row yet, same "brand new user sees the untouched default" contract
     /// `load_show_welcome_overview` already follows.

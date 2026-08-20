@@ -1,11 +1,11 @@
-//! `.anvil.toml` — optional, project-directory config pointing this app's `sqld`/Ollama clients
+//! `.anvil.toml` is an optional, project-directory config pointing this app's `sqld`/Ollama clients
 //! at specific addresses. `anvil init` writes it (see [`run_init`]); normal startup (`main`)
 //! reads it, before `AppState::new` resolves its own `sqld_url` or anything spawns a JS command
-//! that reads `ANVIL_OLLAMA_URL` — see that function's own doc comment for the load-order
+//! that reads `ANVIL_OLLAMA_URL`. See that function's own doc comment for the load-order
 //! contract this depends on.
 //!
 //! Deliberately only ever looked for in the current directory, never walked up toward a repo
-//! root — this is meant to be an explicit, per-project override a person put there on purpose,
+//! root. This is meant to be an explicit, per-project override a person put there on purpose,
 //! not something that silently starts applying because some unrelated parent directory happens
 //! to have one.
 
@@ -47,7 +47,7 @@ pub struct WelcomeConfig {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct WindowConfig {
-    /// See `Args::always_on_top`'s own doc comment — a CLI `--always-on-top` wins over this if
+    /// See `Args::always_on_top`'s own doc comment. A CLI `--always-on-top` wins over this if
     /// both are given.
     #[serde(default)]
     pub always_on_top: bool,
@@ -80,7 +80,7 @@ impl AnvilConfig {
 /// `anvil init`'s whole job: get `sqld`/Ollama reachable, then record where at in
 /// `.anvil.toml` so every later `anvil` launch in this directory skips straight to those
 /// addresses (no probing, no `docker compose`) via [`AnvilConfig::load_from_cwd`]. Per the user
-/// directly: never assumes either service needs starting at all — an explicit `--sqld-url`/
+/// directly: never assumes either service needs starting at all. An explicit `--sqld-url`/
 /// `--ollama-url` is trusted outright, and otherwise the existing default address is probed
 /// first; `docker compose` is only ever reached for once nothing answers there.
 pub fn run_init(sqld_url_override: Option<String>, ollama_url_override: Option<String>) {
@@ -102,11 +102,11 @@ pub fn run_init(sqld_url_override: Option<String>, ollama_url_override: Option<S
 }
 
 /// Resolves one service's address. `override_url` (an explicit `--sqld-url`/`--ollama-url`)
-/// always wins and is trusted without probing — the whole point of passing one is pointing at
+/// always wins and is trusted without probing. The whole point of passing one is pointing at
 /// something this machine can't necessarily reach *yet* (a teammate's host, say). Otherwise
 /// probes `default_url`; only if nothing answers there does this reach for `docker compose` (see
 /// `compose_file_path`) to bring up `compose_service`, then probes again. Falls back to
-/// `default_url` regardless of how that second probe goes — `anvil` itself already degrades
+/// `default_url` regardless of how that second probe goes. `anvil` itself already degrades
 /// gracefully to running without persistence/without the Ollama fallback if the address it's
 /// given doesn't actually work, same as it always has.
 fn resolve_service(name: &str, flag_name: &str, override_url: Option<String>, default_url: &str, compose_service: &str) -> String {
@@ -156,12 +156,12 @@ fn resolve_service(name: &str, flag_name: &str, override_url: Option<String>, de
     default_url.to_string()
 }
 
-/// A plain TCP connect, not an HTTP request — good enough to answer "is anything listening
+/// A plain TCP connect, not an HTTP request. Good enough to answer "is anything listening
 /// here," which is all every call site actually needs, without this module needing an HTTP
 /// client dependency of its own.
 ///
-/// Tries every address `to_socket_addrs` resolves `host_port` to, not just the first — confirmed
-/// live as a real bug otherwise: `"localhost"` commonly resolves to both `::1` and `127.0.0.1`,
+/// Tries every address `to_socket_addrs` resolves `host_port` to, not just the first. This was
+/// confirmed live as a real bug otherwise: `"localhost"` commonly resolves to both `::1` and `127.0.0.1`,
 /// in unspecified order, and a service bound to only one of those (Ollama, in the case that
 /// surfaced this) reads as "nothing listening" if the other one happens to sort first, even
 /// though it's actually up.
@@ -172,9 +172,9 @@ fn probe(url: &str) -> bool {
     addrs.into_iter().any(|addr| TcpStream::connect_timeout(&addr, PROBE_TIMEOUT).is_ok())
 }
 
-/// `apps/anvil`'s own `CARGO_MANIFEST_DIR` is `<repo>/projects/escher/apps/anvil` — two levels up
+/// `apps/anvil`'s own `CARGO_MANIFEST_DIR` is `<repo>/projects/escher/apps/anvil`. Two levels up
 /// is `projects/escher`, where `compose.yaml` actually lives. `None` when that file isn't there
-/// (a shipped binary with no source checkout alongside it, say) — `resolve_service` treats that
+/// (a shipped binary with no source checkout alongside it, say). `resolve_service` treats that
 /// as "nothing to try," not an error worth failing `init` over.
 fn compose_file_path() -> Option<PathBuf> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../compose.yaml");
@@ -182,13 +182,13 @@ fn compose_file_path() -> Option<PathBuf> {
 }
 
 /// Ensures `compose_service` is reachable at `default_url`, starting it via `docker compose` if
-/// nothing's listening yet — the same probe-then-start logic `resolve_service` uses for `sqld`/
+/// nothing's listening yet. Same probe-then-start logic `resolve_service` uses for `sqld`/
 /// Ollama during `anvil init`, reused here for a service `anvil` itself wants running for as
 /// long as it's running, not just something a user opts into via `init`. Per the user directly:
 /// the escher dev server (`escher.brainbow.localhost`, via Caddy → `127.0.0.1:3615`) should
 /// always be reachable while Anvil is running, so it's started proactively at every launch
 /// rather than waiting for something to ask for it first. Meant to be called from a background
-/// thread (`main`'s own call site does) — this blocks on real process/network I/O throughout,
+/// thread (`main`'s own call site does). This blocks on real process/network I/O throughout,
 /// same as `resolve_service`.
 pub(crate) fn ensure_docker_service_running(name: &str, default_url: &str, compose_service: &str) {
     if probe(default_url) {

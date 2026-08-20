@@ -7,6 +7,7 @@ pub mod bootstrap;
 pub mod command;
 pub mod config;
 pub mod event;
+pub mod host_actions;
 pub mod logging;
 pub mod runtime;
 pub mod start;

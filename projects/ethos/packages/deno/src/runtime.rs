@@ -195,7 +195,7 @@ impl EcmaRuntimeManager {
         });
 
         // Run the "not-lite", full Deno runtime (this crate's own shared `bootstrap_main_worker`
-        // handles the Tokio-reactor-context requirement — see its own doc comment). Prefer this
+        // handles the Tokio-reactor-context requirement; see its own doc comment). Prefer this
         // when you want all of Deno's features.
         self.async_runtime.block_on(async move {
             let mut worker = crate::worker::bootstrap_main_worker(
@@ -329,7 +329,7 @@ pub mod ffi {
     use super::EcmaRuntimeError;
 
     // The `ethos_sdk` extension's JS bootstrap files (`00_prelude.js`/`99_debug.js`) live in this
-    // crate's own `src/` — the `dir "src"` below is resolved relative to this crate at compile
+    // crate's own `src/`. The `dir "src"` below is resolved relative to this crate at compile
     // time. This is the default host-embedding SDK the FFI surface below boots; a dialect has no
     // opinion on it, this crate does.
     deno_runtime::deno_core::extension!(
@@ -489,8 +489,8 @@ pub mod ffi {
 
         tracing::debug!("Executing Module: {:}", main_module);
 
-        // `bootstrap_main_worker` handles the Tokio-reactor-context requirement internally — see
-        // this crate's `worker` module doc comment — so this whole block, not just the
+        // `bootstrap_main_worker` handles the Tokio-reactor-context requirement internally. See
+        // this crate's `worker` module doc comment. So this whole block, not just the
         // execute/event-loop calls, has to run inside `block_on`.
         async_runtime.block_on(async move {
             let mut worker = crate::worker::bootstrap_main_worker(

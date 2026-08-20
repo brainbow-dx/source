@@ -75,6 +75,7 @@ derive_more = { workspace = true, features = ["display"] }
 
 [build-dependencies]
 prost-build = { workspace = true }
+color-eyre = { workspace = true }
 napi-build = { workspace = true }
 
 #---

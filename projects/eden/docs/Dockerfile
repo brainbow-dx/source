@@ -23,8 +23,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 \
 COPY --from=builder /root/.cargo/bin/mdbook /usr/local/bin/mdbook
 COPY --from=builder /book /book
 COPY --from=builder /spec/docs /spec/docs
+COPY --from=builder /.output/docs /.output/docs
 
 WORKDIR /book
 
 EXPOSE 3000
-CMD ["python3", "-m", "http.server", "3000", "--directory", "dist/public", "--bind", "0.0.0.0"]
+CMD ["python3", "-m", "http.server", "3000", "--directory", "/.output/docs", "--bind", "0.0.0.0"]

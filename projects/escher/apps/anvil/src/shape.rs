@@ -1,6 +1,6 @@
 //! The `/shape` command: runs Ethos's UXML/USS codegen tool and fans the one JSON result out to
 //! all three renderers. See `AppState::spawn_shape_command` in `main.rs` for the orchestration
-//! (chat messages, `pending_scenes`, `Page::Process` switch) — this module is just the actual
+//! (chat messages, `pending_scenes`, `Page::Process` switch). This module is just the actual
 //! work: run the script, parse its output, produce the terminal block / web page / Unity assets.
 //! See `projects/ethos/spec/agents/proposals/uxml-uss-codegen.md` for why the codegen logic
 //! itself lives in Ethos, not here.
@@ -17,12 +17,12 @@ const ETHOS_TRANSFORM_SCRIPT: &str = "tools/codegen/uxml/from-description.ts";
 const SHAPE_WEB_PORT: u16 = 4001;
 
 /// Both `shape.tsx` and `from-description.ts` are free to `console.log` as much progress as they
-/// want — it already streams live into `process_buffer` (`run_deno_command`'s real `deno run`
+/// want. It already streams live into `process_buffer` (`run_deno_command`'s real `deno run`
 /// child streams every stdout line as it arrives, same as stderr; `run_js_command`'s embedded
-/// engine pipes `console.log` into the same buffer separately from its return value — see that
+/// engine pipes `console.log` into the same buffer separately from its return value, see that
 /// function's own doc comment), so there's no reason to make script authors think about stdout/
 /// stderr separation. The one real payload each script produces is its `run()` export's return
-/// value — for `run_deno_command`'s real `deno run` child that's still the last line of a
+/// value. For `run_deno_command`'s real `deno run` child that's still the last line of a
 /// captured, possibly-`console.log`-noisy stdout, so `last_line` still matters there; for
 /// `run_js_command`'s embedded engine the return value never has any `console.log` output mixed
 /// in to begin with, so `last_line` is a harmless no-op on it, kept only so both call sites below
@@ -31,17 +31,17 @@ fn last_line(output: &str) -> &str {
     output.lines().next_back().unwrap_or(output)
 }
 
-/// Runs on a background thread (via `tokio::task::spawn_blocking`, same as `run_js_command`) —
-/// see `AppState::spawn_shape_command`. Returns the URL of the written web page on success, for
+/// Runs on a background thread (via `tokio::task::spawn_blocking`, same as `run_js_command`).
+/// See `AppState::spawn_shape_command`. Returns the URL of the written web page on success, for
 /// the caller to push onto `pending_scenes`.
 ///
-/// Two-step pipeline — "build the Scaffold" and "compile it to a target format" are different
+/// Two-step pipeline: "build the Scaffold" and "compile it to a target format" are different
 /// jobs, done in different projects:
 /// 1. `commands/shape.tsx` (real `deno run`, JSX-authored, lives in *this* project since this is
 ///    the command that uses it) builds the actual `ScaffoldDescription` JSON.
 /// 2. That JSON gets handed, unmodified, to `ethos/tools/codegen/uxml/from-description.ts` (via
-///    `run_js_command`'s embedded engine) — a pure transform with no authored content of its
-///    own — which returns `{uxml, uss}`.
+///    `run_js_command`'s embedded engine). It's a pure transform with no authored content of its
+///    own, and it returns `{uxml, uss}`.
 ///
 /// Previously one Ethos script did both (authored the demo shape *and* compiled it), which
 /// worked but put content-authoring in the wrong project. See
@@ -51,8 +51,15 @@ pub(crate) fn run_shape_command(process_buffer: &LineBuffer) -> Result<String, S
     let description: serde_json::Value =
         serde_json::from_str(last_line(&deno_output)).map_err(|error| format!("shape.tsx returned invalid JSON: {error}"))?;
 
-    let transform_output =
-        process::run_js_command(Path::new(ETHOS_TRANSFORM_SCRIPT), last_line(&deno_output), "shape (scaffold → uxml)", process_buffer)?;
+    // This script doesn't call any real host action, so a fresh, unread `HostActions` handle is
+    // enough — nothing needs to drain it.
+    let transform_output = process::run_js_command(
+        Path::new(ETHOS_TRANSFORM_SCRIPT),
+        last_line(&deno_output),
+        "shape (scaffold → uxml)",
+        process_buffer,
+        Default::default(),
+    )?;
     let transform: serde_json::Value =
         serde_json::from_str(last_line(&transform_output)).map_err(|error| format!("from-description.ts returned invalid JSON: {error}"))?;
 
@@ -72,14 +79,14 @@ pub(crate) fn run_shape_command(process_buffer: &LineBuffer) -> Result<String, S
 }
 
 /// Renders the shape as a plain colored block of terminal rows, followed by any caption text
-/// found in the tree — read directly off the same `description` JSON the web/Unity legs consume,
+/// found in the tree. It reads directly off the same `description` JSON the web/Unity legs consume,
 /// not routed through `escher-terminal`'s real `Scaffold`/`Property` rendering pipeline (that
 /// would need a deeper integration into how this app's Body area is composed than tonight's scope
 /// covers), so this is a deliberately simpler, honest approximation: same shared source of truth,
-/// hand-rolled ANSI instead of a real `TerminalSurface` draw. Worth revisiting — see
+/// hand-rolled ANSI instead of a real `TerminalSurface` draw. Worth revisiting. See
 /// `escher/spec/ROADMAP.md`.
 ///
-/// Walks the whole tree rather than reading `description.styles` directly — `shape-demo.ts`
+/// Walks the whole tree rather than reading `description.styles` directly. `shape-demo.ts`
 /// nests the actual colored box one level down (`children: [BOX, CAPTION]`, so the shape
 /// explains itself instead of being an unlabeled swatch), so a shallow top-level read
 /// would silently miss it. `find_node_with_background_color` finds the box specifically (the one
@@ -113,7 +120,7 @@ fn render_shape_block(description: &serde_json::Value, process_buffer: &LineBuff
         }
     }
 
-    // Rough px→terminal-cell conversion (~8px/16px per cell, a common monospace ratio) — a
+    // Rough px→terminal-cell conversion (~8px/16px per cell, a common monospace ratio). A
     // terminal has no real notion of "pixels," so this is deliberately approximate, just enough
     // to render the same shape's proportions as a visible block.
     let cols = ((width_px / 8.0).round() as usize).max(1);
@@ -131,7 +138,7 @@ fn render_shape_block(description: &serde_json::Value, process_buffer: &LineBuff
     }
 }
 
-/// Depth-first search for the first node whose own `styles` include a `backgroundColor` — that's
+/// Depth-first search for the first node whose own `styles` include a `backgroundColor`. That's
 /// uniquely the box, regardless of how deep it's nested or how many siblings (a caption, future
 /// additions) sit alongside it.
 fn find_node_with_background_color(node: &serde_json::Value) -> Option<&serde_json::Value> {
@@ -151,7 +158,7 @@ fn find_node_with_background_color(node: &serde_json::Value) -> Option<&serde_js
         .find_map(find_node_with_background_color)
 }
 
-/// Every `content` string anywhere in the tree, depth-first — `shape-demo.ts` only ever puts one
+/// Every `content` string anywhere in the tree, depth-first. `shape-demo.ts` only ever puts one
 /// on the caption node today, but this doesn't assume that stays true.
 fn collect_content_strings(node: &serde_json::Value) -> Vec<String> {
     let mut out = Vec::new();
@@ -187,7 +194,7 @@ mod tests {
 
     #[test]
     fn last_line_skips_progress_output() {
-        // The exact shape stdout takes once `console.log` progress lines are involved —
+        // This is the exact shape stdout takes once `console.log` progress lines are involved.
         // `ethos-cli run-command` prints a script's `run()` return value via `print!` (no added
         // newline), strictly after any `console.log` calls it made.
         let stdout = "Parsing scaffold description...\nCompiling to UXML/USS...\nDone.\n{\"uxml\":\"a\",\"uss\":\"b\"}";
@@ -201,7 +208,7 @@ mod tests {
 
     /// The real, current `description` field `ethos/tools/codegen/uxml/shape-demo.ts` emits,
     /// captured from a real `ethos-cli run-command` run (the box has a sibling caption label,
-    /// both nested one level under `children`) — kept as one shared
+    /// both nested one level under `children`). Kept as one shared
     /// literal so every test below exercises the actual shape this app will really see, not a
     /// hand-simplified stand-in that could drift from it unnoticed.
     fn real_shape_demo_json() -> serde_json::Value {
@@ -210,7 +217,7 @@ mod tests {
 
     #[test]
     fn parses_the_actual_shape_demo_color() {
-        // The exact literal `ethos/tools/codegen/uxml/shape-demo.ts` emits — if that ever drifts
+        // The exact literal `ethos/tools/codegen/uxml/shape-demo.ts` emits. If that ever drifts
         // out of sync with what this parser accepts, this is the test that should catch it.
         assert_eq!(parse_hex_color("#7aa2f7"), Some((0x7a, 0xa2, 0xf7)));
     }
@@ -234,7 +241,7 @@ mod tests {
     #[test]
     fn shape_demo_description_renders_via_escher_web() {
         // What `write_web_shape_page` actually feeds `escher_web::ssg::render_page_to_html`.
-        // Lives here rather than in `escher-web` itself — an equivalent test added directly to
+        // Lives here rather than in `escher-web` itself. An equivalent test added directly to
         // `runtimes/web/src/ssg.rs` broke that crate's own `cbindgen`-based build script (a real,
         // reproducible bug, logged in `escher/spec/ROADMAP.md`); `apps/anvil` has no build script
         // of its own, so testing the same call from here sidesteps it entirely.
@@ -252,7 +259,7 @@ mod tests {
     fn finds_the_box_nested_under_children() {
         // The regression this test exists to catch: `render_shape_block` used to read
         // `description.styles` directly, which broke the moment the box moved one level down
-        // under `children` when the caption was added — it would've silently kept
+        // under `children` when the caption was added. It would've silently kept
         // rendering stale hardcoded defaults instead of the real, current shape.
         let description = real_shape_demo_json();
         let box_node = find_node_with_background_color(&description).expect("box must be found");
@@ -295,12 +302,12 @@ mod tests {
     }
 }
 
-/// Writes only new asset files under `Assets/UI/Generated/` — no `.cs` change, no `.unity` scene
-/// edit — since Aby's Unity Editor may be open interactively when this runs (new non-script
+/// Writes only new asset files under `Assets/UI/Generated/`. No `.cs` change, no `.unity` scene
+/// edit, since Aby's Unity Editor may be open interactively when this runs (new non-script
 /// assets don't trigger a domain reload the way a `.cs` change would). Mirrors
-/// `escher-unity/src/bin/export_shape.rs`'s own file-write logic exactly (duplicated rather than
-/// shared — that binary already re-runs the Ethos script itself, so sharing would mean an extra
-/// crate dependency for two `fs::write` calls).
+/// `escher-unity/src/bin/export_shape.rs`'s own file-write logic exactly. It's duplicated rather than
+/// shared because that binary already re-runs the Ethos script itself, so sharing would mean an extra
+/// crate dependency for two `fs::write` calls.
 fn write_unity_shape_assets(uxml: &str, uss: &str) -> Result<(), String> {
     let unity_project = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../aby/runtimes/unity");
     let output_dir = unity_project.join("Assets/UI/Generated");
@@ -314,7 +321,7 @@ fn write_unity_shape_assets(uxml: &str, uss: &str) -> Result<(), String> {
 
 /// Writes a static HTML page (via `escher_web::ssg::render_page_to_html`, the same renderer
 /// `escher-web`'s own SSG path uses) into the directory served by a locally-running `escher-web`
-/// `serve` example on `SHAPE_WEB_PORT` — a manual one-time prerequisite (see the proposal doc /
+/// `serve` example on `SHAPE_WEB_PORT`. That's a manual one-time prerequisite (see the proposal doc /
 /// `ROADMAP.md`), not something this app spawns itself, to keep this change scoped to "write a
 /// file," not "own a background server's lifecycle."
 fn write_web_shape_page(description: &serde_json::Value) -> Result<String, String> {

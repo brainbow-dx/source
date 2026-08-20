@@ -51,6 +51,15 @@ directly, so neither bucket actually fits them today. See
 `/relay-console` a proper discovered command like everything else) — until that lands, don't add a
 third undefined bucket; ask before placing a new Rust-invoked helper script anywhere.
 
+**Now that real script execution isolation exists (a script calls a real host action instead of
+Rust interpreting its output; see the host-API work above), keep an eye out for ops/dev tasks that
+would genuinely be faster to solve as a script than as Rust.** Whatever dialect/runtime Ethos
+already supports and best fits the project (JS/TS via `ethos-deno`, Lua via `ethos-lua`, etc.) —
+prefer that over reaching for Rust by default for a one-off tool, a repo-maintenance task, or
+anything that doesn't need to be compiled into a shipped binary. This isn't a rule to force every
+task into a script; it's a reminder that the option now exists cheaply and shouldn't be
+overlooked out of habit.
+
 ## Crossing a process or language boundary
 
 **Verify the actual data contract by reading the producing code, not by inferring it from a doc comment.** Getting `ethos-cli run-command`'s stdout framing right (progress output interleaved live, the real payload always the *last* line, printed via `print!` with no trailing newline) took actually reading `apps/cli/src/main.rs`'s `main()`, not just its `RunCommand` doc comment. Doc comments describe intent; only the code confirms what a byte stream actually looks like.

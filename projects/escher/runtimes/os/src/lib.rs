@@ -1,10 +1,10 @@
-//! OS-level integration that isn't specific to any one engine/runtime — native dialogs, the
-//! application menu bar, clipboard access. macOS only for now (`objc2`/AppKit); other platforms
+//! OS-level integration that isn't specific to any one engine/runtime. This covers native dialogs,
+//! the application menu bar, and clipboard access. macOS only for now (`objc2`/AppKit); other platforms
 //! compile but every call returns [`OsError::Unsupported`]. Consumers (e.g. `escher-bevy`) treat
 //! this the same way they treat `escher-webview`: a crate they call into, not something they own.
 //!
 //! The chrome bar (browser back/forward/address toolbar) used to live here, hosted via a compiled
-//! Swift/SwiftUI dylib (`build.rs`'s old `swiftc` step) — moved to `escher-appkit` and rebuilt as
+//! Swift/SwiftUI dylib (`build.rs`'s old `swiftc` step). It was moved to `escher-appkit` and rebuilt as
 //! a real `escher_core::Scaffold` composition, rendered through plain `objc2`/AppKit like the rest
 //! of this crate, no Swift toolchain involved. See `escher_appkit::chrome`.
 //!
@@ -31,7 +31,7 @@ pub enum OsError {
     /// A named resource (e.g. a system sound name) doesn't exist on this system.
     NotFound(String),
     /// The call reached the OS but the OS itself reported a real failure (a failed process spawn,
-    /// a nonzero exit) — distinct from `Unsupported`, which means no attempt was even made.
+    /// a nonzero exit). This is distinct from `Unsupported`, which means no attempt was even made.
     Failed(String),
 }
 

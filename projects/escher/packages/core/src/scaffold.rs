@@ -42,16 +42,16 @@ pub mod prelude {
 }
 
 /// A stable path to one node in a `Scaffold` tree, as the sequence of `(TypeId, usize)` slot
-/// keys from the root — the same keys `slot::<S>()` already assigns (marker type + insertion
-/// index). Exists so a surface with genuinely long-lived native objects (an `NSButton`, an ECS
-/// `Entity`) can identify "the same logical node" across separate draw calls, each of which builds
-/// an entirely new, differently-arena-allocated `Scaffold` tree — a plain `&Scaffold` reference
-/// can't survive past the draw call that produced it, but this can, since it holds no borrow into
-/// the arena at all (`TypeId` is `'static`, `usize` is `Copy`).
+/// keys from the root. These are the same keys `slot::<S>()` already assigns (marker type plus
+/// insertion index). Exists so a surface with genuinely long-lived native objects (an `NSButton`,
+/// an ECS `Entity`) can identify "the same logical node" across separate draw calls, each of
+/// which builds an entirely new, differently-arena-allocated `Scaffold` tree. A plain `&Scaffold`
+/// reference can't survive past the draw call that produced it, but this can, since it holds no
+/// borrow into the arena at all (`TypeId` is `'static`, `usize` is `Copy`).
 ///
 /// Only as stable as the caller's own composition: conditionally *omitting* a `slot` call
 /// between draws shifts every later sibling's index and silently breaks identity for them (the
-/// classic missing-key bug any keyed-reconciliation scheme has) — prefer `Scaffold::condition
+/// classic missing-key bug any keyed-reconciliation scheme has). Prefer `Scaffold::condition
 /// (false)` to keep a node present-but-disabled instead of skipping its `slot` call.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct NodePath(Vec<(TypeId, usize)>);
@@ -69,7 +69,7 @@ impl NodePath {
 }
 
 /// Reserved marker for `Scaffold::get_overlay()`'s detached child, for use in `NodePath`-based
-/// identity schemes — the overlay isn't stored in `slots` (see the `overlay` field), so it has no
+/// identity schemes. The overlay isn't stored in `slots` (see the `overlay` field), so it has no
 /// real slot key of its own; this is a stable stand-in every surface can key it the same way with,
 /// via `NodePath::root().child((TypeId::of::<Overlay>(), 0))`.
 pub struct Overlay;
@@ -84,9 +84,9 @@ pub struct Scaffold<'ctx> {
     events: EventStack<'ctx>,
     state: HashMap<(TypeId, usize), &'ctx dyn Any, DefaultHashBuilder, &'ctx Bump>,
     slots: OrderedMap<(TypeId, usize), Scaffold<'ctx>, DefaultHashBuilder, &'ctx Bump>,
-    // A single detached child, rendered by the runtime outside the normal slot layout flow —
-    // e.g. positioned at a fixed corner and layered on top, instead of partitioning space
-    // with its siblings the way `slots` does.
+    // A single detached child, rendered by the runtime outside the normal slot layout flow.
+    // For example, positioned at a fixed corner and layered on top, instead of partitioning
+    // space with its siblings the way `slots` does.
     overlay: Option<&'ctx Scaffold<'ctx>>,
     context: DrawContext<'ctx>,
 }
@@ -159,7 +159,7 @@ impl<'ctx> Scaffold<'ctx> {
 
     pub fn slot<S: Any + 'ctx>(mut self, draw_fn: impl FnOnce(Scaffold<'ctx>) -> Scaffold<'ctx>) -> Self {
         // Per-`S` insertion index, not a global count of every slot on this node regardless of
-        // type — a slot's key is "the Nth child of marker type `S`," matching what `NodePath`'s
+        // type. A slot's key is "the Nth child of marker type `S`," matching what `NodePath`'s
         // own doc comment already promises ("marker type + insertion index"). Using a global
         // counter here instead would mean any slot inserted *after* a variable-length loop of some
         // other type (e.g. a "new tab" button after N tab rows) gets a key that silently shifts
@@ -171,7 +171,7 @@ impl<'ctx> Scaffold<'ctx> {
         self // etc..
     }
 
-    /// A detached child rendered outside the normal slot layout — see the `overlay` field.
+    /// A detached child rendered outside the normal slot layout; see the `overlay` field.
     pub fn overlay(mut self, draw_fn: impl FnOnce(Scaffold<'ctx>) -> Scaffold<'ctx>) -> Self {
         let overlay = Scaffold::new_in(self.context.arena());
         self.overlay = Some(self.alloc(draw_fn(overlay)));
@@ -231,18 +231,18 @@ impl<'ctx> Scaffold<'ctx> {
         self.overlay
     }
 
-    /// Looks up a direct child by its raw `(TypeId, usize)` slot key — the same key `NodePath`
-    /// accumulates one segment of per level. Plain slot lookup only; use `get_at_path` to resolve
-    /// a full multi-level `NodePath` against this tree.
+    /// Looks up a direct child by its raw `(TypeId, usize)` slot key. This is the same key
+    /// `NodePath` accumulates one segment of per level. Plain slot lookup only; use
+    /// `get_at_path` to resolve a full multi-level `NodePath` against this tree.
     pub fn get_slot_by_key(&self, key: &(TypeId, usize)) -> Option<&Scaffold<'ctx>> {
         self.slots.get(key)
     }
 
-    /// Resolves a `NodePath` (captured against some *earlier* draw's tree) against *this* tree —
-    /// the one legitimate way to turn "the node a stale native callback remembers" back into a
-    /// live, current `&Scaffold` with real, callable handlers. Returns `None` if the path no
-    /// longer resolves (the node was removed, or an ancestor's slot count changed under it) —
-    /// callers should treat that as "silently drop this event," not an error, since it just means
+    /// Resolves a `NodePath` (captured against some *earlier* draw's tree) against *this* tree.
+    /// This is the one legitimate way to turn "the node a stale native callback remembers" back
+    /// into a live, current `&Scaffold` with real, callable handlers. Returns `None` if the path
+    /// no longer resolves (the node was removed, or an ancestor's slot count changed under it).
+    /// Callers should treat that as "silently drop this event," not an error, since it just means
     /// the tree changed shape between when the native callback fired and this draw.
     pub fn get_at_path(&self, path: &NodePath) -> Option<&Scaffold<'ctx>> {
         path.0.iter().try_fold(self, |node, key| {

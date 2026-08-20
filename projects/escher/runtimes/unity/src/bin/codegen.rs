@@ -2,9 +2,9 @@
 //!
 //! Lives here, not in `ethos-deno` itself, because Unity-specific concerns (the C# namespace,
 //! the `libecma`/`__Internal` DLL name split, the output shape) have nothing to do with what
-//! `ethos-deno` is — this crate is where Unity integration belongs. `ethos-deno` only needs to
+//! `ethos-deno` is. This crate is where Unity integration belongs. `ethos-deno` only needs to
 //! expose its `extern "C"` surface (see its `ffi` feature); it stays unaware that Unity exists.
-//! `csbindgen` only parses the given source files with `syn` — it doesn't compile or link
+//! `csbindgen` only parses the given source files with `syn`. It doesn't compile or link
 //! `ethos-deno`, so this has no Cargo dependency on it, just a relative path to its sources.
 //!
 //! Run via `scripts/sync-plugin.sh`, not directly.

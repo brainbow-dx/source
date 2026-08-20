@@ -27,7 +27,7 @@ use crate::GameState;
 pub struct MarioState {
     pub x: f32,
     pub y: f32,
-    /// `x`/`y` as of the start of this tick's `step`, before gravity/input moved them — what
+    /// `x`/`y` as of the start of this tick's `step`, before gravity/input moved them. This is what
     /// `resolve_mario_collisions` sweeps from to catch a fast fall passing clean through a thin
     /// platform within a single tick, rather than only checking where `step` left it.
     pub prev_x: f32,
@@ -117,10 +117,10 @@ pub struct MarioDustEffect {
 }
 
 /// One bright color per player, cycling past 4 gamepads, in the classic SMB2/"mario2" 4-character
-/// roster order: Mario (red), Luigi (green), Peach (pink), Toad (white with a red accent — an off-
-/// white here rather than pure white so it still reads as a distinct color, not "no color"). Not
-/// yet player-chosen (see `render::PLAYER_FLAIRS`'s own doc comment) — every player index maps to
-/// this fixed order until a real picker exists.
+/// roster order: Mario (red), Luigi (green), Peach (pink), Toad (white with a red accent; an
+/// off-white here rather than pure white so it still reads as a distinct color, not "no color").
+/// Not yet player-chosen (see `render::PLAYER_FLAIRS`'s own doc comment); every player index maps
+/// to this fixed order until a real picker exists.
 pub fn mario_player_color(player_index: usize) -> (u8, u8, u8) {
     const MARIO_RED: (u8, u8, u8) = (205, 35, 42);
     const LUIGI_GREEN: (u8, u8, u8) = (0, 166, 81);
@@ -395,15 +395,15 @@ pub struct MarioCollider {
 /// penetration depth* of wherever `mario` ended up this tick, with no notion of which direction it
 /// was actually traveling. Against a thin platform (the single static one here is only ~0.03 of
 /// the play area tall), a fast fall's single-tick step routinely integrates `y` to somewhere in the
-/// *lower* half of that thin box — at which point "least penetration" is the *bottom* face, so the
+/// *lower* half of that thin box. At that point "least penetration" is the *bottom* face, so the
 /// old code shoved the player down and out through the floor of the very platform they were
 /// falling onto, reading as "I land in it, then fall through" (exactly the user's own report).
 /// Worse, if a fast enough fall's single tick skipped the box's thin `y` range entirely, no
-/// overlap was ever detected at all, and the player fell straight through with no resolution — the
-/// "falls through inconsistently" half of the same report.
+/// overlap was ever detected at all, and the player fell straight through with no resolution. That
+/// was the "falls through inconsistently" half of the same report.
 ///
 /// Fixed with a proper swept check, done first and unconditionally on `y` regardless of where the
-/// tick's integration left `mario` relative to the box: if the straight line from `(prev_x,
+/// tick's integration left `mario` relative to the box. If the straight line from `(prev_x,
 /// prev_y)` to `(mario.x, mario.y)` crosses the platform's top or bottom face while inside its `x`
 /// span, that's a real landing/head-bump this tick had, whether or not the final position also
 /// happens to still be inside the box. Left/right still resolve from the (now already
@@ -412,7 +412,7 @@ pub struct MarioCollider {
 ///
 /// Solid on every face, per the user's own explicit call after trying a one-way (solid-from-above-
 /// only) version: a player jumping up into it should bump off the underside exactly like landing
-/// on top, not pass through. That one-way detour was chasing the wrong cause anyway — the "avatar
+/// on top, not pass through. That one-way detour was chasing the wrong cause anyway. The "avatar
 /// looks embedded in the platform" report turned out to be `render.rs` never giving the platform
 /// any visual thickness at all (a single character row, indistinguishable from the ground), fixed
 /// there instead; the collision behavior here was never actually the problem.
@@ -444,7 +444,7 @@ fn resolve_mario_collisions(mario: &mut MarioState, prev_x: f32, prev_y: f32, co
         }
 
         // Still overlapping after the swept checks above (e.g. genuinely moving sideways into the
-        // platform's edge) — resolve whichever side is actually nearest now.
+        // platform's edge). Resolve whichever side is actually nearest now.
         let from_left = mario.x - x0;
         let from_right = x1 - mario.x;
         let from_top = mario.y - y0;
@@ -709,10 +709,10 @@ pub fn update_mario_physics(
 /// is a *fraction of the play area's height* (`MARIO_JUMP_VELOCITY_ROWS_PER_SEC.powi(2) / (2.0 *
 /// MARIO_GRAVITY_ROWS_PER_SEC2 * body_height)` rows canceling out), so a fixed fractional platform
 /// height only reads as "just under one jump" on the roughly 40-row terminal these values are
-/// tuned against — computed below from that same reference height, then pulled in slightly (the
-/// `0.85` margin) so a full-height jump reliably clears it rather than just barely brushing the
-/// underside. On an unusually tall terminal the platform sits proportionally lower and easier to
-/// reach, not harder — the opposite failure from a fixed offset that's too high to jump to.
+/// tuned against. It's computed below from that same reference height, then pulled in slightly
+/// (the `0.85` margin) so a full-height jump reliably clears it rather than just barely brushing
+/// the underside. On an unusually tall terminal the platform sits proportionally lower and easier
+/// to reach, not harder. That's the opposite failure from a fixed offset that's too high to jump to.
 const MARIO_PLATFORM_REFERENCE_HEIGHT_ROWS: f32 = 40.0;
 const MARIO_PLATFORM_JUMP_HEIGHT_MARGIN: f32 = 0.85;
 
@@ -736,9 +736,9 @@ mod tests {
     fn fast_fall_lands_on_a_thin_platform() {
         let mut mario = MarioState { x: 0.5, prev_x: 0.5, y: 0.905, prev_y: 0.905, vy: 1.0, ..MarioState::default() };
         // One tick's worth of a fast fall, integrated exactly the way `step` does, deliberately
-        // large enough to jump clean over the platform's own 0.02-tall span in a single step —
-        // the exact scenario the old min-penetration resolver got wrong (see `resolve_mario_
-        // collisions`'s own doc comment).
+        // large enough to jump clean over the platform's own 0.02-tall span in a single step.
+        // This is the exact scenario the old min-penetration resolver got wrong (see
+        // `resolve_mario_collisions`'s own doc comment).
         mario.y += mario.vy * 0.1;
         assert!(mario.y > PLATFORM.3, "test setup should overshoot clean past the platform, got y={}", mario.y);
 
@@ -751,8 +751,8 @@ mod tests {
 
     #[test]
     fn landing_resolves_to_the_platforms_top() {
-        // Ends the tick already inside the thin box, closer to its bottom face than its top —
-        // exactly the case the old "least penetration" logic got backwards.
+        // Ends the tick already inside the thin box, closer to its bottom face than its top.
+        // This is exactly the case the old "least penetration" logic got backwards.
         let mut mario = MarioState { x: 0.5, prev_x: 0.5, y: 0.929, prev_y: 0.88, vy: 0.5, ..MarioState::default() };
         let (prev_x, prev_y) = (mario.prev_x, mario.prev_y);
         resolve_mario_collisions(&mut mario, prev_x, prev_y, &[PLATFORM]);

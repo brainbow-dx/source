@@ -58,6 +58,7 @@ derive_more = { version = "2.0", default-features = false }
 parking_lot = { version = "0.12", default-features = false }
 spin = { version = "0.10", default-features = false }
 serde = { version = "1.0", default-features = false }
+serde_json = { version = "1.0", default-features = false, features = ["std"] }
 hcl-rs = { version = "0.19", default-features = false }
 hcl-edit = { version = "0.9", default-features = false }
 

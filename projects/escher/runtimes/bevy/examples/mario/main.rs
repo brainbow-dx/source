@@ -5,7 +5,7 @@
 //! Controls (gamepad only): left stick or d-pad to move, South to jump (again in the air for a
 //! double jump, or to wall-kick off a wall), East to attack, Start to open the pause menu. Ctrl+C
 //! or Escape quits. `B` (keyboard) opens the same running game in a real Bevy scene window
-//! alongside the terminal one — see `scene.rs`.
+//! alongside the terminal one; see `scene.rs`.
 
 mod ghosts;
 mod persistence;
@@ -98,14 +98,15 @@ fn main() -> Result<ExitCode> {
     let args = Args::parse();
     color_eyre::install()?;
 
-    // `color_eyre`'s own panic hook only writes to stderr — not a reliable place for a message
-    // to survive once `terminal_startup` puts this process into raw mode/the alternate screen:
-    // whatever the terminal was showing (including a panic that happened after that point) is
-    // gone the moment the process exits without explicitly leaving the alternate screen first,
-    // which a panic never gets the chance to do. Same fix `apps/anvil` already needed for its
-    // own identical symptom (a crash that reads as a silent, message-free exit) — chaining a
-    // second hook that also appends the panic message and a backtrace to a plain file gives a
-    // real crash trail independent of whatever the terminal itself was doing.
+    // `color_eyre`'s own panic hook only writes to stderr, which is not a reliable place for a
+    // message to survive once `terminal_startup` puts this process into raw mode/the alternate
+    // screen: whatever the terminal was showing (including a panic that happened after that
+    // point) is gone the moment the process exits without explicitly leaving the alternate
+    // screen first, which a panic never gets the chance to do. This is the same fix
+    // `apps/anvil` already needed for its own identical symptom (a crash that reads as a
+    // silent, message-free exit). Chaining a second hook that also appends the panic message
+    // and a backtrace to a plain file gives a real crash trail independent of whatever the
+    // terminal itself was doing.
     let default_panic_hook = std::panic::take_hook();
     let panic_log_path = std::env::temp_dir().join(format!("escher-mario-{}", std::process::id())).join("panic.log");
     std::panic::set_hook(Box::new(move |info| {
@@ -138,18 +139,18 @@ fn main() -> Result<ExitCode> {
                 .with_spawn_primary_window(false)
                 .with_spawn_terminal_plugin(false)
                 // No window exists at all in the terminal-only case (only `scene.rs`'s on-demand
-                // `B`-toggle ever opens one) — Bevy's default `OnAllClosed` exit condition would
+                // `B`-toggle ever opens one). Bevy's default `OnAllClosed` exit condition would
                 // otherwise fire immediately since a window count of zero also counts as "all
                 // closed." `terminal_exit`/the signal watcher already send the real `AppExit`.
                 .with_exit_condition(ExitCondition::DontExit),
         ))
         // `EscherBevyPlugin` defaults to `WinitSettings::desktop_app()`, a power-saving mode that
         // only ticks the schedule every 5s while idle (or once a second, from
-        // `spawn_input_watcher`'s own heartbeat wake — see its doc comment). That's exactly the
+        // `spawn_input_watcher`'s own heartbeat wake; see its doc comment). That's exactly the
         // "gets stopped up"/1fps symptom this game hit before, back when it lived in Anvil as
         // `Page::Mario`: the original fix there was `sync_winit_update_mode_for_mario`, switching
         // to continuous `WinitSettings::game()` while that page was active. This example has no
-        // other page to switch away from — it's always "the game" — so it just runs in `game()`
+        // other page to switch away from; it's always "the game." So it just runs in `game()`
         // mode the whole time, restoring the same continuous, vsync-paced tick the original had.
         .insert_resource(WinitSettings::game())
         .insert_resource(state)
@@ -185,14 +186,14 @@ pub struct GameState {
     pub identity: String,
     start: Instant,
     pub runtime: Arc<tokio::runtime::Runtime>,
-    /// Toggled by pressing `B` (see `draw_frame`'s `KeyboardEvent` handler) — `scene::
+    /// Toggled by pressing `B` (see `draw_frame`'s `KeyboardEvent` handler). `scene::
     /// spawn_scene_window_on_toggle` opens or closes the on-demand Bevy scene window to match.
     pub bevy_scene_open: Arc<RwLock<bool>>,
     fps: Arc<RwLock<FpsCounter>>,
 }
 
 /// A plain frames-per-second sanity gauge for the terminal draw loop, per the user's own "seems a
-/// bit perf poor" report — counts frames over a rolling ~1s window rather than reporting instant
+/// bit perf poor" report. Counts frames over a rolling ~1s window rather than reporting instant
 /// per-frame timing, since a single frame's delta is too noisy to read at a glance.
 struct FpsCounter {
     window_start: Instant,
@@ -429,7 +430,7 @@ fn draw_frame(
         move |root| {
             root.style(FlexDirection::Column)
                 // `B` opens the same running game as a real Bevy scene window alongside the
-                // terminal one (see `scene::spawn_scene_window_on_toggle`) — pressing it again
+                // terminal one (see `scene::spawn_scene_window_on_toggle`). Pressing it again
                 // closes that window back down.
                 .handle::<KeyboardEvent>(move |event| {
                     if event.code == Code::KeyB && event.state == KeyState::Down {

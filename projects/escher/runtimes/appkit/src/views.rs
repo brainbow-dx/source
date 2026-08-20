@@ -1,4 +1,4 @@
-//! A plain `NSView` subclass whose only job is `isFlipped -> true` — AppKit's default (origin
+//! A plain `NSView` subclass whose only job is `isFlipped -> true`. AppKit's default (origin
 //! bottom-left, y increasing upward) can't be changed on a stock `NSView` without subclassing.
 //! Every container this surface creates uses this instead of plain `NSView`, so all of `surface.rs`'s
 //! own layout math can assume one consistent coordinate convention (origin top-left, y increasing
@@ -14,7 +14,7 @@ use objc2::{define_class, msg_send, AnyThread, DefinedClass, MainThreadMarker, M
 use objc2_app_kit::{NSAnimationContext, NSBezierPath, NSColor, NSCursor, NSEvent, NSTextFieldCell, NSTrackingArea, NSTrackingAreaOptions, NSView};
 use objc2_foundation::{NSObjectProtocol, NSPoint, NSRect, NSString};
 
-/// `fill`, when set, is a `(r, g, b)` triple (0-255) — `AppKitSurface`'s own root container uses
+/// `fill`, when set, is a `(r, g, b)` triple (0-255). `AppKitSurface`'s own root container uses
 /// this to paint a themed background instead of showing through to whatever's behind it (the
 /// window's default appearance), so a toolbar/tab-strip surface can match a styleguide instead of
 /// just inheriting the OS chrome color. `None` (the default) paints nothing, same as before this
@@ -69,9 +69,9 @@ impl FlippedView {
 }
 
 /// A tab-strip row: click-to-select or drag-to-reorder, disambiguated at `mouseUp:` by total
-/// displacement since `mouseDown:` — below `CLICK_THRESHOLD` points counts as a click, past it
+/// displacement since `mouseDown:`. Below `CLICK_THRESHOLD` points counts as a click, past it
 /// counts as a drag. Deliberately doesn't track/report live position during `mouseDragged:` (no
-/// visual drop-indicator while dragging) — simplest correct version of "movable tabs," not the
+/// visual drop-indicator while dragging). Simplest correct version of "movable tabs," not the
 /// fully polished one; a real drop-indicator is a reasonable follow-up, not attempted here.
 /// Reports both outcomes as a `f64` (0.0 for a plain click, the total vertical displacement in
 /// points for a drag) via `on_release`, which owns turning that into "select" vs. "moved N
@@ -81,17 +81,17 @@ pub struct TabRowViewIvars {
     drag_start: RefCell<Option<NSPoint>>,
     on_release: RefCell<Box<dyn FnMut(f64)>>,
     selected: Cell<bool>,
-    /// Active-row highlight color, `(r, g, b)` 0-255 — set once at construction from the current
+    /// Active-row highlight color, `(r, g, b)` 0-255. Set once at construction from the current
     /// theme (see `AppKitSurface::set_theme`). `None` falls back to the system's own
     /// `selectedContentBackgroundColor`, same as before theming existed.
     highlight: Option<(f64, f64, f64)>,
-    /// Whether the pointer is currently over this row — used to draw a dimmer version of
+    /// Whether the pointer is currently over this row. Used to draw a dimmer version of
     /// `highlight` on non-selected rows, so hovering *any* tab reads as interactive even before
     /// it's clicked.
     hovering: Cell<bool>,
 }
 
-/// How long a highlight fade takes — subtle but smooth, not a snap and not a lazy crawl.
+/// How long a highlight fade takes. Subtle but smooth, not a snap and not a lazy crawl.
 const HIGHLIGHT_FADE_SECONDS: f64 = 0.12;
 
 const CLICK_THRESHOLD: f64 = 4.0;
@@ -130,7 +130,7 @@ define_class!(
             (self.ivars().on_release.borrow_mut())(reported);
         }
 
-        // SAFETY: matches `NSResponder`'s real `updateLayer` signature — called by AppKit
+        // SAFETY: matches `NSResponder`'s real `updateLayer` signature. Called by AppKit
         // whenever a layer-backed view needs to repaint its own backing layer directly, the
         // layer-backed counterpart to `drawRect:`. `apply_highlight` is what actually paints
         // (`layer.backgroundColor`, animated); this override just tells AppKit "yes, updateLayer
@@ -141,7 +141,7 @@ define_class!(
         }
 
         // SAFETY: matches `NSResponder`'s real `mouseEntered:`/`mouseExited:` signatures.
-        // `.set()`, not `.push()`/`.pop()` — see `hover.rs`'s own doc comment: `ActiveInKeyWindow`
+        // `.set()`, not `.push()`/`.pop()`. See `hover.rs`'s own doc comment: `ActiveInKeyWindow`
         // tracking areas can skip `mouseExited:` when the window loses key status while still
         // hovered, leaving an unpaired push on the cursor stack and the pointing-hand cursor
         // stuck until something else happens to pop it back off.
@@ -161,29 +161,29 @@ define_class!(
     }
 );
 
-/// A thin, always-present vertical strip at the tab strip's right edge — drag it to resize the
+/// A thin, always-present vertical strip at the tab strip's right edge. Drag it to resize the
 /// sidebar (see `AppKitSurface::attach_sidebar`/`resize_handle`). Unlike `TabRowView`, reports the
 /// live horizontal delta on every `mouseDragged:` tick, not just the total displacement at
-/// release — a resize needs to track the pointer continuously, not just where it ended up.
+/// release. A resize needs to track the pointer continuously, not just where it ended up.
 /// Deliberately *not* part of the reconciled `Scaffold` tree at all: this doesn't vary with
 /// `state.tabs` the way a drawn tree node would, it's surface chrome `AppKitSurface` owns
 /// directly, the same way its own root view is.
 ///
-/// `root` is reframed directly, synchronously, from inside `mouseDragged:` itself — confirmed
+/// `root` is reframed directly, synchronously, from inside `mouseDragged:` itself. Confirmed
 /// live as a real fix for real jitter: routing every drag tick only through the `on_resize`
 /// callback (which an app forwards into its own ECS event queue) meant the sidebar's actual frame
 /// only ever moved whenever that engine's own scheduler next happened to run, and a live AppKit
 /// mouse-drag runs its own nested tracking run loop that doesn't pump an engine's own (possibly
-/// throttled) event loop at anything like the same steady rate — so the frame visibly lagged and
+/// throttled) event loop at anything like the same steady rate, so the frame visibly lagged and
 /// jumped in batches instead of tracking the pointer smoothly. `on_resize` still fires every tick,
 /// same as before, for whatever state (`crate::bevy::TabStripState::width`, a webview's own
-/// inset) needs to catch up — just no longer the thing that makes the drag *look* smooth.
+/// inset) needs to catch up. It's just no longer the thing that makes the drag *look* smooth.
 pub struct SidebarResizeHandleIvars {
     drag_start: RefCell<Option<NSPoint>>,
     on_resize: RefCell<Box<dyn FnMut(f64)>>,
     root: Retained<NSView>,
     /// `None` (the default, before `set_fill_color` is ever called) draws nothing, leaving
-    /// whatever's behind this view showing through — an unthemed handle otherwise reads as a
+    /// whatever's behind this view showing through. An unthemed handle otherwise reads as a
     /// stray, out-of-place gray/white strip wedged between the sidebar and the webview instead of
     /// a deliberate divider. `AppKitSurface::set_theme` sets this to
     /// `theme.background`, the same fill `FlippedView::set_fill_color` gives the sidebar's own
@@ -225,7 +225,7 @@ define_class!(
         }
 
         // SAFETY: matches `NSResponder`'s real `mouseDragged:` signature. Reports the delta since
-        // the *previous* tick, not since `mouseDown:` — `drag_start` is rewritten to the current
+        // the *previous* tick, not since `mouseDown:`. `drag_start` is rewritten to the current
         // point every call, rather than left alone the way `TabRowView::mouse_up`'s one-shot
         // `.take()` does, since the caller wants a running total it's already tracking, not a
         // final displacement.
@@ -239,7 +239,7 @@ define_class!(
                 return;
             }
 
-            // Reframes `root` (and this view, right past its new edge) immediately — see this
+            // Reframes `root` (and this view, right past its new edge) immediately. See this
             // struct's own doc comment for why that can't wait on `on_resize`'s own event-queue
             // round trip without visibly jittering.
             let root = &self.ivars().root;
@@ -261,7 +261,7 @@ define_class!(
         }
 
         // SAFETY: matches `NSResponder`'s real `mouseEntered:`/`mouseExited:` signatures.
-        // `.set()`, not `.push()`/`.pop()` — see `hover.rs`'s own doc comment: `ActiveInKeyWindow`
+        // `.set()`, not `.push()`/`.pop()`. See `hover.rs`'s own doc comment: `ActiveInKeyWindow`
         // tracking areas can skip `mouseExited:` when the window loses key status while still
         // hovered, leaving an unpaired push on the cursor stack and the resize cursor stuck until
         // something else happens to pop it back off.
@@ -278,7 +278,7 @@ define_class!(
 );
 
 impl SidebarResizeHandle {
-    /// `root` is the tab strip's own root view — kept around so `mouseDragged:` can reframe it
+    /// `root` is the tab strip's own root view. Kept around so `mouseDragged:` can reframe it
     /// directly (see this struct's own doc comment for why).
     pub fn new(mtm: MainThreadMarker, frame: NSRect, root: Retained<NSView>) -> Retained<Self> {
         let this = Self::alloc(mtm)
@@ -287,7 +287,7 @@ impl SidebarResizeHandle {
         let this: Retained<Self> = unsafe { msg_send![super(this), initWithFrame: frame] };
 
         let options = NSTrackingAreaOptions::MouseEnteredAndExited | NSTrackingAreaOptions::ActiveInKeyWindow | NSTrackingAreaOptions::InVisibleRect;
-        // SAFETY: `this` (the tracking area's owner) outlives the tracking area — both are torn
+        // SAFETY: `this` (the tracking area's owner) outlives the tracking area. Both are torn
         // down together whenever `this` is deallocated/removed from its superview.
         let tracking_area =
             unsafe { NSTrackingArea::initWithRect_options_owner_userInfo(NSTrackingArea::alloc(), NSRect::default(), options, Some(&this), None) };
@@ -297,7 +297,7 @@ impl SidebarResizeHandle {
     }
 
     /// Replaces the callback fired (with the horizontal delta in points, positive = rightward)
-    /// on every `mouseDragged:` tick — called fresh every draw, the same "rebuild the closure each
+    /// on every `mouseDragged:` tick. Called fresh every draw, the same "rebuild the closure each
     /// tick" convention `crate::tabs::tab_strip`'s own `on_select`/`on_close`/etc. callbacks
     /// already use, so it can always capture whatever's currently live rather than something
     /// stale from whenever this view was first created.
@@ -305,7 +305,7 @@ impl SidebarResizeHandle {
         *self.ivars().on_resize.borrow_mut() = Box::new(on_resize);
     }
 
-    /// Whether a native drag is currently in progress — `drag_start` is `Some` from `mouseDown:`
+    /// Whether a native drag is currently in progress. `drag_start` is `Some` from `mouseDown:`
     /// until `mouseUp:` clears it, so this doubles as that check. `AppKitSurface::reposition`
     /// uses this to skip re-applying a possibly-stale Bevy-side width mid-drag; see its own doc
     /// comment for why that matters.
@@ -313,7 +313,7 @@ impl SidebarResizeHandle {
         self.ivars().drag_start.borrow().is_some()
     }
 
-    /// Sets (or clears, via `None`) this view's fill and repaints if it actually changed — same
+    /// Sets (or clears, via `None`) this view's fill and repaints if it actually changed. Same
     /// contract as `FlippedView::set_fill_color`.
     pub fn set_fill_color(&self, color: Option<(u8, u8, u8)>) {
         let color = color.map(|(r, g, b)| (r as f64, g as f64, b as f64));
@@ -336,17 +336,17 @@ impl TabRowView {
         let this: Retained<Self> = unsafe { msg_send![super(this), initWithFrame: frame] };
 
         let options = NSTrackingAreaOptions::MouseEnteredAndExited | NSTrackingAreaOptions::ActiveInKeyWindow | NSTrackingAreaOptions::InVisibleRect;
-        // SAFETY: `this` (the tracking area's owner) outlives the tracking area — both are torn
+        // SAFETY: `this` (the tracking area's owner) outlives the tracking area. Both are torn
         // down together whenever `this` is deallocated/removed from its superview.
         let tracking_area =
             unsafe { NSTrackingArea::initWithRect_options_owner_userInfo(NSTrackingArea::alloc(), NSRect::default(), options, Some(&this), None) };
         this.addTrackingArea(&tracking_area);
 
         // Layer-backed so `apply_highlight` can paint via `layer.backgroundColor` instead of a
-        // manual `NSBezierPath` fill in `drawRect:` — a plain property set on a view's own
+        // manual `NSBezierPath` fill in `drawRect:`. A plain property set on a view's own
         // backing layer doesn't animate by default in AppKit (unlike a bare, standalone
         // `CALayer`), so the fade itself still needs `NSAnimationContext`; this is just what makes
-        // there be a layer to fade at all. Also where the row's own rounding comes from — a
+        // there be a layer to fade at all. Also where the row's own rounding comes from: a
         // full-bleed, sharp-cornered fill running edge to edge in the sidebar read as a flat
         // colored block rather than a tab; every real tab treatment (including Edge's own
         // vertical-tabs mode) rounds the chip. `crate::tabs::TAB_STRIP_PADDING`'s own margin
@@ -367,7 +367,7 @@ impl TabRowView {
         }
     }
 
-    /// Fades `layer.backgroundColor` to whatever `selected`/`hovering` currently call for — the
+    /// Fades `layer.backgroundColor` to whatever `selected`/`hovering` currently call for. The
     /// one place either state actually gets painted. `NSAnimationContext.runAnimationGroup` (not
     /// just setting the color directly) is what makes this animate at all: AppKit suppresses
     /// implicit `CALayer` actions on a view's own backing layer outside of an active animation
@@ -383,7 +383,7 @@ impl TabRowView {
         } else {
             Some(match self.ivars().highlight {
                 Some((r, g, b)) => {
-                    // Much lower than a plain full-strength fill — a full-strength selected-tab
+                    // Much lower than a plain full-strength fill. A full-strength selected-tab
                     // highlight reads as too strong. `0.22` is a wash of color,
                     // enough to pick the active tab out at a glance without it looking like a
                     // solid block; hovering a non-selected row stays proportionally dimmer.
@@ -405,7 +405,7 @@ impl TabRowView {
     }
 }
 
-/// No actual state — exists only so `alloc().set_ivars(..)` produces the `PartialInit` handle
+/// No actual state. Exists only so `alloc().set_ivars(..)` produces the `PartialInit` handle
 /// `objc2`'s `super(..)`-call machinery requires for a designated-initializer override, the same
 /// shape every other custom class in this file already follows (see `ActionTarget` in
 /// `crate::action` for the same empty-ivars-purely-for-init pattern).
@@ -424,11 +424,11 @@ define_class!(
 
     impl VerticallyCenteredTextFieldCell {
         // A plain `NSTextFieldCell` draws its text flush with the top of its own bounds whenever
-        // its cell is taller than one line of text — the normal case here, since every toolbar
+        // its cell is taller than one line of text. The normal case here, since every toolbar
         // control shares one `Flex`-stretched row height rather than sizing itself to its content.
         // Auto Layout callers dodge this by giving the field an intrinsic-height constraint
         // instead; this surface positions everything with plain frames, so the standard AppKit fix
-        // is this cell override instead — centering `drawingRectForBounds:`'s returned rect within
+        // is this cell override instead: centering `drawingRectForBounds:`'s returned rect within
         // whatever bounds it's asked to draw in.
         //
         // SAFETY: matches `NSCell`'s real `drawingRectForBounds:` signature (`NSRect -> NSRect`).
@@ -439,11 +439,11 @@ define_class!(
 
         // `drawingRectForBounds:` alone centers the *static* display (an unfocused field showing
         // its placeholder or a committed value) but not the live field editor AppKit installs the
-        // instant this field becomes first responder — without this, actively-edited text
+        // instant this field becomes first responder. Without this, actively-edited text
         // renders top-aligned regardless of the override above; only the static display is
         // actually centered by it. `titleRectForBounds:` is what the field editor
         // itself gets positioned against, so it needs the identical centering, not just a call
-        // through to the override above — a plain cell's own default `titleRectForBounds:` doesn't
+        // through to the override above. A plain cell's own default `titleRectForBounds:` doesn't
         // consult `drawingRectForBounds:` on its own.
         //
         // SAFETY: matches `NSCell`'s real `titleRectForBounds:` signature (`NSRect -> NSRect`).
@@ -454,7 +454,7 @@ define_class!(
     }
 );
 
-/// Horizontal breathing room inside the field's own bounds — without it, text/the field editor's
+/// Horizontal breathing room inside the field's own bounds. Without it, text/the field editor's
 /// cursor sits flush against the rounded pill's own edge (see `AppKitSurface`'s `NodeKind::
 /// TextField` spawn arm for the pill itself), which reads as cramped rather than a real padded
 /// input the way every other browser's address bar is.

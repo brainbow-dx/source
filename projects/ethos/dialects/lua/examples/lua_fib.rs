@@ -1,4 +1,4 @@
-//! Runs a real Lua 5.4 program (recursive Fibonacci, actual `local function`/recursion — this
+//! Runs a real Lua 5.4 program (recursive Fibonacci, actual `local function`/recursion; this
 //! dialect embeds `mlua`, not a hand-rolled subset) and prints whatever it `print`s.
 
 use ethos_lua::LuaRuntime;

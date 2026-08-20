@@ -6,5 +6,5 @@ multilingual = false
 src = "../spec/docs"
 
 [build]
-build-dir = "dist/public"
+build-dir = "../.output/docs"
 create-missing = true

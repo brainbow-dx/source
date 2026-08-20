@@ -2,16 +2,16 @@
 //! via `ethos-cli run-command`, the same way `apps/anvil` already invokes any other Ethos script)
 //! and writes its output into Aby's Unity project as new asset files. See
 //! `projects/ethos/spec/agents/proposals/uxml-uss-codegen.md` for why the actual codegen logic
-//! lives in Ethos, not here — this binary is a thin consumer: run the script, parse its JSON
-//! stdout, write two files. No `ethos-ecma`/`ethos-deno` Rust dependency (see this crate's
-//! `Cargo.toml` doc comment for why that matters) — just a subprocess call, like `codegen.rs`'s
+//! lives in Ethos, not here. This binary is a thin consumer: run the script, parse its JSON
+//! stdout, write two files. It has no `ethos-ecma`/`ethos-deno` Rust dependency (see this crate's
+//! `Cargo.toml` doc comment for why that matters), just a subprocess call, like `codegen.rs`'s
 //! `csbindgen` use is a separate, unrelated kind of "generate output" step.
 //!
 //! Run directly: `cargo run -p escher-unity --bin export_shape`.
 //!
-//! Deliberately writes only new files under `Assets/UI/Generated/` — no `.cs` change, no `.unity`
-//! scene edit — since Aby's Unity Editor may be open interactively when this runs (new non-script
-//! assets don't trigger a domain reload the way a `.cs` change would).
+//! Deliberately writes only new files under `Assets/UI/Generated/`. It makes no `.cs` change and
+//! no `.unity` scene edit, since Aby's Unity Editor may be open interactively when this runs (new
+//! non-script assets don't trigger a domain reload the way a `.cs` change would).
 
 use std::path::Path;
 use std::path::PathBuf;
@@ -53,7 +53,7 @@ fn main() {
     println!("Wrote {} and {}", uxml_path.display(), uss_path.display());
 }
 
-/// Same build+locate pattern `apps/anvil/src/main.rs`'s `ensure_ethos_cli_built` uses — kept as
+/// Same build+locate pattern `apps/anvil/src/main.rs`'s `ensure_ethos_cli_built` uses. Kept as
 /// its own copy here rather than shared, since this is a standalone one-shot binary, not a
 /// library `apps/anvil` could depend on without pulling in that whole crate.
 fn ensure_ethos_cli_built(ethos_root: &Path) -> Result<PathBuf, String> {

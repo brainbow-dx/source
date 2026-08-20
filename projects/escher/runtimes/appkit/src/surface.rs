@@ -1,27 +1,27 @@
-//! Renders an `escher_core::Scaffold` tree as real, native AppKit views — the AppKit analog of
+//! Renders an `escher_core::Scaffold` tree as real, native AppKit views. This is the AppKit analog of
 //! `escher-bevy`'s `BevySurface`/`escher-web`'s DOM surface. Unlike those (which fully tear down
-//! and rebuild their whole native tree every draw — fine for a Bevy UI node or a `<div>`, fatal
+//! and rebuild their whole native tree every draw; that's fine for a Bevy UI node or a `<div>`, but fatal
 //! for an `NSTextField` a user might be actively typing into), this surface reconciles: each node
 //! gets a stable identity (`escher_core::scaffold::NodePath`, the same `(TypeId, usize)` slot-key
 //! chain every surface already has available) that survives across draws, so an unchanged native
-//! object is patched in place — never destroyed and recreated — and only nodes whose path
+//! object is patched in place. It is never destroyed and recreated, and only nodes whose path
 //! genuinely disappears get torn down.
 //!
 //! Two node "shapes" get special, atomic treatment instead of the generic container-recursion
 //! every other node gets: a node carrying a `Button` element becomes one `NSButton` (reading
 //! `.label`/`.disabled` directly off the element, not by recursing into whatever child slot
-//! `Button::draw()` happens to produce — that child exists for surfaces that *do* want to recurse
-//! into it, like Terminal; this one doesn't need to). Likewise `Input<String>` becomes one
+//! `Button::draw()` happens to produce; that child exists for surfaces that *do* want to recurse
+//! into it, like Terminal, but this one doesn't need to). Likewise `Input<String>` becomes one
 //! `NSTextField`. Everything else with content and no children becomes a plain text label;
 //! everything else becomes a plain container view children lay out inside of.
 //!
 //! Native callbacks (a button click, a text field's Return-commit) can't safely hold a reference
-//! into the `Scaffold` tree that registered their handler — that tree's whole arena is dropped the
+//! into the `Scaffold` tree that registered their handler. That tree's whole arena is dropped the
 //! moment the next `draw()` call replaces it, and a click might not happen until many draws later
 //! (or never again). So a callback firing does the minimum possible: push `(NodePath, NativeEvent)`
 //! onto `self.outbox`, a plain `'static` queue. Real dispatch into a node's actual handler closures
 //! only happens at the *start* of the next `draw()` call, against the freshly-built, still-valid
-//! tree, via `Scaffold::get_at_path` — never against a previous draw's arena. If a path no longer
+//! tree, via `Scaffold::get_at_path`, never against a previous draw's arena. If a path no longer
 //! resolves (the tree changed shape in the meantime), the event is silently dropped.
 
 use std::cell::Cell;
@@ -53,21 +53,21 @@ use crate::views::FlippedView;
 
 /// A node's currently-live native representation, keyed by `NodePath` in `AppKitSurface::nodes`.
 /// The `ActionTarget` fields exist purely to keep the target-action bridge alive for as long as
-/// the control is — never read again after `spawn`, same lifetime contract `ChromeBar::events`
+/// the control is. They are never read again after `spawn`, the same lifetime contract `ChromeBar::events`
 /// used to have with its Swift-side counterpart.
 enum NativeNode {
     Container(Retained<NSView>),
     Button {
         view: Retained<NSButton>,
         _target: Retained<ActionTarget>,
-        /// `None` on an unthemed surface (nothing to hover-tint into) — see `crate::hover`.
+        /// `None` on an unthemed surface (nothing to hover-tint into). See `crate::hover`.
         _hover: Option<Retained<crate::hover::HoverTarget>>,
         /// Shared with the hover closure above (when there is one) so its own "not hovering"
         /// resting color can reflect the button's current `active` state instead of always
-        /// resetting to `theme.text` — `patch` writes here whenever `NodeKind::Button::active`
+        /// resetting to `theme.text`. `patch` writes here whenever `NodeKind::Button::active`
         /// changes; `None` on an unthemed surface, same as `_hover`.
         active: Option<Rc<Cell<bool>>>,
-        /// Whether the pointer is currently over this button — written by the hover closure,
+        /// Whether the pointer is currently over this button, written by the hover closure and
         /// read by `patch` so it can recompute the filled backdrop (`hovering || active`)
         /// without stomping a currently-hovered button's fill back off the instant the next
         /// reconciliation pass happens to run. `None` on an unthemed surface, same as `_hover`.
@@ -79,7 +79,7 @@ enum NativeNode {
     },
     Label(Retained<NSTextField>),
     Image(Retained<NSImageView>),
-    /// A tab-strip row — see `crate::views::TabRowView`'s own doc comment for the click-vs-drag
+    /// A tab-strip row. See `crate::views::TabRowView`'s own doc comment for the click-vs-drag
     /// disambiguation it implements. Still a plain container for layout purposes (its favicon/
     /// title/close-button children recurse normally, see `layout_children`); the only difference
     /// from `Container` is which native class backs it.
@@ -99,18 +99,18 @@ impl NativeNode {
     }
 }
 
-/// What a native callback pushes onto `AppKitSurface::outbox` — deliberately tiny and `'static`,
+/// What a native callback pushes onto `AppKitSurface::outbox`. Deliberately tiny and `'static`;
 /// see this module's own doc comment for why it can't be anything richer (no arena references).
 #[derive(Debug, Clone)]
 pub enum NativeEvent {
     Activated,
     Submitted(String),
     /// `0.0` for a plain click (select), any other value for a completed drag (that many points
-    /// of vertical displacement) — see `TabRowView`'s own doc comment.
+    /// of vertical displacement). See `TabRowView`'s own doc comment.
     RowReleased(f64),
 }
 
-/// Dispatched into a tab-row node's handlers on `NativeEvent::RowReleased` — see that variant's
+/// Dispatched into a tab-row node's handlers on `NativeEvent::RowReleased`. See that variant's
 /// own doc comment for the click(`0.0`)-vs-drag(anything else) meaning of the payload. Local to
 /// this crate, not `escher_core`, same reasoning as `runtimes/terminal`'s own local `ClickEvent`:
 /// this is a genuinely AppKit-tab-strip-specific interaction, not a general cross-surface concept.
@@ -118,7 +118,7 @@ pub enum NativeEvent {
 pub struct TabRowReleased(pub f64);
 
 /// Which kind of native object a `Scaffold` node should become, decided once per node per draw by
-/// `classify` — carries just enough extracted data (`get_element::<E>()` copies, not `&Scaffold`
+/// `classify`. Carries just enough extracted data (`get_element::<E>()` copies, not `&Scaffold`
 /// borrows) to spawn/patch without re-walking the tree.
 enum NodeKind {
     Container,
@@ -129,8 +129,8 @@ enum NodeKind {
     TabRow { selected: bool },
 }
 
-/// Marks a node as "render the cached favicon for this host" — surface-specific (favicon caching
-/// is an AppKit-surface concern, not something `escher-core` needs to know about), read via
+/// Marks a node as "render the cached favicon for this host". Surface-specific (favicon caching
+/// is an AppKit-surface concern, not something `escher-core` needs to know about); read via
 /// `get_element::<FaviconImage>()` the same way `Button`/`Input` are.
 #[derive(Debug, Clone)]
 pub struct FaviconImage {
@@ -139,7 +139,7 @@ pub struct FaviconImage {
 
 impl escher_core::element::Element for FaviconImage {}
 
-/// Marks a node as a tab-strip row — see `NodeKind::TabRow`/`NativeNode::Row`. `selected` is the
+/// Marks a node as a tab-strip row. See `NodeKind::TabRow`/`NativeNode::Row`. `selected` is the
 /// only data it carries; a row's actual tab identity lives in the closure `crate::tabs::tab_strip`
 /// gives each row's `.handle::<TabRowReleased>(..)`, not in this marker.
 #[derive(Debug, Clone, Default)]
@@ -189,7 +189,7 @@ fn gap_px(styles: &escher_core::style::StyleSheet) -> f64 {
     }).unwrap_or(0.0)
 }
 
-/// `(top, right, bottom, left)` — `Padding`'s own `Edge` targets one side per call (or `All` for
+/// `(top, right, bottom, left)`. `Padding`'s own `Edge` targets one side per call (or `All` for
 /// every side at once), so several `Padding` entries can coexist in the same style sheet; this
 /// folds all of them down to one inset per side, last-write-wins per side (matches how every other
 /// surface's own `sum_insets`/`apply_edge`-style folding already treats repeated edge styles).
@@ -218,9 +218,9 @@ fn flex_weight(styles: &escher_core::style::StyleSheet) -> Option<f64> {
     })
 }
 
-/// The explicit main-axis `Size` a node asked for, if any — width for a `Row` parent, height for
+/// The explicit main-axis `Size` a node asked for, if any: width for a `Row` parent, height for
 /// a `Column` one. `Value::Fill`/`Value::Percent`/`Value::Auto` aren't resolved here (no core
-/// consumer sets them today outside `Px`) — treated the same as "no explicit size," falling
+/// consumer sets them today outside `Px`); they're treated the same as "no explicit size," falling
 /// through to `Flex` or intrinsic sizing instead. Worth revisiting if a future composition needs
 /// them.
 fn explicit_main_px(styles: &escher_core::style::StyleSheet, direction: FlexDirection) -> Option<f64> {
@@ -252,12 +252,12 @@ fn px(value: Value) -> f64 {
 
 /// Where an `AppKitSurface`'s root view sits relative to its host, recomputed against the host's
 /// *current* frame at the top of every `draw()` call (see `AppKitSurface::reposition`) rather than
-/// left to AppKit's own autoresizing masks — masks work fine until a *flipped* superview enters
+/// left to AppKit's own autoresizing masks. Masks work fine until a *flipped* superview enters
 /// the picture, at which point which margin flag means "pinned to the visual top" versus "pinned
-/// to the visual bottom" stops being documented anywhere reliable, and got it wrong in practice
-/// (this is why the toolbar/tab strip used to drift on window resize: the mask that was
-/// supposed to keep them pinned instead let their origin float). Recomputing the frame outright
-/// every draw sidesteps the ambiguity entirely — same one-time math `attach`/`attach_sidebar` used
+/// to the visual bottom" stops being documented anywhere reliable, and got it wrong in practice.
+/// (This is why the toolbar/tab strip used to drift on window resize: the mask that was
+/// supposed to keep them pinned instead let their origin float.) Recomputing the frame outright
+/// every draw sidesteps the ambiguity entirely. It's the same one-time math `attach`/`attach_sidebar` used
 /// to do once at construction, just re-run continuously against `AppKitSurface::draw`'s own
 /// already-every-tick cadence, which costs nothing extra it wasn't already paying.
 enum Pin {
@@ -269,31 +269,31 @@ enum Pin {
 }
 
 /// The minimal set of colors + text sizes an `AppKitSurface` themes itself with: `background`
-/// (this surface's own root fill), `surface` (a control's own background — e.g. the address field
-/// — one step lighter than `background` so it reads as a raised control instead of blending into
+/// (this surface's own root fill), `surface` (a control's own background, e.g. the address field,
+/// one step lighter than `background` so it reads as a raised control instead of blending into
 /// the bar behind it), `accent` (active tab-row highlight), `text` (labels/text fields/button
-/// titles), `ui_text_size` (button glyphs — back/forward/refresh/hamburger/close, generally wants
+/// titles), `ui_text_size` (button glyphs: back/forward/refresh/hamburger/close, generally wants
 /// to read a bit larger than body copy), and `body_text_size` (labels/text field content). Two
 /// sizes, not one, so a themed surface can size icon glyphs and body text independently while
 /// still guaranteeing every text-bearing control actually gets *some* explicit, consistent size
-/// instead of silently falling back to whatever the default system font happens to be (previously:
+/// instead of silently falling back to whatever the default system font happens to be. (Previously
 /// only buttons had an explicit size, labels/fields didn't, so the two could drift out of visual
-/// sync depending on the OS's own default). See `escher_styleguide::Styleguide` for where these
+/// sync depending on the OS's own default.) See `escher_styleguide::Styleguide` for where these
 /// normally come from; this type exists so `surface.rs` doesn't need to depend on that crate
-/// directly. `None` on `AppKitSurface` (the default) means "untouched, system default appearance"
-/// — the same look this surface had before theming existed.
+/// directly. `None` on `AppKitSurface` (the default) means "untouched, system default appearance,"
+/// the same look this surface had before theming existed.
 #[derive(Debug, Clone, Copy)]
 pub struct Theme {
     pub background: (u8, u8, u8),
-    /// The toolbar/tab-strip's own surface — one visible step above `background`, so chrome
+    /// The toolbar/tab-strip's own surface, one visible step above `background`, so chrome
     /// reads as chrome regardless of what page happens to be loaded underneath it. See
     /// `spec/design/styleguide/anvil.md`'s own doc prose for the full layered-stack reasoning.
     pub chrome: (u8, u8, u8),
     pub surface: (u8, u8, u8),
-    /// `surface`'s own hover/press state — one step up again, for a control that's both lifted
+    /// `surface`'s own hover/press state, one step up again, for a control that's both lifted
     /// off its chrome *and* currently interactive (a hovered toolbar button, a pressed one).
     pub control_hover: (u8, u8, u8),
-    /// A hairline separator's color, not a fill — the seam between chrome and page content, and
+    /// A hairline separator's color, not a fill. The seam between chrome and page content, and
     /// between the tab strip and the toolbar above it.
     pub border: (u8, u8, u8),
     pub accent: (u8, u8, u8),
@@ -307,7 +307,7 @@ fn rgb_color((r, g, b): (u8, u8, u8)) -> Retained<NSColor> {
 }
 
 /// Shows or hides a themed toolbar button's filled backdrop (see its own `spawn` doc comment for
-/// why it has one at all) — `show` is `hovering || active`, computed by both call sites (the
+/// why it has one at all). `show` is `hovering || active`, computed by both call sites (the
 /// hover closure and `patch`) so neither can stomp the other's reason for the fill being on.
 fn apply_button_fill(view: &NSButton, control_hover: (u8, u8, u8), show: bool) {
     let Some(layer) = view.layer() else { return };
@@ -315,26 +315,26 @@ fn apply_button_fill(view: &NSButton, control_hover: (u8, u8, u8), show: bool) {
 }
 
 /// Attached at the top (or side) of some window, reconciles+renders a `Scaffold` tree into it
-/// every `draw()` call. Replaces `runtimes/os/src/macos/chrome.rs`'s Swift-hosted toolbar — see
+/// every `draw()` call. Replaces `runtimes/os/src/macos/chrome.rs`'s Swift-hosted toolbar. See
 /// this module's own doc comment for the reconciliation contract, and `escher_chalk::toolbar`/
 /// `crate::tabs` for the two concrete compositions built on top of this.
 pub struct AppKitSurface {
     root: Retained<NSView>,
-    /// The window content view this surface is attached to — kept around (not just borrowed at
+    /// The window content view this surface is attached to. Kept around (not just borrowed at
     /// `attach` time) so `reposition` can re-read its *current* frame every draw; see `Pin`'s own
     /// doc comment for why that's needed instead of a one-time autoresizing mask.
     host: Retained<NSView>,
     /// Same object as `root`, kept typed so `set_theme` can call `FlippedView::set_fill_color` on
-    /// it — `root` itself is upcast to plain `NSView` since every other use site (layout, event
+    /// it. `root` itself is upcast to plain `NSView` since every other use site (layout, event
     /// dispatch) only needs generic `NSView` methods.
     root_flipped: Retained<crate::views::FlippedView>,
     pin: Pin,
     theme: Option<Theme>,
-    /// Called (if set) the instant a native callback — a button click, a text field submit, a tab
-    /// row release — pushes onto `outbox`, *before* that event is ever dispatched. Exists because
+    /// Called (if set) the instant a native callback (a button click, a text field submit, a tab
+    /// row release) pushes onto `outbox`, *before* that event is ever dispatched. Exists because
     /// these are raw Cocoa target-action/mouse callbacks on views this crate created directly
     /// (not routed through winit's own window-event mapping at all), so without this, a click here
-    /// only gets noticed whenever Bevy's `Update` schedule next happens to run — which, under
+    /// only gets noticed whenever Bevy's `Update` schedule next happens to run, which, under
     /// `WinitSettings::desktop_app()`'s reactive throttling, can be seconds later. Same fix shape
     /// as `escher_bevy::terminal::spawn_signal_watcher`/`spawn_input_watcher` use for signals and
     /// keyboard input: wake the event loop explicitly rather than hoping it notices on its own. See
@@ -344,26 +344,26 @@ pub struct AppKitSurface {
     outbox: Arc<Mutex<Vec<(NodePath, NativeEvent)>>>,
     mtm: MainThreadMarker,
     pub favicons: FaviconCache,
-    /// Only ever `Some` for a `Pin::Left` surface (the tab strip) — see `attach_sidebar` and
+    /// Only ever `Some` for a `Pin::Left` surface (the tab strip). See `attach_sidebar` and
     /// `crate::views::SidebarResizeHandle`'s own doc comment for why this is plain surface chrome,
     /// not a reconciled `Scaffold` node.
     resize_handle: Option<Retained<crate::views::SidebarResizeHandle>>,
 }
 
-/// How wide `SidebarResizeHandle`'s own hit-target strip is, at the tab strip's right edge —
+/// How wide `SidebarResizeHandle`'s own hit-target strip is, at the tab strip's right edge:
 /// narrow enough not to visibly eat into the sidebar's own content, wide enough to actually grab
 /// with a mouse without pixel-perfect aim. Public: a consumer inserting a webview beside this
 /// surface (see `crate::bevy::TabStripState::effective_width`) has to add this on top of that
-/// width when computing the webview's own left inset — otherwise the webview's frame starts
+/// width when computing the webview's own left inset. Otherwise the webview's frame starts
 /// exactly where the handle's own strip begins, so whichever view gets added to the window later
 /// (almost always the webview, since tabs open after the sidebar attaches) sits on top of the
 /// handle in z-order and silently eats every click meant for it.
 pub const RESIZE_HANDLE_WIDTH: f64 = 6.0;
 
-/// Never drag the sidebar narrower than this even in icon-only mode — just wide enough for one
+/// Never drag the sidebar narrower than this even in icon-only mode: just wide enough for one
 /// favicon plus its own padding to stay legible. Bounds `SidebarResizeHandle`'s own *native*
 /// `mouseDragged:` reframing directly (see that view's own doc comment on why it reframes `root`
-/// itself immediately, rather than waiting on a round trip through an ECS event queue) — confirmed
+/// itself immediately, rather than waiting on a round trip through an ECS event queue). Confirmed
 /// live as a real bug otherwise: routing every drag tick through Bevy's `Update` schedule before
 /// the sidebar's actual frame ever moved read as visibly jittery, since a live AppKit mouse-drag
 /// runs its own nested tracking run loop that doesn't pump an engine's own (possibly throttled,
@@ -376,7 +376,7 @@ pub const MAX_WIDTH: f64 = 400.0;
 
 impl AppKitSurface {
     /// Attaches an empty, flipped container to the top of `parent`'s window, `height` points
-    /// tall, full width, pinned to the top edge and kept frontmost — geometry/z-order/flip
+    /// tall, full width, pinned to the top edge and kept frontmost. Geometry/z-order/flip
     /// handling ported from `runtimes/os/src/macos/chrome.rs`'s original `attach` (now deleted).
     /// No content yet; the first `draw()` call builds it.
     pub fn attach(parent: RawWindowHandle, height: f64) -> Result<Self, OsError> {
@@ -385,7 +385,7 @@ impl AppKitSurface {
 
     /// Same idea as `attach`, but pinned to the *left* edge with a fixed `width`, starting
     /// `top_offset` points down from the very top (e.g. below a toolbar attached separately via
-    /// plain `attach`) — for the tab strip, which sits beside the toolbar rather than above the
+    /// plain `attach`). For the tab strip, which sits beside the toolbar rather than above the
     /// page.
     pub fn attach_sidebar(parent: RawWindowHandle, width: f64, top_offset: f64) -> Result<Self, OsError> {
         Self::attach_pinned(parent, Pin::Left { width, top_offset })
@@ -399,7 +399,7 @@ impl AppKitSurface {
         let mtm = MainThreadMarker::new().ok_or(OsError::NotOnMainThread)?;
 
         // SAFETY: the caller is responsible for `parent` staying valid for as long as the
-        // returned `AppKitSurface` is alive — the same contract every other consumer of a
+        // returned `AppKitSurface` is alive. This is the same contract every other consumer of a
         // `RawWindowHandle` in this workspace already places on itself.
         let ns_view: &NSView = unsafe { appkit_handle.ns_view.cast().as_ref() };
 
@@ -410,8 +410,8 @@ impl AppKitSurface {
             let _: () = objc2::msg_send![ns_view, addSubview: &*root, positioned: NS_WINDOW_ABOVE, relativeTo: std::ptr::null::<NSView>()];
         }
 
-        // Only the tab strip (`Pin::Left`) gets a resize handle — a `Pin::Top` toolbar's width
-        // always tracks its host's own, there's nothing to drag.
+        // Only the tab strip (`Pin::Left`) gets a resize handle. A `Pin::Top` toolbar's width
+        // always tracks its host's own, so there's nothing to drag.
         let resize_handle = matches!(pin, Pin::Left { .. }).then(|| {
             let handle =
                 crate::views::SidebarResizeHandle::new(mtm, NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(0.0, 0.0)), Retained::into_super(Retained::clone(&root)));
@@ -441,15 +441,15 @@ impl AppKitSurface {
         Ok(surface)
     }
 
-    /// Recomputes `root`'s frame from `host`'s *current* frame and flip state and applies it — see
+    /// Recomputes `root`'s frame from `host`'s *current* frame and flip state and applies it. See
     /// `Pin`'s own doc comment for why this replaces relying on an autoresizing mask.
     fn reposition(&self) {
         // A native drag is actively repositioning `root`/the handle itself right now (see
         // `views::SidebarResizeHandle`'s own doc comment on why that has to happen synchronously,
-        // outside Bevy's own schedule) — skipping avoids a real bug otherwise: this method runs
+        // outside Bevy's own schedule). Skipping avoids a real bug otherwise: this method runs
         // unconditionally every Bevy tick from `set_width`, using whatever
-        // `TabStripState::width` was left over from *before* this tick's own event dispatch —
-        // always one tick behind whatever the live drag had already pushed `root`'s frame to — so
+        // `TabStripState::width` was left over from *before* this tick's own event dispatch,
+        // always one tick behind whatever the live drag had already pushed `root`'s frame to. So
         // it kept yanking the frame back to a stale value and the user's continued dragging kept
         // pushing it forward again, reading as constant fighting/jitter. Only ever `Some` and
         // dragging for the tab strip's own surface instance (`Pin::Top`'s toolbar has no handle at
@@ -483,10 +483,10 @@ impl AppKitSurface {
         }
     }
 
-    /// Changes a `Pin::Left` surface's width in place — e.g. collapsing/expanding a tab strip
+    /// Changes a `Pin::Left` surface's width in place, e.g. collapsing/expanding a tab strip
     /// after it's already attached. A no-op for a `Pin::Top` surface (its width always tracks the
-    /// host's own, there's nothing meaningful to override). Takes effect on the very next `draw()`
-    /// (via `reposition`), or immediately if called between draws — either way, callers that also
+    /// host's own, so there's nothing meaningful to override). Takes effect on the very next `draw()`
+    /// (via `reposition`), or immediately if called between draws. Either way, callers that also
     /// need to re-inset content sharing the same edge (a webview sitting beside this sidebar, say)
     /// still need to update that separately; this only owns the sidebar's own frame.
     pub fn set_width(&mut self, width: f64) {
@@ -496,7 +496,7 @@ impl AppKitSurface {
         }
     }
 
-    /// Hides (or reveals) the resize handle — a no-op on a `Pin::Top` surface, same as
+    /// Hides (or reveals) the resize handle. A no-op on a `Pin::Top` surface, same as
     /// `set_resize_callback`. The caller (`crate::bevy::redraw_tab_strip`) passes
     /// `TabStripState::icon_only()` here: a collapsed, favicon-only rail has nothing meaningful
     /// left to drag-resize (its own width is a fixed constant, not something a user picks), and a
@@ -509,12 +509,12 @@ impl AppKitSurface {
         }
     }
 
-    /// Replaces the resize handle's own drag callback — a no-op on a `Pin::Top` surface, which
+    /// Replaces the resize handle's own drag callback. A no-op on a `Pin::Top` surface, which
     /// never has one (see `resize_handle`'s own doc comment). Meant to be called fresh every
     /// `draw()`, the same "rebuild the closure each tick" convention every other native callback
     /// in this surface already follows, so it always captures whatever's currently live. Wakes the
     /// event loop after every call, same as every other native callback this surface installs
-    /// (see `NodeKind::TabRow`'s own construction) — without it, a drag wouldn't be noticed by
+    /// (see `NodeKind::TabRow`'s own construction); without it, a drag wouldn't be noticed by
     /// Bevy's `Update` schedule until `WinitSettings::desktop_app()`'s idle-fallback timer next
     /// fires, up to several seconds later.
     pub fn set_resize_callback(&self, mut on_resize: impl FnMut(f64) + 'static) {
@@ -531,8 +531,8 @@ impl AppKitSurface {
 
     /// Applies a theme: paints `root`'s background immediately, and remembers the rest of
     /// `theme` for nodes created from here on (existing tab rows/labels don't retroactively
-    /// repaint — call this before the surface's first `draw()`, which is the only time this
-    /// crate itself calls it today). Fills with `theme.chrome`, not `theme.background` — this
+    /// repaint; call this before the surface's first `draw()`, which is the only time this
+    /// crate itself calls it today). Fills with `theme.chrome`, not `theme.background`, because this
     /// surface *is* the toolbar/tab-strip chrome, which reads as its own distinct layer sitting
     /// above whatever page content (`theme.background`) happens to be loaded, not a continuation
     /// of it.
@@ -540,16 +540,16 @@ impl AppKitSurface {
         self.theme = Some(theme);
         self.root_flipped.set_fill_color(Some(theme.chrome));
         // Otherwise the resize handle stays fully transparent (see its own doc comment) and reads
-        // as a stray unstyled gap between the sidebar and whatever's beside it, not a divider —
-        // `theme.border`, not `theme.chrome`, so the handle still reads as a seam even while
+        // as a stray unstyled gap between the sidebar and whatever's beside it, not a divider.
+        // Uses `theme.border`, not `theme.chrome`, so the handle still reads as a seam even while
         // sitting directly against the chrome it's attached to.
         if let Some(handle) = &self.resize_handle {
             handle.set_fill_color(Some(theme.border));
         }
     }
 
-    /// Registers a callback fired the instant any native control this surface owns is activated —
-    /// see `wake`'s own doc comment for why this exists. Applies to nodes created from here on;
+    /// Registers a callback fired the instant any native control this surface owns is activated.
+    /// See `wake`'s own doc comment for why this exists. Applies to nodes created from here on;
     /// call before the first `draw()`, same as `set_theme`.
     pub fn set_wake_callback(&mut self, wake: Arc<dyn Fn() + Send + Sync>) {
         self.wake = Some(wake);
@@ -675,7 +675,7 @@ impl AppKitSurface {
 
             if matches!(kind, NodeKind::Container | NodeKind::TabRow { .. }) {
                 // A child's own children are positioned relative to *its* bounds, not the outer
-                // surface's — same convention every `NSView` subview tree already uses.
+                // surface's. Same convention every `NSView` subview tree already uses.
                 let child_view: Retained<NSView> = match &native {
                     NativeNode::Container(view) => Retained::clone(view),
                     NativeNode::Row(view) => Retained::into_super(Retained::clone(view)),
@@ -741,15 +741,15 @@ impl AppKitSurface {
                 let active = Rc::new(Cell::new(*active));
                 let view = NSButton::initWithFrame(NSButton::alloc(mtm), zero_frame);
                 // A real icon (see `crate::icons`'s own doc comment) replaces the glyph label
-                // outright when this surface has one bundled for the given name — falls back to
+                // outright when this surface has one bundled for the given name. Falls back to
                 // the plain-text label (already set below, same as an icon-unaware surface would
                 // use) if the name isn't recognized, so a typo'd or not-yet-bundled icon name is
                 // never a hard failure.
                 if let Some(icon) = icon.and_then(crate::icons::icon_bytes) {
                     let data = NSData::with_bytes(icon);
                     if let Some(image) = NSImage::initWithData(NSImage::alloc(), &data) {
-                        // Lucide's source is drawn on a 24x24 canvas (rasterized at 48x48 — see
-                        // `crate::icons`'s own doc comment) — full-size inside a 34pt toolbar
+                        // Lucide's source is drawn on a 24x24 canvas (rasterized at 48x48, see
+                        // `crate::icons`'s own doc comment). Full-size inside a 34pt toolbar
                         // button left almost no margin and read as oversized. `16` is a standard,
                         // comfortable toolbar-icon size.
                         image.setSize(NSSize::new(16.0, 16.0));
@@ -760,19 +760,19 @@ impl AppKitSurface {
                 }
                 if let Some(theme) = self.theme {
                     // A themed toolbar reads as flat toolbar glyphs (back/forward/refresh/new-tab)
-                    // rather than full macOS push buttons — `NSBezelStyle::Push`'s beveled chrome
+                    // rather than full macOS push buttons. `NSBezelStyle::Push`'s beveled chrome
                     // is the "clunky, inconsistent" look this replaces; an unthemed surface (no
                     // `Theme` set) keeps the original default untouched.
                     view.setBordered(false);
                     let resting_color = if active.get() { theme.accent } else { theme.text };
                     view.setContentTintColor(Some(&rgb_color(resting_color)));
                     // Default system-font size (13pt) reads as small/cramped for a lone glyph
-                    // (‹, ›, ↻, ☰, ×) once the button chrome around it is gone — a themed surface
+                    // (‹, ›, ↻, ☰, ×) once the button chrome around it is gone. A themed surface
                     // bumps it for legibility, same reasoning as the wider `Size::width` values in
                     // `escher-chalk`'s `toolbar` and this crate's `tabs` compositions.
                     view.setFont(Some(&NSFont::systemFontOfSize(theme.ui_text_size)));
                     // A real filled backdrop on hover/press (see the `hover` closure below), not
-                    // just the glyph's own tint color shifting — a bare glyph with no surrounding
+                    // just the glyph's own tint color shifting. A bare glyph with no surrounding
                     // shape read as "text pretending to be a button," not a real control. `6.0`
                     // matches `spec/design/styleguide/anvil.md`'s own `radius` token; not worth
                     // threading a dimension through `Theme` for one hardcoded geometry constant
@@ -800,7 +800,7 @@ impl AppKitSurface {
                     view.setAction(Some(objc2::sel!(fire:)));
                 }
 
-                // Only themed buttons get a hover tint — an unthemed surface has no `accent`
+                // Only themed buttons get a hover tint. An unthemed surface has no `accent`
                 // color to tint toward, and keeps its default system push-button hover behavior
                 // (which AppKit already provides for free) untouched.
                 let hovering_cell = Rc::new(Cell::new(false));
@@ -810,7 +810,7 @@ impl AppKitSurface {
                     let hovering_for_closure = hovering_cell.clone();
                     crate::hover::HoverTarget::attach(mtm, &view, move |hovering| {
                         hovering_for_closure.set(hovering);
-                        // Not-hovering rests at `theme.accent` too when `active` — the whole point
+                        // Not-hovering rests at `theme.accent` too when `active`. The whole point
                         // of a persistent toggle-state indicator is that it doesn't disappear the
                         // instant the pointer moves away.
                         let color = if hovering || active_for_hover.get() { theme.accent } else { theme.text };
@@ -831,16 +831,16 @@ impl AppKitSurface {
             NodeKind::TextField { .. } => {
                 let view = NSTextField::initWithFrame(NSTextField::alloc(mtm), zero_frame);
                 // A plain `NSTextFieldCell` draws top-aligned once the field's frame is taller
-                // than one line (always true here — every toolbar control shares one `Flex`-
-                // stretched row height) — see `VerticallyCenteredTextFieldCell`'s own doc comment.
+                // than one line (always true here, since every toolbar control shares one `Flex`-
+                // stretched row height). See `VerticallyCenteredTextFieldCell`'s own doc comment.
                 // `setCell:` retains its own reference, so this temporary dropping at the end of
                 // the statement doesn't tear the cell down. Must happen *before* every `set*` call
-                // below, not after — a fresh `NSTextFieldCell` defaults to non-editable, so
+                // below, not after: a fresh `NSTextFieldCell` defaults to non-editable, so
                 // swapping it in after
                 // `setEditable(true)` silently discarded that (it had only ever been applied to
                 // the original, now-replaced cell), leaving the address field entirely read-only.
                 view.setCell(Some(&crate::views::VerticallyCenteredTextFieldCell::new(mtm)));
-                // Neither bezeled nor bordered — the native bezel draws its own gray inset border
+                // Neither bezeled nor bordered. The native bezel draws its own gray inset border
                 // regardless of theming, which read as a mismatched "system gray edge around a
                 // dark themed fill" once a real theme was applied. A flat field, distinguished
                 // purely by `theme.surface` sitting one step lighter than the bar behind it (see
@@ -849,7 +849,7 @@ impl AppKitSurface {
                 view.setBordered(false);
                 view.setEditable(true);
                 if let Some(theme) = self.theme {
-                    // A real rounded pill, not a hard-cornered fill — `setDrawsBackground`
+                    // A real rounded pill, not a hard-cornered fill. `setDrawsBackground`
                     // (used before this) paints a plain rectangle with no radius support at all,
                     // which combined with `theme.surface` barely lifting off `theme.chrome` (the
                     // bar it sits in, one shade darker) read as "is this even clickable" rather
@@ -897,7 +897,7 @@ impl AppKitSurface {
                 view.setSelectable(false);
                 view.setDrawsBackground(false);
                 // A label's box is whatever its slot's layout gives it (e.g. a tab title's `Flex`
-                // width, which shrinks as the row gets crowded) — without this, text that doesn't
+                // width, which shrinks as the row gets crowded). Without this, text that doesn't
                 // fit wraps to a second line inside a fixed-height row and gets clipped top/bottom,
                 // which is the main way this surface's text has been rendering badly. Truncating
                 // to one line with a trailing ellipsis is the standard native behavior instead.
@@ -941,23 +941,23 @@ impl AppKitSurface {
         match (native, kind) {
             (NativeNode::Button { view, active: active_cell, hovering: hovering_cell, .. }, NodeKind::Button { label, disabled, active, .. }) => {
                 // A no-op on an icon button (`imagePosition` is `ImageOnly`, so the title never
-                // actually shows) — harmless to still set, not worth a special case just to skip
+                // actually shows). Harmless to still set, not worth a special case just to skip
                 // it, and the icon itself is fixed at spawn time (see `spawn`'s own `NodeKind::
                 // Button` arm), never re-applied here since none of this crate's icon buttons
                 // change which icon they show at runtime.
                 view.setTitle(&NSString::from_str(label));
                 view.setEnabled(!disabled);
 
-                // `active`, unlike the icon, *does* need to re-apply every draw — it's the whole
+                // `active`, unlike the icon, *does* need to re-apply every draw. It's the whole
                 // point of the field (a toolbar pin button toggling live). `active_cell` also
-                // keeps the hover closure's own "not hovering" resting color in sync — see
+                // keeps the hover closure's own "not hovering" resting color in sync. See
                 // `spawn`'s own `NodeKind::Button` arm for why that's a shared cell, not just a
                 // one-off tint set here.
                 if let (Some(theme), Some(active_cell)) = (self.theme, active_cell) {
                     active_cell.set(*active);
                     let resting_color = if *active { theme.accent } else { theme.text };
                     view.setContentTintColor(Some(&rgb_color(resting_color)));
-                    // Recomputed from both cells, not just `active` alone — otherwise a button
+                    // Recomputed from both cells, not just `active` alone. Otherwise a button
                     // the pointer is currently sitting over would have its hover fill stomped
                     // back off the moment this ran again on the very next reconciliation pass.
                     let hovering = hovering_cell.as_ref().is_some_and(|cell| cell.get());
@@ -966,8 +966,8 @@ impl AppKitSurface {
             }
             (NativeNode::TextField { view, .. }, NodeKind::TextField { value, placeholder }) => {
                 // Skip touching `stringValue` at all while the user has this field open for
-                // editing (`currentEditor()` is only `Some` for the first-responder text field) —
-                // every draw call re-patches from the *last committed* `value`, which is stale by
+                // editing (`currentEditor()` is only `Some` for the first-responder text field).
+                // Every draw call re-patches from the *last committed* `value`, which is stale by
                 // definition while the user is mid-keystroke, so comparing against it and patching
                 // on a mismatch (the previous approach) stomped every character the instant it was
                 // typed. Once editing ends (blur or Enter-commit), `value` catches up via the

@@ -27,7 +27,7 @@ pub const ACCENT_BLUE: (u8, u8, u8) = (122, 162, 247);
 pub const ACCENT_ORANGE: (u8, u8, u8) = (224, 175, 104);
 
 /// Every live player, effect, and platform renders as a solid background-color block rather than
-/// a colored character on the terminal's own default background — the user's own explicit
+/// a colored character on the terminal's own default background. This is the user's own explicit
 /// direction, after finding a previous rainbow-of-foreground-glyphs look "totally stood out"
 /// against itself. `texture_fg_for` always derives a readable foreground for whatever glyph sits
 /// on top of a block from that block's own color, so no effect needs to hand-pick a contrasting
@@ -42,26 +42,27 @@ fn texture_fg_for(bg: (u8, u8, u8)) -> (u8, u8, u8) {
 }
 
 /// One glyph per player slot, on top of that player's own bright block color
-/// (`physics::mario_player_color`) — not yet player-chosen (see the module doc above this file's
-/// usage sites) — this is the deterministic placeholder every player index maps to until a real
-/// picker exists.
+/// (`physics::mario_player_color`). It is not yet player-chosen (see the module doc above this
+/// file's usage sites); this is the deterministic placeholder every player index maps to until a
+/// real picker exists.
 const PLAYER_FLAIRS: [char; 4] = ['#', '@', '%', '&'];
 
 pub fn mario_player_flair(player_index: usize) -> char {
     PLAYER_FLAIRS[player_index % PLAYER_FLAIRS.len()]
 }
 
-/// The single static platform's fill — a warm, neutral stone tone, deliberately not in the same
+/// The single static platform's fill: a warm, neutral stone tone, deliberately not in the same
 /// blue-gray family as `DIM`/the player blocks so a platform reads as solid ground underfoot
 /// rather than more backdrop.
 const PLATFORM_COLOR: (u8, u8, u8) = (94, 84, 74);
 const PLATFORM_TEXTURE: char = '=';
 /// How many extra rows of solid texture are painted *below* the platform's own top-surface row,
-/// independent of the collider's real (deliberately paper-thin, ~0.02 fraction) thickness — real,
-/// live-verified bug, found by tracing the actual rendered frame: with no visual thickness at all,
-/// a platform is exactly one character row, indistinguishable in kind from any other single line
-/// of text or from the ground itself, so standing on it never read as "on top of a raised block" —
-/// the user's own "lands in the center" and "walks the same line as the floor" reports. Collision
+/// independent of the collider's real (deliberately paper-thin, ~0.02 fraction) thickness. This is
+/// a real, live-verified bug, found by tracing the actual rendered frame: with no visual thickness
+/// at all, a platform is exactly one character row, indistinguishable in kind from any other single
+/// line of text or from the ground itself, so standing on it never read as "on top of a raised
+/// block." That matches the user's own "lands in the center" and "walks the same line as the
+/// floor" reports. Collision
 /// still resolves against the real thin rect (`physics::spawn_platform`) unchanged; this only
 /// gives the painted block a body to stand visibly above.
 const PLATFORM_VISUAL_EXTRA_ROWS: u16 = 2;
@@ -172,14 +173,14 @@ pub fn mario_body_text(
     let blank_rows = height as usize - rows.len();
 
     // Sprites grouped by row so multiple players sharing one row still render as separate splices
-    // rather than clobbering each other. Each entry is (column, block color, glyph) — the block
+    // rather than clobbering each other. Each entry is (column, block color, glyph). The block
     // color is the solid background fill; its glyph's own foreground is always derived from it via
     // `texture_fg_for`, never chosen separately, so every block/glyph pair stays readable.
     let mut sprites_by_row: std::collections::HashMap<u16, Vec<(u16, (u8, u8, u8), char)>> = std::collections::HashMap::new();
-    // Background-only fills (no glyph override) for a swing's own blast/motion trail — the
+    // Background-only fills (no glyph override) for a swing's own blast/motion trail. The
     // existing backdrop character shows through as the texture, recolored via `texture_fg_for`.
     let mut tints_by_row: std::collections::HashMap<u16, Vec<(u16, (u8, u8, u8))>> = std::collections::HashMap::new();
-    // Foreground-only glyph overrides with no background fill at all — ghosts render this way
+    // Foreground-only glyph overrides with no background fill at all. Ghosts render this way
     // rather than through `sprites_by_row` so they stay a plain colored dot directly on the dim
     // backdrop, never a solid block: a background memorial, not something meant to visually
     // compete with a live player for attention.
@@ -279,7 +280,7 @@ pub fn mario_body_text(
     }
 
     // Every lost life, ever. Rendered through `glyphs_by_row`, not `sprites_by_row`, so a ghost is
-    // always a faint colored dot directly on the plain backdrop, never a solid block — they're a
+    // always a faint colored dot directly on the plain backdrop, never a solid block. They're a
     // memorial, not something anyone's currently standing on.
     for &(x, y, color, flicker) in ghosts {
         let (col, row) = to_cell(x, y);
@@ -338,12 +339,12 @@ pub fn mario_body_text(
 
 /// Splices `sprites` (column, block color, glyph) on top of `row_text`, already padded to `width`.
 /// Every sprite and tinted column renders as a solid background-color block, its foreground always
-/// derived from that block color via `texture_fg_for` rather than a separately-chosen fg — so a
+/// derived from that block color via `texture_fg_for` rather than a separately-chosen fg, so a
 /// player, an effect, and a platform all read as "a colored block with a readable glyph on it"
 /// rather than colored text on the terminal's own background. `tints` (column, color) fills a
 /// background without overriding the underlying character, so the backdrop's own text becomes the
 /// texture showing through a motion trail or glow. `glyphs` (column, color, glyph) overrides the
-/// character and its foreground with no background fill at all — a plain colored mark directly on
+/// character and its foreground with no background fill at all: a plain colored mark directly on
 /// the dim backdrop, for anything (ghosts) that must never read as a solid block. `platform_cols`, if
 /// the platform spans this row, is the lowest-priority layer: any column not otherwise claimed but
 /// inside that range renders as solid platform instead of plain dim backdrop. Priority, high to
@@ -359,7 +360,7 @@ fn render_row_with_sprites(
     let padded = pad_to_width(row_text, width as usize);
     let mut out = String::new();
     let mut run = String::new();
-    // (foreground, background) — background is `None` for the plain, unfilled dim backdrop.
+    // (foreground, background). Background is `None` for the plain, unfilled dim backdrop.
     let mut run_style: Option<((u8, u8, u8), Option<(u8, u8, u8)>)> = None;
 
     for (col, c) in padded.chars().enumerate() {

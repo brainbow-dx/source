@@ -1,18 +1,18 @@
 /** @jsxImportSource @escher/jsx */
-// The `/shape` demo's actual source of truth — authored here, in Anvil (the project that "houses"
-// the command), as JSX: shape-authoring belongs where the command lives, not in Ethos.
+// The `/shape` demo's actual source of truth is authored here, in Anvil (the project that "houses"
+// the command), as JSX. Shape-authoring belongs where the command lives, not in Ethos.
 // `@escher/jsx` (see `packages/jsx`) compiles this into a `ScaffoldNode` tree matching
-// `runtimes/web/src/description.rs`'s `ScaffoldDescription` schema exactly — the same shape
+// `runtimes/web/src/description.rs`'s `ScaffoldDescription` schema exactly. It's the same shape
 // `packages/jsx/examples/render.ts` produces.
 //
-// Run directly: `deno run commands/shape.tsx` (needs `apps/anvil` in the Deno workspace — see
-// the root `deno.jsonc` — so `@escher/jsx`/`@escher/core` resolve). Prints the `ScaffoldNode` as
+// Run directly: `deno run commands/shape.tsx` (needs `apps/anvil` in the Deno workspace; see
+// the root `deno.jsonc`, so `@escher/jsx`/`@escher/core` resolve). Prints the `ScaffoldNode` as
 // JSON to stdout when run as the main module. `apps/anvil/src/process.rs`'s `run_deno_command`
 // invokes exactly this.
 //
 // What happens to the output from here: `apps/anvil/src/shape.rs` takes this JSON and hands it,
-// unmodified, to `ethos/tools/codegen/uxml/from-description.ts` (`ethos-cli run-command`) — a
-// pure `ScaffoldDescription → {uxml, uss}` transform, no authored content of its own. The only
+// unmodified, to `ethos/tools/codegen/uxml/from-description.ts` (`ethos-cli run-command`). That is
+// a pure `ScaffoldDescription → {uxml, uss}` transform, no authored content of its own. The only
 // thing between "built here in Escher" and "compiled in Ethos" is a plain JSON handoff between
 // two process invocations, nothing more.
 
@@ -43,12 +43,12 @@ export function Shape() {
 }
 
 if (import.meta.main) {
-    // Plain `console.log` throughout — it already streams live into Anvil's output UI the same
+    // Plain `console.log` throughout. It already streams live into Anvil's output UI the same
     // way `ethos-cli run-command`'s own `console.log` passthrough does (see
     // `apps/anvil/src/process.rs`'s `run_streamed_command`), so there's no separate "logging
     // utility" to think about on the scripting side. The caller (`apps/anvil/src/shape.rs`) reads
-    // only the *last* line of stdout as the real payload — matching `ethos-cli run-command`'s own
-    // "console.log output, then the return value, last" convention — so any number of progress
+    // only the *last* line of stdout as the real payload, matching `ethos-cli run-command`'s own
+    // "console.log output, then the return value, last" convention. So any number of progress
     // lines before it are free, so `/shape` shows what it's doing while it runs instead of going
     // silent until it's done.
     console.log("Building scaffold from JSX...");

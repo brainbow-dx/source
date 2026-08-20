@@ -1,17 +1,17 @@
-//! The real top-level `escher` entrypoint — `escher anvil` instead of the raw `cargo run -p
+//! The real top-level `escher` entrypoint. It runs `escher anvil` instead of the raw `cargo run -p
 //! escher-anvil --bin escher-anvil` every session has used so far. See
-//! `spec/.agents/proposals/terminal-drawing-and-embedding.md`'s item 4 for the design history:
-//! a bare flag on one binary was rejected in favor of a real `clap` subcommand tree, the same
+//! `spec/.agents/proposals/terminal-drawing-and-embedding.md`'s item 4 for the design history.
+//! A bare flag on one binary was rejected in favor of a real `clap` subcommand tree, the same
 //! shape `cargo` itself uses, specifically so a later `--tui` mode lands as a flag *on* `anvil`
 //! rather than another top-level mode. `ROADMAP.md` (M6) tracks this as a real blocker for that
-//! work — this is the stub that unblocks it, not the `--tui` feature itself.
+//! work. This is the stub that unblocks it, not the `--tui` feature itself.
 //!
-//! Deliberately a thin dispatcher, not a merge of `apps/anvil`'s own binary into this crate:
+//! Deliberately a thin dispatcher, not a merge of `apps/anvil`'s own binary into this crate.
 //! `anvil` stays exactly what it is today (its own crate, its own heavy Bevy/AppKit/webview
 //! dependency graph, no `lib` target to link against), so this just execs the built binary
-//! instead — see [`resolve_subcommand_binary`] for exactly how it finds one. Per the user
+//! instead. See [`resolve_subcommand_binary`] for exactly how it finds one. Per the user
 //! directly: this chain should exec real, already-built release binaries when they're available,
-//! not shell out to `cargo run` — that only ever worked from inside this monorepo checkout with
+//! and not shell out to `cargo run`. That only ever worked from inside this monorepo checkout with
 //! `cargo` on `PATH`, which is exactly wrong for testing an actually-built release install (e.g.
 //! `~/.bin/escher`). `cargo run` is now the last-resort fallback, used only from inside a dev
 //! checkout with neither a sibling nor a `PATH` binary installed, and it clearly logs that it's
@@ -23,7 +23,7 @@ use std::process::ExitCode;
 
 use clap::Parser;
 
-/// The `escher` CLI — one subcommand per app/tool that lives in this workspace, `cargo`-style.
+/// The `escher` CLI: one subcommand per app/tool that lives in this workspace, `cargo`-style.
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
@@ -33,20 +33,20 @@ struct Args {
 
 #[derive(clap::Subcommand, Debug)]
 enum Commands {
-    /// Scaffolds a new Escher project in the current directory — the smallest real thing that
-    /// works as a project `escher anvil` can then open: a `Cargo.toml` (with a
+    /// Scaffolds a new Escher project in the current directory. This is the smallest real thing
+    /// that works as a project `escher anvil` can then open: a `Cargo.toml` (with a
     /// `[package.metadata.anvil]` table, so a mounted Anvil can read this project's own
-    /// title/tagline rather than always showing its own — see `ROADMAP.md`'s "Anvil as a
+    /// title/tagline rather than always showing its own; see `ROADMAP.md`'s "Anvil as a
     /// mountable exoskeleton" note), the smallest possible `src/main.rs`, a `pages/` directory
     /// with one real example `Scaffold`/HTML page, and a `spec/`/`spec/.agents/` doc skeleton
     /// mirroring this very workspace's own convention.
     Init {
-        /// Where to scaffold the project — defaults to the current directory.
+        /// Where to scaffold the project. Defaults to the current directory.
         #[arg(default_value = ".")]
         path: PathBuf,
     },
     /// Launches Anvil (the terminal + Bevy + native webview app). Everything after `anvil` is
-    /// forwarded as-is — this subcommand doesn't parse Anvil's own flags itself, so adding a new
+    /// forwarded as-is. This subcommand doesn't parse Anvil's own flags itself, so adding a new
     /// one to `apps/anvil` (like the planned `--tui`) never requires touching this crate too.
     Anvil {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
@@ -70,8 +70,8 @@ fn main() -> ExitCode {
 }
 
 /// Runs `binary_name` (found via [`resolve_subcommand_binary`]) with `args`, forwarding this
-/// process's stdio and exit code unchanged — so e.g. `escher anvil`'s own exit status still means
-/// what it should to a script or CI step calling it.
+/// process's stdio and exit code unchanged. This way e.g. `escher anvil`'s own exit status still
+/// means what it should to a script or CI step calling it.
 fn exec_subcommand(binary_name: &str, args: &[String]) -> ExitCode {
     let (program, base_args) = resolve_subcommand_binary(binary_name);
 
@@ -90,18 +90,18 @@ fn exec_subcommand(binary_name: &str, args: &[String]) -> ExitCode {
 /// `escher_os::process::find_sibling_or_path` (shared with `apps/anvil`'s own `ethos-cli`
 /// lookup, since the same sibling-of-exe/`PATH` resolution logic applies to both):
 ///
-/// 1. A binary named `binary_name` sitting right next to this `escher` executable itself — the
-///    real, self-contained release-install case (`~/.bin/escher` shipped alongside
+/// 1. A binary named `binary_name` sitting right next to this `escher` executable itself. This is
+///    the real, self-contained release-install case (`~/.bin/escher` shipped alongside
 ///    `~/.bin/escher-anvil`), and the one this exists to make actually work.
 /// 2. `binary_name` anywhere on `PATH` (a `cargo install`-style setup, one directory holding
 ///    every `escher-*` binary without also holding this exact `escher` executable).
 /// 3. Last resort, dev-only: `cargo run --release -p <crate> --bin <binary_name>`, `<crate>`
 ///    being `binary_name` itself (matches this workspace's own package-naming convention, e.g.
-///    `escher-anvil`'s crate and binary share a name) — only reachable from inside a checkout
-///    that actually has this binary's crate and `cargo` on `PATH`, logged clearly so it's obvious
-///    why a first launch is slow.
+///    `escher-anvil`'s crate and binary share a name). This is only reachable from inside a
+///    checkout that actually has this binary's crate and `cargo` on `PATH`, and it's logged
+///    clearly so it's obvious why a first launch is slow.
 ///
-/// Returns `(program, leading_args)` — `leading_args` is empty for cases 1/2 (the resolved path
+/// Returns `(program, leading_args)`. `leading_args` is empty for cases 1/2 (the resolved path
 /// *is* the program to run), non-empty for case 3 (`cargo`'s own subcommand/flags come first).
 fn resolve_subcommand_binary(binary_name: &str) -> (PathBuf, Vec<String>) {
     if let Some(found) = escher_os::process::find_sibling_or_path(binary_name) {
@@ -112,7 +112,7 @@ fn resolve_subcommand_binary(binary_name: &str) -> (PathBuf, Vec<String>) {
     ("cargo".into(), ["run", "--quiet", "--release", "-p", binary_name, "--bin", binary_name, "--"].into_iter().map(String::from).collect())
 }
 
-/// Kept in this file rather than a separate module — small enough, and `apps/cli` has no other
+/// Kept in this file rather than a separate module: it's small enough, and `apps/cli` has no other
 /// modules yet to make a `mod` split worth it. See [`Commands::Init`] for the user-facing contract
 /// this implements.
 mod escher_init {
@@ -147,7 +147,7 @@ mod escher_init {
         Ok(())
     }
 
-    /// Refuses to clobber anything already there — `escher init` in a directory that already
+    /// Refuses to clobber anything already there. `escher init` in a directory that already
     /// has, say, a hand-written `Cargo.toml` should fail loudly, not silently overwrite it.
     fn write_new(path: &Path, contents: &str) -> io::Result<()> {
         if path.exists() {

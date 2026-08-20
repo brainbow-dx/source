@@ -7,6 +7,7 @@
 use std::path::Path;
 
 use deno_core::v8;
+use deno_core::Extension;
 use deno_core::PollEventLoopOptions;
 use deno_runtime::deno_core::resolve_url_or_path;
 use deno_runtime::deno_io::Stdio;
@@ -18,11 +19,17 @@ use crate::worker::bootstrap_main_worker;
 /// `console.log`s along the way goes wherever `stdio.stdout`/`stdio.stderr` point, not into this
 /// return value.
 ///
+/// `extensions` are registered on the worker before evaluation, same as `bootstrap_main_worker`'s
+/// own parameter of the same name — this is how a host gives a script real callable functions
+/// (see `ethos_sdk`'s own `op_send_host_log` for the pattern), rather than the script signaling
+/// intent back through its return value for the host to interpret. Pass an empty `Vec` for a
+/// script that only needs stdout/stderr and a return value, no host actions.
+///
 /// Builds its own dedicated single-threaded Tokio runtime — `deno_unsync` (used internally by
 /// `deno_fetch`) asserts the runtime driving it is `CurrentThread` — so callers don't need a
 /// Tokio context of their own at all; this blocks the calling thread until the script's `run`
 /// returns.
-pub fn run_module_command(script: &Path, current_dir: &Path, args: &str, stdio: Stdio) -> Result<String, String> {
+pub fn run_module_command(script: &Path, current_dir: &Path, args: &str, stdio: Stdio, extensions: Vec<Extension>) -> Result<String, String> {
     let tokio_runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -32,7 +39,7 @@ pub fn run_module_command(script: &Path, current_dir: &Path, args: &str, stdio: 
         let main_module = resolve_url_or_path(&script.to_string_lossy(), current_dir)
             .map_err(|error| format!("{script:?} is not a valid module specifier: {error}"))?;
 
-        let mut worker = bootstrap_main_worker(&main_module, stdio, None, vec![], false, None);
+        let mut worker = bootstrap_main_worker(&main_module, stdio, None, extensions, false, None);
 
         let module_id = worker.preload_main_module(&main_module).await.map_err(|error| format!("failed to preload {script:?}: {error}"))?;
         worker.evaluate_module(module_id).await.map_err(|error| format!("failed to evaluate {script:?}: {error}"))?;

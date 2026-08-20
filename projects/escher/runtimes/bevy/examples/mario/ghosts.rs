@@ -30,19 +30,19 @@ pub struct GhostDrift {
     pub flicker_phase: f32,
 }
 
-/// A small twinkling orb — always the same tiny dot glyph now (the user's own direction: ghosts
+/// A small twinkling orb. Always the same tiny dot glyph now, per the user's own direction: ghosts
 /// were "too prominent" and "in the way" as a 3-size glyph that grows to a full `•` at its
-/// brightest). Kept as a single character rather than inlining `'·'` at both call sites so a
+/// brightest. Kept as a single character rather than inlining `'·'` at both call sites so a
 /// future "shrink further at the deep dim floor" tweak still has one place to add a second glyph.
 pub const MARIO_GHOST_GLYPH_DIM: char = '·';
 /// How dim a ghost renders relative to its own color at its brightest. The actual per-frame
 /// brightness is this times the flicker function's own 0.0-1.0 result, never this alone. Lowered
-/// per the user's own "more faded" direction — ghosts are a background memorial, not something
+/// per the user's own "more faded" direction. Ghosts are a background memorial, not something
 /// meant to visually compete with a live player for attention.
 pub const MARIO_GHOST_DIM_FRACTION: f64 = 0.32;
 /// Ghosts drift within this vertical band, a fraction of the play area's height, `0.0` the very
 /// top. Extended further down the screen per the user's own "dither down the screen a bit more"
-/// direction — confining every ghost to a thin strip near the top read as clutter right where nothing
+/// direction. Confining every ghost to a thin strip near the top read as clutter right where nothing
 /// else happens; spreading the same ghosts over most of the play area reads as much less crowded even
 /// though the count hasn't changed.
 pub const MARIO_GHOST_BAND_TOP: f32 = 0.02;
@@ -60,7 +60,7 @@ pub const MARIO_GHOST_WOBBLE_FREQ: f32 = 0.08;
 /// with a rare, distinct dart rather than a continuous fast jitter. `_BASE`/`_JITTER` give each
 /// ghost its own average interval between swoops so they never swoop in lockstep. `_WINDOW` is how
 /// much of that interval the dash occupies, eased in and back out rather than snapped. `_DISTANCE`
-/// is how far it travels. Interval raised and distance shortened per "slower" — swoops were the
+/// is how far it travels. Interval raised and distance shortened per "slower". Swoops were the
 /// most eye-catching, least ghost-like part of the old motion.
 pub const MARIO_GHOST_SWOOP_INTERVAL_BASE: f32 = 26.0;
 pub const MARIO_GHOST_SWOOP_INTERVAL_JITTER: f32 = 20.0;
@@ -162,8 +162,8 @@ pub fn mario_ghost_flicker(elapsed_seconds: f32, phase: f32) -> f64 {
     (ambient * deep_dim).clamp(MARIO_GHOST_DEEP_DIM_FLOOR, 1.0)
 }
 
-/// Which orb glyph a ghost renders as this frame. Always the same tiny dot now — see
-/// `MARIO_GHOST_GLYPH_DIM`'s own doc comment — the flicker value still drives how dim it is
+/// Which orb glyph a ghost renders as this frame. Always the same tiny dot now; see
+/// `MARIO_GHOST_GLYPH_DIM`'s own doc comment. The flicker value still drives how dim it is
 /// (`render.rs`'s own color blend), just not its size/glyph anymore.
 pub fn mario_ghost_glyph(_flicker: f64) -> char {
     MARIO_GHOST_GLYPH_DIM

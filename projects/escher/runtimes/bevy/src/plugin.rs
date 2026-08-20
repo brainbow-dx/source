@@ -1,8 +1,8 @@
-//! The top-level Escher Bevy plugin. Ported from a pre-refactor `slate` prototype — trimmed
+//! The top-level Escher Bevy plugin. Ported from a pre-refactor `slate` prototype, trimmed
 //! down to the parts that are actually cross-platform. The original also wired up a custom
 //! window manager and a WebView overlay, but both of those (`window.rs`/`webview.rs`) turned
 //! out to be Windows-only (hard-locked to the `webview2` COM API, no macOS backend was ever
-//! written) — they're kept as reference in `src/legacy/` rather than pulled in here. Likewise
+//! written). They're kept as reference in `src/legacy/` rather than pulled in here. Likewise
 //! `provider.rs` (the actual Escher-`Scaffold`-to-Bevy-UI bridge) targets the pre-refactor core
 //! API and needs a real rewrite against the current `escher-core`, so it's parked in
 //! `src/legacy/` too rather than wired in half-working.

@@ -18,7 +18,7 @@ use crate::menu::MenuItem;
 use crate::menu::MenuRole;
 use crate::OsError;
 
-/// Bridges a custom `MenuItem::Item`'s `action` into AppKit's target-action mechanism — an
+/// Bridges a custom `MenuItem::Item`'s `action` into AppKit's target-action mechanism. An
 /// `NSMenuItem`'s `action` selector needs a real Objective-C target object to fire on, same as
 /// `NSButton`. Duplicated from `escher_appkit::action::ActionTarget`'s shape rather than depended
 /// on (this crate can't depend on `escher-appkit`, which already depends on it).
@@ -39,7 +39,7 @@ define_class!(
 
     impl MenuActionTarget {
         // SAFETY: matches the `(id)sender` signature every `NSMenuItem` action selector is
-        // invoked with — `sender` is never read, so its exact type doesn't matter here.
+        // invoked with. `sender` is never read, so its exact type doesn't matter here.
         #[unsafe(method(fire:))]
         fn fire(&self, _sender: &AnyObject) {
             (self.ivars().action)();
@@ -55,7 +55,7 @@ impl MenuActionTarget {
     }
 }
 
-/// (title, selector, key equivalent) for each role — all standard `NSResponder`/`NSApplication`/
+/// (title, selector, key equivalent) for each role. All are standard `NSResponder`/`NSApplication`/
 /// `NSText` action methods that AppKit routes through the responder chain on its own, which is
 /// exactly why no target object is needed here.
 fn role_parts(role: MenuRole) -> (&'static str, Sel, &'static str) {
@@ -97,7 +97,7 @@ fn build_item(mtm: MainThreadMarker, item: &MenuItem) -> Retained<NSMenuItem> {
             // SAFETY: `target` is a real `MenuActionTarget` responding to `fire:` exactly as set
             // above; it's kept alive for the process's whole lifetime (see the `forget` below).
             unsafe { menu_item.setTarget(Some(&target)) };
-            // `NSMenuItem.target` is a weak property — nothing else keeps `target` retained past
+            // `NSMenuItem.target` is a weak property. Nothing else keeps `target` retained past
             // this call. The application menu bar is installed exactly once, at startup, and lives
             // for the process's whole lifetime with no teardown path to release this into, so
             // leaking this one retain permanently is deliberate, not an oversight.
