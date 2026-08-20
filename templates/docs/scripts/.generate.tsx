@@ -58,10 +58,11 @@ if (args.verbose) console.log(`> copy docs/book.toml (title: ${name})`);
 // right after `services:` matches every real Brainbow project's own compose.yaml today), or
 // write a fresh minimal one if it doesn't. Idempotent: does nothing if a `docs:` service already
 // exists, so re-running this template on an already-composed project is a safe no-op.
-const DOCS_SERVICE = `  # \`docker compose --profile docs up\` alone serves the static book built into the image at
-  # :${port} (the Dockerfile's own release default). \`docker compose --profile docs watch\`
-  # instead overrides the command to \`mdbook serve\`, which live-reloads: \`develop.watch\` syncs
-  # local edits into the container, mdbook's own file watcher picks those up and rebuilds.
+const DOCS_SERVICE = `  # \`docker compose --profile docs up\` builds the image (a real release binary/static book —
+  # the Dockerfile's own default), but this service always overrides the command to \`mdbook
+  # serve\` and bind-mounts spec/docs straight in — watch is on unconditionally the moment this
+  # service is up, no separate \`docker compose watch\`/\`--watch\` invocation required. mdbook's
+  # own file watcher sees host edits immediately through the bind mount and rebuilds + live-reloads.
   docs:
     build:
       context: .
@@ -70,11 +71,8 @@ const DOCS_SERVICE = `  # \`docker compose --profile docs up\` alone serves the 
     ports:
       - ${port}:3000
     command: ["mdbook", "serve", "--hostname", "0.0.0.0", "--port", "3000"]
-    develop:
-      watch:
-        - path: ./spec/docs
-          action: sync
-          target: /spec/docs
+    volumes:
+      - ./spec/docs:/spec/docs
 `;
 
 if (await exists(COMPOSE_PATH)) {
@@ -95,4 +93,4 @@ if (await exists(COMPOSE_PATH)) {
     console.log(`Created compose.yaml with a 'docs' service.`);
 }
 
-console.log(`Fin. Serve it: cd ${OUT_DIR} && docker compose --profile docs watch`);
+console.log(`Fin. Serve it: cd ${OUT_DIR} && docker compose --profile docs up`);

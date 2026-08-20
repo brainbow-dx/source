@@ -1,11 +1,11 @@
 # docs template
 
-Bootstraps a live-reloading [mdBook](https://rust-lang.github.io/mdBook/) documentation site for a project — the smallest of the Brainbow templates, and meant to be composed *with* one of the others (`app`/`package`/`service`/`workspace`) rather than used alone: it never touches `src/`, `Cargo.toml`, or `deno.json`, only `docs/` and a `docs:` service in the project's `compose.yaml`.
+Bootstraps a live-reloading [mdBook](https://rust-lang.github.io/mdBook/) documentation site for a project — the smallest of the Brainbow templates, and meant to be composed *with* one of the others (`app`/`package`/`service`/`workspace`) rather than used alone: it never touches `src/`, `Cargo.toml`, or `deno.json`, only `docs/`, `spec/docs/`, and a `docs:` service in the project's `compose.yaml`.
 
 ## What it does
 
-- Copies `Dockerfile`/`book.toml`/`SUMMARY.md`/`src/Introduction.md` into `<target>/docs/`.
-- Adds (or creates) a `docs:` service in `<target>/compose.yaml` — a dev-mode container running `mdbook serve`, paired with a `develop.watch` block so `docker compose --profile docs watch` syncs local edits straight in; mdbook's own file watcher rebuilds + live-reloads from there, no container restart needed. Idempotent — running it again on a project that already has the service is a no-op, not a duplicate block.
+- Copies `Dockerfile`/`book.toml` into `<target>/docs/` — the book's actual content (`SUMMARY.md`, `Introduction.md`) goes to `<target>/spec/docs/` instead, alongside the rest of the project's documentation.
+- Adds (or creates) a `docs:` service in `<target>/compose.yaml` running `mdbook serve`, with `spec/docs/` bind-mounted straight in — watch is on unconditionally the moment the service is up (`docker compose --profile docs up`), no separate `watch`/`--watch` invocation needed; mdbook's own file watcher sees host edits through the bind mount and rebuilds + live-reloads from there. Idempotent — running it again on a project that already has the service is a no-op, not a duplicate block.
 
 ## Usage
 
