@@ -21,7 +21,6 @@ atlas-relay = { workspace = true }
 atlas-store = { workspace = true }
 atlas-dev = { workspace = true }
 atlas-home = { workspace = true }
-atlas-pds = { workspace = true }
 atlas-bsky = { workspace = true }
 
 dirs = { workspace = true }

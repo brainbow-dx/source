@@ -1,4 +1,7 @@
-//! Runs the relay standalone: `cargo run -p atlas-relay --bin atlas-relay [addr]`.
+//! Runs the relay standalone, for local dev/testing only (`compose.yaml`'s `relay` service runs
+//! this): `cargo run --example serve -p atlas-relay [addr]`. `atlas-relay` itself ships no bin
+//! target — real consumers embed `atlas_relay::serve` directly on their own runtime (see
+//! `apps/anvil/src/main.rs`), the same way this example does.
 
 use std::net::SocketAddr;
 

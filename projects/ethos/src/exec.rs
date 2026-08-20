@@ -18,11 +18,7 @@ impl Exec {
         let args: Vec<S> = args.into_iter().collect();
 
         #[cfg(feature = "dev")]
-        tracing::info!(
-            "Executing: {:?} {:}",
-            program.as_ref(),
-            args.iter().map(|arg| arg.as_ref().to_string_lossy()).collect::<Vec<_>>().join(" "),
-        );
+        tracing::info!("Executing: {:?} {:}", program.as_ref(), args.iter().map(|arg| arg.as_ref().to_string_lossy()).collect::<Vec<_>>().join(" "));
 
         let mut command = Command::new(program);
 

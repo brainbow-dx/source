@@ -3,7 +3,7 @@ title = "Eden"
 authors = ["Brainbow"]
 language = "en"
 multilingual = false
-src = "."
+src = "../spec/docs"
 
 [build]
 build-dir = "dist/public"

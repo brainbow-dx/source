@@ -21,7 +21,6 @@ tracing = { workspace = true }
 escher-core = { workspace = true }
 escher-chalk = { workspace = true }
 escher-os = { workspace = true }
-dirs = { workspace = true }
 bumpalo = { workspace = true }
 bevy = { workspace = true, features = ["bevy_window", "bevy_winit"], optional = true }
 

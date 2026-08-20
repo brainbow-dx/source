@@ -3,8 +3,7 @@ name = "docs"
 include = [
     "Dockerfile",
     "book.toml",
-    "SUMMARY.md",
-    "src/**/*.md",
+    "spec-docs/**/*.md",
 ]
 
 [hooks.generate]

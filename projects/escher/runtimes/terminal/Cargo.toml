@@ -20,30 +20,23 @@ escher-core = { workspace = true }
 
 palette = { workspace = true }
 
-uuid = { workspace = true, features = ["v4"] }
 ratatui = { workspace = true, features = ["crossterm"] }
 crossterm = { workspace = true, features = ["events", "bracketed-paste"] }
 ansi-to-tui = { workspace = true }
 arboard = { workspace = true }
 unicode-width = { workspace = true }
 
-slotmap = { workspace = true }
-indexmap = { workspace = true }
 
 parking_lot = { workspace = true }
 
 derive_more = { workspace = true, features = ["from", "display", "index", "index_mut", "deref", "deref_mut", "is_variant"] }
-enum_dispatch = { workspace = true }
 
 num-traits = { workspace = true }
 
-hashbrown = { workspace = true, features = ["core", "alloc", "default-hasher", "serde", "allocator-api2", "rayon"] }
 
-bumpalo = { workspace = true, features = ["allocator-api2", "boxed", "collections"] }
 bumpalo-herd = { workspace = true }
 
 tracing = { workspace = true }
-tracing-core = { workspace = true }
 tracing-subscriber = { workspace = true, optional = true }
 
 oops = { workspace = true, features = ["macros"] }

@@ -33,27 +33,15 @@ lto = true
 [dependencies]
 escher-core = { workspace = true }
 escher-macros = { workspace = true }
-escher-syn = { workspace = true, optional = true }
 escher-bevy = { workspace = true }
 escher-terminal = { workspace = true, optional = true }
 
-atlas = { workspace = true }
 
-prost = { workspace = true }
-prost-types = { workspace = true }
 
 # Bumpalo is the primary allocator used in the hot-path during scaffolding, via the stable
 # allocator-api2 crate rather than nightly's own allocator_api.
-bumpalo = { workspace = true, features = [
-    "allocator-api2",
-    "boxed",
-    "collections",
-] }
-bumpalo-herd = { workspace = true }
 
 #--
-uuid = { workspace = true, features = ["v4"] }
-parking_lot = { workspace = true }
 derive_more = { workspace = true, features = [
     "from",
     "display",
@@ -63,25 +51,8 @@ derive_more = { workspace = true, features = [
     "deref_mut",
     "is_variant",
 ] }
-enum_dispatch = { workspace = true }
-num-traits = { workspace = true }
-hashbrown = { workspace = true, features = [
-    "core",
-    "alloc",
-    "default-hasher",
-    "serde",
-    "allocator-api2",
-    "rayon",
-] }
 
-tracing = { workspace = true }
-tracing-core = { workspace = true }
-tracing-subscriber = { workspace = true, optional = true }
 
-oops = { workspace = true, features = ["macros"] }
-eyre = { workspace = true }
-color-eyre = { workspace = true }
-wasm-bindgen = { workspace = true, default-features = false }
 
 [target.'cfg(not(target_arch="wasm32"))'.dependencies]
 escher-terminal = { workspace = true }
@@ -90,28 +61,20 @@ crossterm = { workspace = true, features = ["events", "bracketed-paste"] }
 ansi-to-tui = { workspace = true }
 
 [target.'cfg(target_arch="wasm32")'.dependencies]
-uuid = { workspace = true, features = ["v4", "js"] }
 
 [target.'cfg(target_os="windows")'.dependencies]
 crossterm = { workspace = true, features = ["windows"] }
 
 [dev-dependencies]
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true, features = ["fmt", "ansi"] }
 
-hashbrown = { workspace = true, features = ["default-hasher"] }
 
 # Only "display" is used (examples/events.rs). "full" also enables derive_more's own `Debug`
 # derive, which can collide with a plain `#[derive(Debug)]` elsewhere in the workspace (E0659).
 derive_more = { workspace = true, features = ["display"] }
 
-eyre = { workspace = true, features = ["default"] }
-oops = { workspace = true, features = ["default"] }
 
 [build-dependencies]
 prost-build = { workspace = true }
-eyre = { workspace = true }
-color-eyre = { workspace = true }
 napi-build = { workspace = true }
 
 #---

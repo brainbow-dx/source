@@ -9,8 +9,6 @@ edition = "2024"
 # engine/runtime (`escher-bevy` etc. are consumers, not owners, of this). macOS only for now, via
 # `objc2`/AppKit — same toolkit already used by `escher-webview`.
 [dependencies]
-raw-window-handle = { workspace = true }
-tracing = { workspace = true }
 
 [target.'cfg(target_os="macos")'.dependencies]
 objc2 = { workspace = true }

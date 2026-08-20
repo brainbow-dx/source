@@ -23,4 +23,3 @@ tracing-log = { workspace = true, features = ["std", "log-tracer"] }
 ethos-core = { workspace = true }
 ethos-deno = { workspace = true }
 ethos-lua = { workspace = true }
-tokio = { workspace = true, features = ["rt"] }

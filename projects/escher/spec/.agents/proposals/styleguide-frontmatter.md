@@ -40,33 +40,10 @@ Each project can define one or more styleguides — simple markdown documents wi
 
 ## What actually shipped (v1, 2026-08-15)
 
-Time-boxed to "smallest subset that puts a solid foundation in place and gets the browser chrome
-looking consistent with the TUI" — a much smaller slice than the full design above, on the human's
-explicit instruction ("I don't have much time"). Concretely:
+Time-boxed to "smallest subset that puts a solid foundation in place and gets the browser chrome looking consistent with the TUI" — a much smaller slice than the full design above, on the human's explicit instruction ("I don't have much time"). Concretely:
 
-- **`packages/styleguide`** (`escher-styleguide`): parses a `---`-delimited YAML frontmatter block
-  into a flat `colors: HashMap<String, (u8,u8,u8)>` (hex strings only) + `dimensions:
-  HashMap<String, f64>`. No variable/token aliasing (`{token.path}` references — §1 above), no W3C
-  `$type`/`$value` tagging (§2 above), no component-dependency declarations (§3, still the open
-  question). `Styleguide::color(name)`/`.dimension(name)` are the whole lookup API.
-- **`spec/design/styleguide/anvil.md`**: the actual token file — a Tokyo-Night-derived palette
-  (`background`, `surface`, `border`, `accent`, `accent-warn`, `success`, `danger`, `text`,
-  `text-muted`) plus a handful of unused-so-far dimension tokens (`radius`, `spacing-*`).
-- **Terminal side**: `apps/anvil/src/main.rs`'s previously-hardcoded `ACCENT_BLUE`/`ACCENT_ORANGE`/
-  `GREEN`/`RED`/`DIM` consts (and two raw hex-literal `style` calls) now resolve from this
-  file via a `LazyLock<Styleguide>`, with the original hardcoded values kept as fallbacks.
-- **AppKit side**: `escher-appkit` gained a minimal `Theme { background, accent, text }` (just
-  three colors, deliberately not the full token set) on `AppKitSurface` — `set_theme()` paints the
-  surface's own root background (new: `FlippedView` can now fill itself, previously painted
-  nothing) and colors newly-created tab rows/labels/text fields. `escher_appkit::bevy` exposes this
-  as a `ThemeState` resource; `apps/anvil` populates it from the same `Styleguide` instance the
-  terminal side reads, so both surfaces are provably reading the same token source, not just
-  visually similar by coincidence. Verified live: toolbar/tab-strip background is now the dark
-  styleguide `background` color (previously transparent/system-default) and the active tab
-  highlight uses the styleguide `accent` blue (previously `NSColor::selectedContentBackgroundColor`,
-  a system color that wouldn't have matched the TUI in light mode or a non-default accent).
-- **Not touched**: Bevy scene surface and webview *content* styling (arbitrary web pages aren't
-  ours to restyle) — the human's original four-surfaces framing only fully applies to the two that
-  are ours to paint (terminal, AppKit chrome). Buttons/bezels still use system AppKit rendering
-  (NSButton's default bezel, not restyled). Dimension tokens are parsed but nothing consumes them
-  yet. No hot-reload — theme is read once at startup.
+- **`packages/styleguide`** (`escher-styleguide`): parses a `---`-delimited YAML frontmatter block into a flat `colors: HashMap<String, (u8,u8,u8)>` (hex strings only) + `dimensions: HashMap<String, f64>`. No variable/token aliasing (`{token.path}` references — §1 above), no W3C `$type`/`$value` tagging (§2 above), no component-dependency declarations (§3, still the open question). `Styleguide::color(name)`/`.dimension(name)` are the whole lookup API.
+- **`spec/design/styleguide/anvil.md`**: the actual token file — a Tokyo-Night-derived palette (`background`, `surface`, `border`, `accent`, `accent-warn`, `success`, `danger`, `text`, `text-muted`) plus a handful of unused-so-far dimension tokens (`radius`, `spacing-*`).
+- **Terminal side**: `apps/anvil/src/main.rs`'s previously-hardcoded `ACCENT_BLUE`/`ACCENT_ORANGE`/ `GREEN`/`RED`/`DIM` consts (and two raw hex-literal `style` calls) now resolve from this file via a `LazyLock<Styleguide>`, with the original hardcoded values kept as fallbacks.
+- **AppKit side**: `escher-appkit` gained a minimal `Theme { background, accent, text }` (just three colors, deliberately not the full token set) on `AppKitSurface` — `set_theme()` paints the surface's own root background (new: `FlippedView` can now fill itself, previously painted nothing) and colors newly-created tab rows/labels/text fields. `escher_appkit::bevy` exposes this as a `ThemeState` resource; `apps/anvil` populates it from the same `Styleguide` instance the terminal side reads, so both surfaces are provably reading the same token source, not just visually similar by coincidence. Verified live: toolbar/tab-strip background is now the dark styleguide `background` color (previously transparent/system-default) and the active tab highlight uses the styleguide `accent` blue (previously `NSColor::selectedContentBackgroundColor`, a system color that wouldn't have matched the TUI in light mode or a non-default accent).
+- **Not touched**: Bevy scene surface and webview *content* styling (arbitrary web pages aren't ours to restyle) — the human's original four-surfaces framing only fully applies to the two that are ours to paint (terminal, AppKit chrome). Buttons/bezels still use system AppKit rendering (NSButton's default bezel, not restyled). Dimension tokens are parsed but nothing consumes them yet. No hot-reload — theme is read once at startup.

@@ -18,9 +18,6 @@ clap = { workspace = true, features = ["derive"] }
 derive_more = { workspace = true, features = ["from"] }
 oops = { workspace = true }
 serde = { workspace = true }
-url = { workspace = true }
-hcl-edit = { workspace = true }
-hcl-rs = { workspace = true }
 
 [dev-dependencies]
 eyre = { workspace = true, features = ["auto-install"] }

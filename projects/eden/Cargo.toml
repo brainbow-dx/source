@@ -11,12 +11,8 @@ verbose = []
 profiling = []
 
 [dependencies]
-tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter", "fmt", "ansi"], optional = true }
 clap = { workspace = true, features = ["derive"] }
-derive_more = { workspace = true, features = ["from"] }
-oops = { workspace = true }
-url = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }

@@ -16,7 +16,6 @@ verbose = []
 # See `apps/anvil/Cargo.toml`'s identical line for why `3d` is dropped from `bevy`'s own
 # `default` (2d + 3d + ui) — nothing anywhere in this workspace renders 3D content.
 bevy = { workspace = true, features = ["2d", "ui"] }
-futures = { workspace = true }
 winit = { workspace = true }
 tracing = { workspace = true }
 

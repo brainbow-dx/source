@@ -20,7 +20,6 @@ escher-core = { workspace = true }
 
 uuid = { workspace = true, features = ["v4", "v5"] }
 
-parking_lot = { workspace = true }
 
 derive_more = { workspace = true, features = [
     "error",
@@ -32,28 +31,11 @@ derive_more = { workspace = true, features = [
     "deref_mut",
     "is_variant",
 ] }
-enum_dispatch = { workspace = true }
 
-num-traits = { workspace = true }
 
-hashbrown = { workspace = true, features = [
-    "core",
-    "alloc",
-    "default-hasher",
-    "serde",
-    "allocator-api2",
-    "rayon",
-] }
 
-bumpalo = { workspace = true, features = [
-    "allocator-api2",
-    "boxed",
-    "collections",
-] }
-bumpalo-herd = { workspace = true }
 
 tracing = { workspace = true }
-tracing-core = { workspace = true }
 tracing-subscriber = { workspace = true, optional = true }
 
 oops = { workspace = true, features = ["macros"] }

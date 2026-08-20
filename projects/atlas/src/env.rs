@@ -13,10 +13,7 @@ pub fn get_data_dir(namespace: &str, fallback: &str) -> Result<PathBuf, Error> {
             Some(home_dir) => home_dir.join(".atlas").join(namespace).join("data"),
             None => {
                 tracing::info!("Couldn't get user home directory: {:}; using fallback", error);
-                tracing::debug!(
-                    "Hint: Set the {} environment variable to override the local database path.",
-                    DATA_DIR_KEY
-                );
+                tracing::debug!("Hint: Set the {} environment variable to override the local database path.", DATA_DIR_KEY);
                 PathBuf::from(fallback)
             }
         });

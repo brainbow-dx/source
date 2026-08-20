@@ -1,4 +1,9 @@
-FROM ubuntu:24.04
+# Release default: builds a real release binary at image-build time and runs that — no cargo
+# process at container runtime. `compose.yaml`'s `relay` service (local dev only) instead builds
+# the `builder` stage directly and overrides this image's `command` to `cargo run`, so bind-mounted
+# source edits + the registry/target cache volumes it already has actually get used; this
+# Dockerfile's own default is what a real deploy of this image should run.
+FROM ubuntu:24.04 AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl ca-certificates build-essential pkg-config \
@@ -22,7 +27,16 @@ ENV RUSTUP_TOOLCHAIN=stable
 ENV RUSTC_WRAPPER=""
 
 WORKDIR /workspace
+COPY . .
+RUN cargo build --release --example serve -p atlas-relay
+
+FROM ubuntu:24.04
+
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /workspace/target/release/examples/serve /usr/local/bin/atlas-relay
 
 EXPOSE 9200
 
-CMD ["cargo", "run", "-p", "atlas-relay", "--bin", "atlas-relay", "0.0.0.0:9200"]
+CMD ["atlas-relay", "0.0.0.0:9200"]

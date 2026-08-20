@@ -20,6 +20,9 @@ const args = parseArgs(Deno.args, {
 const tpldir = resolve(import.meta.dirname!, "..");
 const OUT_DIR = resolve(Deno.cwd(), args._[0]?.toString() ?? ".");
 const DOCS_DIR = join(OUT_DIR, "docs");
+// Book content lives under `spec/docs/`, not `docs/` itself — `docs/` only ever holds the
+// Dockerfile/book.toml, matching where every other project's own book content already lives.
+const SPEC_DOCS_DIR = join(OUT_DIR, "spec", "docs");
 const COMPOSE_PATH = join(OUT_DIR, "compose.yaml");
 const port = Number(args.port);
 
@@ -28,18 +31,21 @@ if (!args.name) {
     console.info(`Missing --name flag; using directory name '${name}' ..`);
 }
 
-console.log(`docs: generating docs/ @ '${DOCS_DIR}'`);
+console.log(`docs: generating docs/ @ '${DOCS_DIR}', spec/docs/ @ '${SPEC_DOCS_DIR}'`);
 
-await Deno.mkdir(join(DOCS_DIR, "src"), { recursive: true });
+await Deno.mkdir(DOCS_DIR, { recursive: true });
+await Deno.mkdir(SPEC_DOCS_DIR, { recursive: true });
 
-// Fixed scaffold files — copied as-is except book.toml, which gets the target project's name
-// substituted for the template's own `__PROJECT_NAME__` placeholder.
-for (const relPath of ["Dockerfile", "SUMMARY.md", "src/Introduction.md"]) {
-    const from = join(tpldir, relPath);
-    const to = join(DOCS_DIR, relPath);
-    await Deno.mkdir(resolve(to, ".."), { recursive: true });
+// Fixed scaffold files: Dockerfile stays docs-tooling-only; the actual book content (SUMMARY.md,
+// content pages) goes to spec/docs/ instead.
+await Deno.copyFile(join(tpldir, "Dockerfile"), join(DOCS_DIR, "Dockerfile"));
+if (args.verbose) console.log(`> copy docs/Dockerfile`);
+
+for (const relPath of ["SUMMARY.md", "Introduction.md"]) {
+    const from = join(tpldir, "spec-docs", relPath);
+    const to = join(SPEC_DOCS_DIR, relPath);
     await Deno.copyFile(from, to);
-    if (args.verbose) console.log(`> copy docs/${relPath}`);
+    if (args.verbose) console.log(`> copy spec/docs/${relPath}`);
 }
 
 const bookToml = (await Deno.readTextFile(join(tpldir, "book.toml")))
@@ -52,10 +58,10 @@ if (args.verbose) console.log(`> copy docs/book.toml (title: ${name})`);
 // right after `services:` matches every real Brainbow project's own compose.yaml today), or
 // write a fresh minimal one if it doesn't. Idempotent: does nothing if a `docs:` service already
 // exists, so re-running this template on an already-composed project is a safe no-op.
-const DOCS_SERVICE = `  # \`docker compose --profile docs watch\` — serves docs/ (a real mdbook) at :${port} and
-  # keeps it live: \`develop.watch\` syncs local edits into the container, mdbook's own file
-  # watcher then rebuilds + live-reloads the served page. \`docker compose --profile docs up\`
-  # alone (no \`watch\`) still works — it just serves whatever was present at image build time.
+const DOCS_SERVICE = `  # \`docker compose --profile docs up\` alone serves the static book built into the image at
+  # :${port} (the Dockerfile's own release default). \`docker compose --profile docs watch\`
+  # instead overrides the command to \`mdbook serve\`, which live-reloads: \`develop.watch\` syncs
+  # local edits into the container, mdbook's own file watcher picks those up and rebuilds.
   docs:
     build:
       context: .
@@ -63,11 +69,12 @@ const DOCS_SERVICE = `  # \`docker compose --profile docs watch\` — serves doc
     profiles: [docs]
     ports:
       - ${port}:3000
+    command: ["mdbook", "serve", "--hostname", "0.0.0.0", "--port", "3000"]
     develop:
       watch:
-        - path: ./docs
+        - path: ./spec/docs
           action: sync
-          target: /book
+          target: /spec/docs
 `;
 
 if (await exists(COMPOSE_PATH)) {

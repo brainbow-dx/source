@@ -3,7 +3,7 @@ title = "Aby SDK"
 authors = ["Aby Games"]
 language = "en"
 multilingual = false
-src = "."
+src = "../spec/docs"
 
 [build]
 build-dir = "dist/public"

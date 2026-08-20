@@ -733,7 +733,7 @@ mod tests {
     const PLATFORM: (f32, f32, f32, f32) = (0.3, 0.91, 0.7, 0.93);
 
     #[test]
-    fn fast_fall_lands_on_top_of_a_thin_platform_instead_of_tunneling_through() {
+    fn fast_fall_lands_on_a_thin_platform() {
         let mut mario = MarioState { x: 0.5, prev_x: 0.5, y: 0.905, prev_y: 0.905, vy: 1.0, ..MarioState::default() };
         // One tick's worth of a fast fall, integrated exactly the way `step` does, deliberately
         // large enough to jump clean over the platform's own 0.02-tall span in a single step —
@@ -750,7 +750,7 @@ mod tests {
     }
 
     #[test]
-    fn landing_never_pushes_the_player_out_through_the_bottom_of_a_thin_platform() {
+    fn landing_resolves_to_the_platforms_top() {
         // Ends the tick already inside the thin box, closer to its bottom face than its top —
         // exactly the case the old "least penetration" logic got backwards.
         let mut mario = MarioState { x: 0.5, prev_x: 0.5, y: 0.929, prev_y: 0.88, vy: 0.5, ..MarioState::default() };
