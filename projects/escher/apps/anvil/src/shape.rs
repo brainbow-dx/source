@@ -59,6 +59,7 @@ pub(crate) fn run_shape_command(process_buffer: &LineBuffer) -> Result<String, S
         "shape (scaffold → uxml)",
         process_buffer,
         Default::default(),
+        "run",
     )?;
     let transform: serde_json::Value =
         serde_json::from_str(last_line(&transform_output)).map_err(|error| format!("from-description.ts returned invalid JSON: {error}"))?;

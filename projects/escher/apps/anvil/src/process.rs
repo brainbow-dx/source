@@ -48,7 +48,10 @@ use crate::DIM;
 /// `actions` is a real host-action channel (`ethos_deno::host_actions`), not the return value —
 /// the script's return value is display text only. The caller passes its own handle in and drains
 /// it after this returns; this function only wires it into the worker.
-pub(crate) fn run_js_command(script: &Path, args: &str, command_label: &str, process_buffer: &LineBuffer, actions: HostActions) -> Result<String, String> {
+///
+/// `export_name` is `"run"` for a normal per-invocation call; see `AppState::spawn_command_onload`
+/// for the other case (`"onLoad"`, called once at startup instead of per invocation).
+pub(crate) fn run_js_command(script: &Path, args: &str, command_label: &str, process_buffer: &LineBuffer, actions: HostActions, export_name: &str) -> Result<String, String> {
     process_buffer.push_line(format!("{}", format!("── {command_label} ──").truecolor(DIM.0, DIM.1, DIM.2)));
 
     let (stdout_reader, stdout_writer) = std::io::pipe().map_err(|error| format!("failed to create stdout pipe: {error}"))?;
@@ -78,7 +81,7 @@ pub(crate) fn run_js_command(script: &Path, args: &str, command_label: &str, pro
             })
     });
 
-    let result = run_embedded_js(script, args, pipe_writer_into_file(stdout_writer), pipe_writer_into_file(stderr_writer), actions);
+    let result = run_embedded_js(script, args, pipe_writer_into_file(stdout_writer), pipe_writer_into_file(stderr_writer), actions, export_name);
 
     let _ = stdout_handle.join();
     let _ = stderr_handle.join();
@@ -105,13 +108,13 @@ fn pipe_writer_into_file(writer: std::io::PipeWriter) -> File {
     File::from(std::os::windows::io::OwnedHandle::from(writer))
 }
 
-fn run_embedded_js(script: &Path, args: &str, stdout: File, stderr: File, actions: HostActions) -> Result<String, String> {
+fn run_embedded_js(script: &Path, args: &str, stdout: File, stderr: File, actions: HostActions, export_name: &str) -> Result<String, String> {
     let stdio = RuntimeStdio::try_new(Some(stdout), Some(stderr))
         .and_then(|stdio| stdio.try_clone_into())
         .map_err(|error| format!("failed to set up the embedded JS engine's stdio: {error}"))?;
 
     let extensions = vec![ethos_deno::host_actions::host_action_extension(actions)];
-    ethos_deno::command::run_module_command(script, &crate::anvil_root(), args, stdio, extensions)
+    ethos_deno::command::run_module_command(script, &crate::anvil_root(), args, stdio, extensions, export_name)
 }
 
 /// Runs a `.tsx`/`.ts` file via the real `deno` CLI, not `ethos-cli run-command`, which goes

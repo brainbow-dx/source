@@ -108,7 +108,7 @@ mod tests {
         .expect("write script");
 
         let actions: HostActions = Default::default();
-        let result = run_module_command(&script_path, &dir, "", Stdio::default(), vec![host_action_extension(actions.clone())]);
+        let result = run_module_command(&script_path, &dir, "", Stdio::default(), vec![host_action_extension(actions.clone())], "run");
 
         std::fs::remove_dir_all(&dir).ok();
 

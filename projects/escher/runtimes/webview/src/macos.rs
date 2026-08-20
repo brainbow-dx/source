@@ -281,7 +281,7 @@ impl ContextMenuDelegate {
 /// that needs real async work (a network fetch) would need this reworked to hold the task and
 /// answer later instead.
 struct SchemeTaskHandlerIvars {
-    handler: Arc<dyn Fn(&str) -> Option<String> + Send + Sync>,
+    handler: Arc<dyn Fn(&str) -> Option<crate::SchemeResponse> + Send + Sync>,
 }
 
 define_class!(
@@ -303,7 +303,7 @@ define_class!(
             let url = request.URL();
             let url_string = url.as_deref().and_then(|url| url.absoluteString()).map(|s| s.to_string()).unwrap_or_default();
 
-            let Some(html) = (self.ivars().handler)(&url_string) else {
+            let Some(scheme_response) = (self.ivars().handler)(&url_string) else {
                 let error = unsafe {
                     NSError::errorWithDomain_code_userInfo(&NSString::from_str("EscherWebViewCustomScheme"), 404, None)
                 };
@@ -317,13 +317,17 @@ define_class!(
                 return;
             };
 
-            let bytes = html.into_bytes();
+            let bytes = scheme_response.body;
             let data = unsafe { NSData::dataWithBytes_length(bytes.as_ptr().cast(), bytes.len()) };
             let response = NSURLResponse::initWithURL_MIMEType_expectedContentLength_textEncodingName(
                 NSURLResponse::alloc(),
                 &url,
-                Some(&NSString::from_str("text/html")),
+                Some(&NSString::from_str(&scheme_response.mime)),
                 bytes.len() as isize,
+                // Not every MIME type this now serves (images, fonts) is meaningfully "encoded
+                // text" at all, but `WKURLSchemeTask` requires *some* value here; `None` would
+                // read as "unspecified," not "binary," which isn't what's meant either. `utf-8`
+                // is only actually load-bearing for the text-based MIME types (html/css/js/json).
                 Some(&NSString::from_str("utf-8")),
             );
 
@@ -343,7 +347,7 @@ define_class!(
 );
 
 impl SchemeTaskHandler {
-    fn new(mtm: MainThreadMarker, handler: Arc<dyn Fn(&str) -> Option<String> + Send + Sync>) -> Retained<Self> {
+    fn new(mtm: MainThreadMarker, handler: Arc<dyn Fn(&str) -> Option<crate::SchemeResponse> + Send + Sync>) -> Retained<Self> {
         let this = Self::alloc(mtm).set_ivars(SchemeTaskHandlerIvars { handler });
         // SAFETY: `NSObject`'s `init` has this exact signature.
         unsafe { msg_send![super(this), init] }

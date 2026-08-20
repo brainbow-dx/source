@@ -185,5 +185,5 @@ fn run_js_command(script: &Path, args: &str) -> Result<String, Box<dyn std::erro
     let current_dir = std::env::current_dir()?;
     let stdio = RuntimeStdio::try_new(None, None)?.try_clone_into()?;
 
-    ethos_deno::command::run_module_command(script, &current_dir, args, stdio, Vec::new()).map_err(Into::into)
+    ethos_deno::command::run_module_command(script, &current_dir, args, stdio, Vec::new(), "run").map_err(Into::into)
 }

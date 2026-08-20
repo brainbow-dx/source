@@ -15,9 +15,15 @@ use deno_runtime::deno_io::Stdio;
 use crate::worker::bootstrap_main_worker;
 
 /// Loads `script` as an ES module (resolved against `current_dir`), evaluates it, calls its
-/// exported `run(args)`, and returns the (stringified) result — anything the script itself
-/// `console.log`s along the way goes wherever `stdio.stdout`/`stdio.stderr` point, not into this
-/// return value.
+/// exported `<export_name>(args)`, and returns the (stringified) result — anything the script
+/// itself `console.log`s along the way goes wherever `stdio.stdout`/`stdio.stderr` point, not
+/// into this return value.
+///
+/// `export_name` is almost always `"run"` (the normal per-invocation entry point every command
+/// script has), but is a parameter rather than hardcoded so a host can call a *different* exported
+/// function against the same script for a distinct lifecycle moment — see `escher-anvil`'s own
+/// `onLoad` convention (run once at startup, when a command is discovered, rather than per
+/// invocation) for the reason this exists.
 ///
 /// `extensions` are registered on the worker before evaluation, same as `bootstrap_main_worker`'s
 /// own parameter of the same name — this is how a host gives a script real callable functions
@@ -27,9 +33,9 @@ use crate::worker::bootstrap_main_worker;
 ///
 /// Builds its own dedicated single-threaded Tokio runtime — `deno_unsync` (used internally by
 /// `deno_fetch`) asserts the runtime driving it is `CurrentThread` — so callers don't need a
-/// Tokio context of their own at all; this blocks the calling thread until the script's `run`
-/// returns.
-pub fn run_module_command(script: &Path, current_dir: &Path, args: &str, stdio: Stdio, extensions: Vec<Extension>) -> Result<String, String> {
+/// Tokio context of their own at all; this blocks the calling thread until the script's
+/// `<export_name>` returns.
+pub fn run_module_command(script: &Path, current_dir: &Path, args: &str, stdio: Stdio, extensions: Vec<Extension>, export_name: &str) -> Result<String, String> {
     let tokio_runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -55,9 +61,10 @@ pub fn run_module_command(script: &Path, current_dir: &Path, args: &str, stdio: 
             deno_core::scope!(scope, worker.js_runtime);
             let namespace_local = v8::Local::new(scope, &namespace);
 
-            let key = v8::String::new(scope, "run").ok_or_else(|| "failed to allocate \"run\" key".to_string())?;
-            let run_value = namespace_local.get(scope, key.into()).ok_or_else(|| format!("{script:?} does not export \"run\""))?;
-            let run_function = v8::Local::<v8::Function>::try_from(run_value).map_err(|_| format!("{script:?}'s exported \"run\" is not a function"))?;
+            let key = v8::String::new(scope, export_name).ok_or_else(|| format!("failed to allocate {export_name:?} key"))?;
+            let run_value = namespace_local.get(scope, key.into()).ok_or_else(|| format!("{script:?} does not export {export_name:?}"))?;
+            let run_function =
+                v8::Local::<v8::Function>::try_from(run_value).map_err(|_| format!("{script:?}'s exported {export_name:?} is not a function"))?;
 
             let arg_string = v8::String::new(scope, args).ok_or_else(|| "failed to allocate arg string".to_string())?;
             let arg_value: v8::Local<v8::Value> = arg_string.into();
@@ -70,7 +77,7 @@ pub fn run_module_command(script: &Path, current_dir: &Path, args: &str, stdio: 
             .js_runtime
             .call_with_args_and_await(&run_function, &[arg_value])
             .await
-            .map_err(|error| format!("{script:?}'s \"run\" threw: {error}"))?;
+            .map_err(|error| format!("{script:?}'s {export_name:?} threw: {error}"))?;
 
         let result_string = {
             deno_core::scope!(scope, worker.js_runtime);

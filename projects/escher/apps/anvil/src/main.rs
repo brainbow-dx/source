@@ -658,7 +658,7 @@ struct TabWebViews(std::collections::HashMap<u64, escher_webview::WebView>);
 /// file, since `escher-web` has no reason to depend on `escher-styleguide` for one static page.
 /// The content itself is deliberately just a functional stub, expected to only need style tweaks
 /// from here, not more plumbing.
-fn anvil_scheme_handler() -> escher_webview::CustomSchemeHandler {
+fn anvil_scheme_handler(static_mounts: Arc<RwLock<std::collections::HashMap<String, PathBuf>>>) -> escher_webview::CustomSchemeHandler {
     use escher_core::draw::Bump;
     use escher_core::scaffold::Scaffold;
     use escher_core::style::BackgroundColor;
@@ -673,7 +673,7 @@ fn anvil_scheme_handler() -> escher_webview::CustomSchemeHandler {
 
     escher_webview::CustomSchemeHandler {
         scheme: "anvil".to_string(),
-        handler: Arc::new(|url: &str| {
+        handler: Arc::new(move |url: &str| {
             let page = url.strip_prefix("anvil://").unwrap_or(url);
             match page.trim_end_matches('/') {
                 "settings" => {
@@ -693,9 +693,54 @@ fn anvil_scheme_handler() -> escher_webview::CustomSchemeHandler {
 
                     Some(escher_web::ssg::render_scaffold_to_html(&root))
                 }
-                _ => None,
+                _ => return serve_static_mount(page, &static_mounts),
             }
+            .map(escher_webview::SchemeResponse::html)
         }),
+    }
+}
+
+/// Serves `page` (the requested URL's path, e.g. `docs/chapter_1.html`) out of whichever
+/// directory `static_mounts` has registered for its first path segment (see
+/// `apply_mount_static_dir_actions`/`commands/docs.js`) — a real multi-file static site behind
+/// `anvil://<prefix>/...`, not just one page of markup. An empty remainder (`anvil://docs` or
+/// `anvil://docs/`) serves that mount's own `index.html`, the same default a real HTTP static
+/// file server would use. `None` (no matching mount, or the resolved file doesn't exist/isn't
+/// readable) reads to the page as a real 404, same as any other unmatched `anvil://` path.
+fn serve_static_mount(page: &str, static_mounts: &Arc<RwLock<std::collections::HashMap<String, PathBuf>>>) -> Option<escher_webview::SchemeResponse> {
+    let (prefix, rest) = page.split_once('/').unwrap_or((page, ""));
+    let mount_dir = static_mounts.read().get(prefix)?.clone();
+
+    let relative = if rest.is_empty() { "index.html" } else { rest };
+    // `PathBuf::join` with an absolute-looking `relative` (a leading `/` slipping through, say)
+    // would silently replace `mount_dir` outright instead of erroring — `..` traversal escaping
+    // `mount_dir` isn't blocked here either. Both are real, `.output/docs` is trusted local build
+    // output, not attacker-controlled input; worth real path-containment checks before this mount
+    // mechanism ever serves anything from a less-trusted source.
+    let path = mount_dir.join(relative);
+    let body = std::fs::read(&path).inspect_err(|error| tracing::warn!("anvil://{prefix}/{rest}: could not read {}: {error}", path.display())).ok()?;
+    let mime = mime_for_path(&path);
+
+    Some(escher_webview::SchemeResponse { mime: mime.to_string(), body })
+}
+
+/// A small, deliberately incomplete extension → MIME map — just enough for a real `mdbook`-built
+/// site (HTML, CSS, JS, its search index JSON, common image/font formats) to render correctly.
+/// Falls back to `application/octet-stream` for anything else, which a browser treats as "download
+/// this" rather than "render this" — safe, if not especially useful, for a type not covered here.
+fn mime_for_path(path: &Path) -> &'static str {
+    match path.extension().and_then(|extension| extension.to_str()) {
+        Some("html") => "text/html",
+        Some("css") => "text/css",
+        Some("js") => "text/javascript",
+        Some("json") => "application/json",
+        Some("svg") => "image/svg+xml",
+        Some("png") => "image/png",
+        Some("jpg") | Some("jpeg") => "image/jpeg",
+        Some("woff2") => "font/woff2",
+        Some("woff") => "font/woff",
+        Some("ico") => "image/x-icon",
+        _ => "application/octet-stream",
     }
 }
 
@@ -795,7 +840,7 @@ fn attach_pending_tab_webviews(
             tab_strip_content_inset(&tab_strip),
             Some(escher_webview::DEFAULT_USER_AGENT),
             link_context_menu_items(state.pending_browser_urls.clone(), Clone::clone(&event_loop_proxy)),
-            Some(anvil_scheme_handler()),
+            Some(anvil_scheme_handler(state.static_mounts.clone())),
             &state.extensions_script,
         ) {
             Ok(webview) => {
@@ -1908,6 +1953,41 @@ fn read_exported_string_const(source: &str, name: &str) -> Option<Option<String>
     None
 }
 
+/// A deliberately naive text scan for whether a command script declares an `onLoad` export at
+/// all (`export const onLoad = ...`/`export async function onLoad`/`export function onLoad`),
+/// same "not a real parse" spirit as `read_exported_string_const` — this only needs a yes/no
+/// answer per script at startup, not to actually read `onLoad`'s value (it's a function, not a
+/// string literal `read_exported_string_const` could handle anyway). See `AppState::
+/// spawn_command_onloads`.
+fn script_exports_onload(source: &str) -> bool {
+    source.contains("export const onLoad") || source.contains("export async function onLoad") || source.contains("export function onLoad")
+}
+
+/// Applies every `"mountStaticDir"` action in `actions` — data `{ prefix, dir }` — into
+/// `static_mounts` (`AppState::static_mounts`, consulted by `anvil_scheme_handler`). `dir` is
+/// resolved relative to `anvil_root()`, the same base every other project-relative path in this
+/// app already uses. A free function, not an `AppState` method: shared by both places a script
+/// can post a host action from — a normal per-invocation `run` (`spawn_js_command`, which only
+/// has individually-cloned fields in scope by the time this runs, not a whole `AppState`) and the
+/// startup `onLoad` path (`spawn_command_onloads`) — a script might reasonably call this from
+/// either, so both apply whatever comes back the same way.
+fn apply_mount_static_dir_actions(actions: &[ethos_deno::host_actions::HostMessage], static_mounts: &Arc<RwLock<std::collections::HashMap<String, PathBuf>>>) {
+    for action in actions {
+        if action.message_type != "mountStaticDir" {
+            continue;
+        }
+        let (Some(prefix), Some(dir)) =
+            (action.data.get("prefix").and_then(serde_json::Value::as_str), action.data.get("dir").and_then(serde_json::Value::as_str))
+        else {
+            tracing::warn!("mountStaticDir action missing prefix/dir: {action:?}");
+            continue;
+        };
+        let resolved_dir = anvil_root().join(dir);
+        tracing::info!("Mounted anvil://{prefix} -> {}", resolved_dir.display());
+        static_mounts.write().insert(prefix.to_string(), resolved_dir);
+    }
+}
+
 /// Recursively collects every `.js` file under `dir` into `out`. This is the walk `discover_js_commands`
 /// needs, kept separate so that function can stay focused on turning paths into `SlashCommand`s.
 /// Skips (rather than fails on) a subdirectory it can't read, same "optional, not load-bearing"
@@ -2329,6 +2409,14 @@ struct AppState {
     /// since `WebView::add_script("")` is already a harmless no-op — one fewer branch at every
     /// call site for a value that's almost always empty anyway.
     extensions_script: String,
+    /// `anvil://<prefix>/...` path prefixes mounted to a real directory on disk, serving whatever
+    /// file that resolves to with a real MIME type (see `anvil_scheme_handler`/`mime_for_path`).
+    /// Populated by a script's own `postMessage({ type: "mountStaticDir", prefix, dir })` — see
+    /// `commands/docs.js` for the first real user of this, and `apply_mount_static_dir_actions`
+    /// for where a "mountStaticDir" action actually lands here. Not `.anvil.toml` config: a
+    /// mount is something a *command* decides to register (typically from its own `onLoad`, see
+    /// `spawn_command_onloads`), not something the user hand-declares up front.
+    static_mounts: Arc<RwLock<std::collections::HashMap<String, PathBuf>>>,
 }
 
 impl AppState {
@@ -2404,9 +2492,11 @@ impl AppState {
             welcome_tagline,
             welcome_footer,
             extensions_script,
+            static_mounts: Arc::new(RwLock::new(std::collections::HashMap::new())),
         };
 
         state.spawn_connect_persistence(sqld_url);
+        state.spawn_command_onloads();
         state
     }
 
@@ -2584,6 +2674,55 @@ impl AppState {
         });
     }
 
+    /// Runs every discovered JS command's `onLoad` export, once, at startup — a real lifecycle
+    /// hook distinct from `run` (called per invocation, when a user types `/name`). Detected by
+    /// the same kind of naive text scan `discover_js_commands` already uses for `command`/
+    /// `description`/`argsHint` (see `script_exports_onload`), not by executing every script just
+    /// to check — most commands don't have one, and booting a V8 worker per script just to find
+    /// out would slow down startup for no reason.
+    ///
+    /// This is what lets a command build/register something once, at launch, instead of only
+    /// reacting to being invoked — `commands/docs.js` (builds the docs book, then mounts it via a
+    /// real `"mountStaticDir"` host action, see `apply_mount_static_dir_actions`) is the first
+    /// real user. Each runs on its own background task, same "don't block startup" shape as
+    /// `spawn_connect_persistence`; a slow or failing one never blocks the TUI from appearing or
+    /// blocks any other command's own `onLoad`.
+    fn spawn_command_onloads(&self) {
+        for command in self.commands.iter() {
+            let Some(script) = command.script.clone() else { continue };
+            let Ok(source) = std::fs::read_to_string(&script) else { continue };
+            if !script_exports_onload(&source) {
+                continue;
+            }
+
+            let command_name = command.name.clone();
+            let state = self.clone();
+            self.runtime.spawn(async move {
+                let span = tracing::info_span!("live_trace", command = %format!("{command_name} (onLoad)"));
+                let actions: ethos_deno::host_actions::HostActions = Default::default();
+                let result = {
+                    let span = span.clone();
+                    let actions = actions.clone();
+                    let process_buffer = state.process_buffer.clone();
+                    let command_label = format!("{command_name} (onLoad)");
+                    tokio::task::spawn_blocking(move || {
+                        let _entered = span.enter();
+                        process::run_js_command(&script, "", &command_label, &process_buffer, actions, "onLoad")
+                    })
+                    .await
+                    .unwrap_or_else(|error| Err(format!("onLoad task panicked: {error}")))
+                };
+
+                let requested_actions = std::mem::take(&mut *actions.lock().unwrap_or_else(std::sync::PoisonError::into_inner));
+                apply_mount_static_dir_actions(&requested_actions, &state.static_mounts);
+
+                if let Err(error) = result {
+                    tracing::warn!("{command_name}'s onLoad failed: {error}");
+                }
+            });
+        }
+    }
+
     /// Runs a JS slash command's script on a background thread and appends the resulting
     /// messages once it finishes, instead of blocking the render thread on `run_js_command` for
     /// however long the child process takes (a fresh build, well over a minute, in the worst
@@ -2597,6 +2736,8 @@ impl AppState {
         let process_buffer = self.process_buffer.clone();
         let running_command = self.running_command.clone();
         let quit_requested = self.quit_requested.clone();
+        let static_mounts = self.static_mounts.clone();
+        let pending_browser_urls = self.pending_browser_urls.clone();
         let actions: ethos_deno::host_actions::HostActions = Default::default();
 
         *running_command.write() = Some(RunningCommand { label: command_name.clone(), started_at: Instant::now() });
@@ -2615,7 +2756,7 @@ impl AppState {
                 let actions = actions.clone();
                 tokio::task::spawn_blocking(move || {
                     let _entered = span.enter();
-                    process::run_js_command(&script, &args, &command_label, &process_buffer, actions)
+                    process::run_js_command(&script, &args, &command_label, &process_buffer, actions, "run")
                 })
                 .await
                 .unwrap_or_else(|error| Err(format!("js command task panicked: {error}")))
@@ -2626,9 +2767,21 @@ impl AppState {
             // return values. `commands/quit.js`/`commands/clear.js` call these directly instead
             // of encoding intent into the text they return.
             let requested_actions = std::mem::take(&mut *actions.lock().unwrap_or_else(std::sync::PoisonError::into_inner));
+            apply_mount_static_dir_actions(&requested_actions, &static_mounts);
 
             if requested_actions.iter().any(|action| action.message_type == "quit") {
                 quit_requested.store(true, Ordering::Relaxed);
+            }
+
+            // `commands/docs.js`'s own `run` posts one of these to open its built book, the same
+            // "queue it, the browser-tab system drains it next tick" path a link's own "Open Link
+            // in New Tab" context-menu action already uses (see `link_context_menu_items`) —
+            // opening a tab isn't something a script can do more directly than asking the host to.
+            for action in requested_actions.iter().filter(|action| action.message_type == "openUrl") {
+                match action.data.get("url").and_then(serde_json::Value::as_str) {
+                    Some(url) => pending_browser_urls.lock().push(url.to_string()),
+                    None => tracing::warn!("openUrl action missing `url`: {action:?}"),
+                }
             }
 
             // `commands/clear.js` posting the "clear" action means it actually wiped `sqld`.
@@ -2957,7 +3110,7 @@ impl AppState {
                     let _entered = span.enter();
                     // This script doesn't call any real host action, so a fresh, unread
                     // `HostActions` handle is enough — nothing needs to drain it.
-                    process::run_js_command(&script, &args, &command_label, &process_buffer, Default::default())
+                    process::run_js_command(&script, &args, &command_label, &process_buffer, Default::default(), "run")
                 })
                 .await
                 .unwrap_or_else(|error| Err(format!("open-page task panicked: {error}")))

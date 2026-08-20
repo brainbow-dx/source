@@ -26,16 +26,31 @@ pub struct ContextMenuItem {
     pub action: Arc<dyn Fn() + Send + Sync>,
 }
 
+/// One `CustomSchemeHandler` response: real bytes plus a real MIME type, not just HTML text —
+/// needed for a custom scheme to serve a real multi-file static site (stylesheets, scripts,
+/// images, not just one page of markup) rather than only ever answering with `text/html`.
+pub struct SchemeResponse {
+    pub mime: String,
+    pub body: Vec<u8>,
+}
+
+impl SchemeResponse {
+    /// Convenience for the common case: a plain HTML string response.
+    pub fn html(body: impl Into<String>) -> Self {
+        SchemeResponse { mime: "text/html".to_string(), body: body.into().into_bytes() }
+    }
+}
+
 /// Registers a custom URL scheme (e.g. `"anvil"`, for `anvil://settings`) this webview serves
 /// itself instead of asking the network for. See [`WebView::attach`]'s `custom_scheme`
-/// parameter. `handler` is called with the full requested URL; `Some(html)` serves that HTML back
-/// as the response, `None` fails the request (WebKit reports it as a load error, same as a real
-/// 404 would read to the page). This crate has no opinion on what scheme or what content a caller
-/// wants. Deciding that is entirely the caller's job, same reasoning as `ContextMenuItem`.
+/// parameter. `handler` is called with the full requested URL; `Some(response)` serves that back
+/// as the response, `None` fails the request (WebKit/WebView2 reports it as a load error, same as
+/// a real 404 would read to the page). This crate has no opinion on what scheme or what content a
+/// caller wants. Deciding that is entirely the caller's job, same reasoning as `ContextMenuItem`.
 #[derive(Clone)]
 pub struct CustomSchemeHandler {
     pub scheme: String,
-    pub handler: Arc<dyn Fn(&str) -> Option<String> + Send + Sync>,
+    pub handler: Arc<dyn Fn(&str) -> Option<SchemeResponse> + Send + Sync>,
 }
 
 /// Why [`WebView::attach`] failed.

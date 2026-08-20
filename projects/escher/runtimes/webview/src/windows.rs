@@ -330,12 +330,12 @@ pub fn attach(
                     webview.add_web_resource_requested(move |_, args| {
                         let request = args.get_request()?;
                         let requested_url = request.get_uri()?;
-                        let (status, reason, body) = match (custom_scheme.handler)(&requested_url) {
-                            Some(html) => (200, "OK", html),
-                            None => (404, "Not Found", String::new()),
+                        let (status, reason, mime, body) = match (custom_scheme.handler)(&requested_url) {
+                            Some(response) => (200, "OK", response.mime, response.body),
+                            None => (404, "Not Found", "text/plain".to_string(), Vec::new()),
                         };
-                        let stream = webview2::Stream::from_bytes(body.as_bytes());
-                        let response = environment_for_handler.create_web_resource_response(stream, status, reason, "Content-Type: text/html")?;
+                        let stream = webview2::Stream::from_bytes(&body);
+                        let response = environment_for_handler.create_web_resource_response(stream, status, reason, &format!("Content-Type: {mime}"))?;
                         args.put_response(response)?;
                         Ok(())
                     })?;
