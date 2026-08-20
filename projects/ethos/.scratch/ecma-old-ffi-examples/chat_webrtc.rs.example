@@ -1,0 +1,299 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use anyhow::Result;
+
+use base64::Engine as _;
+
+use futures::{SinkExt as _, StreamExt};
+
+use tokio::sync::{mpsc, Mutex as TokioMutex};
+use tokio::time::Duration;
+
+use tokio_tungstenite::tungstenite::protocol::Message;
+
+use webrtc::api::APIBuilder;
+use webrtc::api::media_engine::MediaEngine;
+use webrtc::data_channel::RTCDataChannel;
+use webrtc::data_channel::data_channel_message::DataChannelMessage;
+use webrtc::ice_transport::ice_server::RTCIceServer;
+use webrtc::interceptor::registry::Registry;
+use webrtc::peer_connection::configuration::RTCConfiguration;
+use webrtc::peer_connection::math_rand_alpha;
+use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
+use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
+
+#[derive(oops::Error)]
+enum PeerRelayError {
+    #[msg("failed establish webrtc connection: {0:}")]
+    WebRTCError(webrtc::error::Error),
+}
+
+impl From<webrtc::error::Error> for PeerRelayError {
+    fn from(error: webrtc::error::Error) -> Self {
+        PeerRelayError::WebRTCError(error)
+    }
+}
+
+type PeerConnections = Arc<TokioMutex<HashMap<String, Arc<webrtc::peer_connection::RTCPeerConnection>>>>;
+
+pub struct PeerRelay {
+    api: Arc<APIBuilder>,
+    config: RTCConfiguration,
+    peer_connections: PeerConnections,
+}
+
+impl PeerRelay {
+    pub fn new() {
+        //..
+    }
+}
+
+impl PeerRelay {
+    pub fn start(&mut self) {
+        //..
+    }
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    // Create a MediaEngine object to configure the supported codec
+    let mut media_engine = MediaEngine::default();
+
+    // Register default codecs
+    media_engine.register_default_codecs()?;
+
+    // Create an InterceptorRegistry. This is the user-configurable RTP/RTCP Pipeline.
+    // This provides NACKs, RTCP Reports and other features. If you use `webrtc.NewPeerConnection`
+    // this is enabled by default. If you are manually managing You MUST create an InterceptorRegistry
+    // for each PeerConnection.
+    let mut registry = Registry::new();
+
+    // Use the default set of Interceptors
+    registry = webrtc::api::interceptor_registry::register_default_interceptors(registry, &mut media_engine)?;
+
+    // Create the API object with the MediaEngine
+    let api = Arc::new(APIBuilder::new()
+        .with_media_engine(media_engine)
+        .with_interceptor_registry(registry)
+        .build());
+
+    // Prepare the configuration
+    let config = RTCConfiguration {
+        ice_servers: vec![RTCIceServer {
+            urls: vec!["stun:stun.l.google.com:19302".to_owned()],
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+
+    // Shared state for all peer connections
+    let peer_connections = Arc::new(TokioMutex::new(HashMap::new()));
+
+    // Channel for signaling server shutdown
+    let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
+
+    // WebSocket URL for the signaling server
+    let signaling_url = "ws://localhost:9339/ws";
+    
+    // Connect to the signaling server
+    let (ws_stream, _) = tokio_tungstenite::connect_async(url::Url::parse(signaling_url)?).await?;
+    println!("Connected to signaling server at {}", signaling_url);
+
+    // Split the WebSocket stream into a sender and receiver
+    let (ws_sender, mut ws_receiver) = ws_stream.split();
+    let ws_sender = Arc::new(TokioMutex::new(ws_sender)); // TODO
+    
+    let peer_connections_clone = peer_connections.clone();
+    tokio::spawn(async move {
+        while let Some(msg) = ws_receiver.next().await {
+            match msg {
+                Ok(Message::Text(text)) => {
+                    let message: serde_json::Value = serde_json::from_str(&text).unwrap();
+                    handle_signaling_message(
+                        &message,
+                        peer_connections_clone.clone(),
+                        ws_sender.clone(),
+                        shutdown_tx.clone(),
+                        &api,
+                        &config,
+                    ).await.unwrap_or_else(|e| println!("Error handling message: {:?}", e));
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    println!("Error receiving message: {:?}", e);
+                    break;
+                }
+            }
+        }
+    });
+
+    // Simulate a loop to accept multiple clients
+    // Normally you'd have a server loop here to accept connections
+    println!("Server is running. Awaiting connections...");
+
+    // Check if the server is shutting down
+    tokio::select! {
+        _ = shutdown_rx.recv() => {
+            println!("Shutting down the server...");
+        }
+    }
+
+    // Close all peer connections
+    let connections = peer_connections.lock().await;
+    for peer_connection in connections.values() {
+        let _ = peer_connection.close().await;
+    }
+
+    println!("Server has shut down.");
+
+    Ok(())
+}
+
+async fn handle_signaling_message(
+    message: &serde_json::Value,
+    peer_connections: PeerConnections,
+    ws_sender: Arc<TokioMutex<futures::stream::SplitSink<tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>, Message>>>,
+    shutdown_tx: mpsc::Sender<()>,
+    api: &Arc<webrtc::api::API>,
+    config: &RTCConfiguration,
+) -> Result<()> {
+    if let Some(offer) = message.get("offer") {
+        // Create a new RTCPeerConnection
+        let peer_connection = Arc::new(api.new_peer_connection(config.clone()).await?);
+        
+        let (done_tx, mut done_rx) = mpsc::channel::<()>(1);
+        
+        // Generate a unique ID for the connection
+        let connection_id = uuid::Uuid::new_v4().to_string();
+        {
+            // Store the connection in the shared state
+            let mut connections = peer_connections.lock().await;
+            connections.insert(connection_id.clone(), Arc::clone(&peer_connection));
+        }
+
+        // Set the handler for Peer connection state
+        // This will notify you when the peer has connected/disconnected
+        peer_connection
+            .on_peer_connection_state_change(Box::new(move |state: RTCPeerConnectionState| {
+                tracing::info!("Peer Connection State has changed: {:}", state);
+                
+                if state == RTCPeerConnectionState::Failed {
+                    tracing::warn!("Peer Connection has gone to failed, signaling to exit ..");
+                    if let Err(error) = done_tx.try_send(()) {
+                        tracing::error!("Failed to send done signal: {:}", error);
+                    }
+                }
+                
+                Box::pin(async {
+                    //..
+                })
+            }));
+
+        // Register data channel creation handling
+        peer_connection
+            .on_data_channel(Box::new(move |data_channel: Arc<RTCDataChannel>| {
+                let data_channel_label = data_channel.label().to_owned();
+                let data_channel_id = data_channel.id();
+                tracing::debug!("New DataChannel {:} {:} ..", data_channel_label, data_channel_label);
+
+                Box::pin(async move {
+                    let data_channel_clone = Arc::clone(&data_channel);
+                    let data_channel_label_clone = data_channel_label.clone();
+                    let data_channel_id_clone = data_channel_id;
+                    data_channel.on_close(Box::new(move || {
+                        println!("Data channel closed");
+                        Box::pin(async {})
+                    }));
+
+                    data_channel.on_open(Box::new(move || {
+                        println!("Data channel '{data_channel_label}'-'{data_channel_id_clone}' open. Random messages will now be sent to any connected DataChannels every 60 seconds");
+
+                        Box::pin(async move {
+                            let mut result = Result::<usize>::Ok(0);
+                            while result.is_ok() {
+                                let timeout = tokio::time::sleep(Duration::from_secs(60));
+                                tokio::pin!(timeout);
+
+                                tokio::select! {
+                                    _ = timeout.as_mut() =>{
+                                        let message = math_rand_alpha(15);
+                                        println!("Sending '{message}'");
+                                        result = data_channel_clone.send_text(message).await.map_err(Into::into);
+                                    }
+                                };
+                            }
+                        })
+                    }));
+
+                    // Register text message handling
+                    data_channel.on_message(Box::new(move |msg: DataChannelMessage| {
+                        let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
+                        println!("Message from DataChannel '{data_channel_label_clone}': '{msg_str}'");
+                        Box::pin(async {})
+                    }));
+                })
+            }));
+
+        // Decode the SDP offer from base64
+        let desc_data = offer.as_str().unwrap();
+        let b64_engine = base64::engine::general_purpose::STANDARD;
+        let desc_data = String::from_utf8(b64_engine.decode(desc_data)?)?;
+        let offer = serde_json::from_str::<RTCSessionDescription>(&desc_data)?;
+
+        // Set the remote SessionDescription
+        peer_connection.set_remote_description(offer).await?;
+
+        // Create an answer
+        let answer = peer_connection.create_answer(None).await?;
+
+        // Create channel that is blocked until ICE Gathering is complete
+        let mut gather_complete = peer_connection.gathering_complete_promise().await;
+
+        // Sets the LocalDescription, and starts our UDP listeners
+        peer_connection.set_local_description(answer).await?;
+
+        // Block until ICE Gathering is complete, disabling trickle ICE
+        // We do this because we can only exchange one signaling message
+        // In a production application, you should exchange ICE Candidates via OnICECandidate
+        let _ = gather_complete.recv().await;
+        
+        let mut ws_sender = ws_sender.lock().await;
+
+        // Output the answer in base64 so we can send it back to the client
+        if let Some(local_desc) = peer_connection.local_description().await {
+            let json_str = serde_json::to_string(&local_desc)?;
+            let b64 = base64::engine::general_purpose::STANDARD.encode(&json_str);
+            let response = serde_json::json!({
+                "answer": b64,
+                "target": message.get("from").unwrap()
+            });
+            // Send the answer back to the signaling server
+            ws_sender.send(Message::Text(response.to_string())).await.unwrap();
+        } else {
+            println!("Failed to generate local_description!");
+        }
+
+        println!("Client connection is active. Waiting for disconnection...");
+
+        tokio::select! {
+            _ = done_rx.recv() => {
+                println!("Received done signal for client {connection_id}!");
+            }
+            _ = tokio::signal::ctrl_c() => {
+                println!("Ctrl+C pressed, signaling server shutdown...");
+                let _ = shutdown_tx.try_send(());
+            }
+        };
+
+        // Remove the connection from the shared state
+        {
+            let mut connections = peer_connections.lock().await;
+            connections.remove(&connection_id);
+        }
+
+        peer_connection.close().await?;
+    }
+
+    Ok(())
+}

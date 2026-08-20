@@ -8,6 +8,7 @@ using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEditor.SceneManagement;
 
+using Escher.Unity;
 using Unity.Runtime;
 
 namespace Unity.Editor.Aby
@@ -52,18 +53,7 @@ namespace Unity.Editor.Aby
         /// TODO
         /// </summary>
         [SerializeField]
-        private AbyEnv m_CurrentEnvironment;
-
-        /// <summary>
-        /// TODO
-        /// </summary>
-        [SerializeField]
         private VisualTreeAsset m_VisualTreeAsset = default;
-
-        /// <summary>
-        /// TODO
-        /// </summary>
-        // private readonly State m_BindingContext = new State();
 
         /// <summary>
         /// TODO
@@ -85,25 +75,6 @@ namespace Unity.Editor.Aby
         }
 
         //--
-        /// <summary>
-        /// TODO
-        /// </summary>
-        private void Awake()
-        {
-            // Mount environment assets and pick one to use with the editor window.
-            // TODO: Move this to a static value on AbyEnvConfig itself.
-            var envConfigs = AssetDatabase.FindAssets("t:AbyEnv");
-            if (envConfigs.Length == 0)
-            {
-                Debug.LogWarning("Couldn't find Aby Environment configs.");
-            }
-            else
-            {
-                var envConfigPath = AssetDatabase.GUIDToAssetPath(envConfigs[0]);
-                m_CurrentEnvironment = AssetDatabase.LoadAssetAtPath<AbyEnv>(envConfigPath);
-            }
-        }
-
         /// <summary>
         /// TODO
         /// </summary>
@@ -133,17 +104,6 @@ namespace Unity.Editor.Aby
         /// </summary>
         private void DrawRuntimeControlToolbar()
         {
-            var stateLabel = rootVisualElement.Q<Label>("RuntimeState");
-            if (stateLabel == null)
-            {
-                Debug.LogWarning("RuntimeState element not found ..");
-            }
-            else
-            {
-                // stateLabel.text = $"Runtime State: {EcmaRuntime.State}";
-                stateLabel.text = $"Runtime State: TODO";
-            }
-
             var toggleButton = rootVisualElement.Q<Button>("ToggleButton");
             if (toggleButton == null)
             {
@@ -154,7 +114,6 @@ namespace Unity.Editor.Aby
                 toggleButton.clicked += OnToggleButtonClicked;
             }
 
-
             var reloadButton = rootVisualElement.Q<Button>("ReloadButton");
             if (reloadButton == null)
             {
@@ -164,18 +123,22 @@ namespace Unity.Editor.Aby
             {
                 reloadButton.clicked += OnReloadButtonClicked;
             }
+
+            RefreshRuntimeStatus();
         }
 
-        /// <summary>
-        /// TODO
-        /// </summary>
-        public void OnGUI()
+        private void RefreshRuntimeStatus()
         {
+            var stateLabel = rootVisualElement.Q<Label>("RuntimeState");
+            if (stateLabel != null)
+            {
+                stateLabel.text = $"Runtime State: {(EscherRuntime.IsInitialized ? "Initialized" : "Not Initialized")}";
+            }
+
             var toggleButton = rootVisualElement.Q<Button>("ToggleButton");
             if (toggleButton != null)
             {
-                // toggleButton.text = EcmaRuntime.IsRunning == false ? "Start" : "Stop";
-                toggleButton.text = "TODO";
+                toggleButton.text = EscherRuntime.IsInitialized ? "Stop" : "Start";
             }
         }
 
@@ -187,19 +150,18 @@ namespace Unity.Editor.Aby
             // Debug.LogFormat("Found GUI item: {0}", instanceID);
         }
 
-        /// <summary>
-        /// TODO: Setup an observer for status display.
-        /// </summary>
         private void OnToggleButtonClicked()
         {
-            // if (!EcmaRuntime.IsRunning)
-            // {
-            //     EcmaRuntime.StartServiceThread();
-            // }
-            // else
-            // {
-            //     EcmaRuntime.StopServiceThread();
-            // }
+            if (!EscherRuntime.IsInitialized)
+            {
+                EscherRuntime.InitializeInEditor();
+            }
+            else
+            {
+                EscherRuntime.Shutdown();
+            }
+
+            RefreshRuntimeStatus();
         }
 
         /// <summary>

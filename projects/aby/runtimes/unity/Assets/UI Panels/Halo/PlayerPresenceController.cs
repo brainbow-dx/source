@@ -3,7 +3,7 @@
 //using UnityEngine;
 //using UnityEngine.UIElements;
 
-//namespace Aby
+//namespace Theta
 //{
 //    public class PlayerPresenceController : MonoBehaviour
 //    {
@@ -57,7 +57,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
 
-namespace Aby
+namespace Theta
 {
     public class PlayerPresenceController : MonoBehaviour
     {

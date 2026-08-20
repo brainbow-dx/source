@@ -1,36 +1,38 @@
-﻿using System.Collections;
-using System.Collections.Generic;
+﻿using System.IO;
 
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
-using UnityEditor;
-
+using Escher.Unity;
 using Unity.Runtime;
-using UnityEditor.SceneManagement;
 
 namespace Unity.Editor.Aby.Actions
 {
     /// <summary>
-    /// TODO
+    /// Editor actions for running the embedded ecma engine outside Play mode.
     /// </summary>
     public static class Run
     {
         /// <summary>
-        /// TODO
+        /// Initializes the ecma engine if needed, then runs the Counter example module.
         /// </summary>
         public static void Server()
         {
-            // Debug.LogWarning("Disabled EcmaRuntime ..");
-            // if (EcmaRuntime.IsRunning)
-            // {
-            //     Debug.LogWarning("EcmaRuntime already running ({0}). Can't run any further!");
-            // }
-            // else
-            // {
-            //     EcmaRuntime.StartServiceThread();
-            //     Debug.LogFormat("Running EcmaRuntime for Server ({0})", EcmaRuntime.State);
-            // }
+            if (!EscherRuntime.IsInitialized)
+            {
+                EscherRuntime.InitializeInEditor();
+            }
+
+            string modulePath = Path.Combine(Application.dataPath, "..", "Examples", "Counter", "main.js");
+            CStartResult result = EscherRuntime.ExecuteModule(modulePath);
+
+            if (result != CStartResult.Ok)
+            {
+                Debug.LogError($"[Escher] Module execution failed: {result}");
+            }
+            else
+            {
+                Debug.Log("[Escher] Module executed successfully.");
+            }
         }
     }
 }

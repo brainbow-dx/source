@@ -20,13 +20,13 @@
     },
     "imports": {
         "@std/async": "jsr:@std/async@1.2.0",
+        "@std/fmt/colors": "jsr:@std/fmt@1.0.8/colors",
         "@std/fs": "jsr:@std/fs@1.0.23",
         "@std/path": "jsr:@std/path@1.1.4",
         "@std/uuid/v5": "jsr:@std/uuid@1.1.0/v5",
         "@std/cli": "jsr:@std/cli@1.0.28",
         "@david/which": "jsr:@david/which@^0.4.1",
-        "dzx": "https://deno.land/x/dzx@0.4.0/mod.ts",
-        "dzx/runtime/process": "https://deno.land/x/dzx@0.4.0/src/runtime/process.ts"
+        "@david/dax": "jsr:@david/dax@^0.48.0"
     },
     "workspace": [
         "./services/dev",

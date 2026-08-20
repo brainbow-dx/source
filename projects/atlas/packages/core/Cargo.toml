@@ -19,8 +19,8 @@ indexmap = { workspace = true }
 hashbrown = { workspace = true, features = [
     "default-hasher",
     "allocator-api2",
-    "nightly",
 ] }
+allocator-api2 = { workspace = true, features = ["alloc"] }
 
 derive_more = { workspace = true, features = [
     "from",

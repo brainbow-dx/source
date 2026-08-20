@@ -1,0 +1,199 @@
+use std::path::Path;
+use std::path::PathBuf;
+
+/// TODO
+#[derive(Default, Debug)]
+pub struct RuntimeConfig {
+    /// TODO
+    main_module_specifier: Option<String>,
+
+    /// TODO
+    root_dir: Option<PathBuf>,
+
+    /// TODO
+    db_dir: Option<PathBuf>,
+
+    /// TODO
+    log_dir: Option<PathBuf>,
+
+    /// TODO
+    inspector_name: Option<String>,
+
+    /// TODO
+    inspector_addr: Option<String>,
+
+    /// TODO
+    inspector_wait: bool,
+
+    /// Add support for as-yet unstable Deno features within the current
+    /// instance of the runtime. See deno docs (below) for more info.
+    ///
+    /// ### Resources:
+    /// -   [Unstable Flags Documentation](https://docs.deno.com/runtime/manual/tools/unstable_flags)
+    /// -   [Source Mapping for key->i32](https://github.com/denoland/deno/blob/main/runtime/lib.rs)
+    ///
+    /// ### Known Features
+    /// 1.  BroadcastChannel
+    /// 2.  Deno.cron
+    /// 3.  FFI
+    /// 4.  File System
+    /// 5.  HTTP
+    /// 6.  Key-Value
+    /// 7.  Net
+    /// 8.  Temporal
+    /// 9.  Proto
+    /// 10. WebGPU
+    /// 11. Web Worker
+    unstable_deno_features: Vec<i32>,
+}
+
+impl RuntimeConfig {
+    /// TODO
+    pub fn new() -> Self {
+        RuntimeConfig::default()
+    }
+
+    /// TODO
+    pub fn with_main_module_specifier<V: Into<String>>(mut self, value: V) -> Self {
+        self.main_module_specifier = Some(value.into());
+        self // etc..
+    }
+
+    /// TODO
+    pub fn with_root_dir<V: Into<String>>(mut self, value: V) -> Self {
+        self.root_dir = Some(PathBuf::from(value.into()));
+        self // etc..
+    }
+
+    /// TODO
+    pub fn with_db_dir<V: Into<String>>(mut self, value: V) -> Self {
+        self.db_dir = Some(PathBuf::from(value.into()));
+        self // etc..
+    }
+
+    /// TODO
+    pub fn with_log_dir<V: Into<String>>(mut self, value: V) -> Self {
+        self.log_dir = Some(PathBuf::from(value.into()));
+        self // etc..
+    }
+
+    /// TODO
+    pub fn with_inspector_name<V: Into<String>>(mut self, value: V) -> Self {
+        self.inspector_name = Some(value.into());
+        self // etc..
+    }
+
+    /// TODO
+    pub fn with_inspector_addr<V: Into<String>>(mut self, value: V) -> Self {
+        self.inspector_addr = Some(value.into());
+        self // etc..
+    }
+
+    /// TODO
+    pub fn with_inspector_wait<V: Into<bool>>(mut self, value: V) -> Self {
+        self.inspector_wait = value.into();
+        self // etc..
+    }
+
+    /// TODO
+    pub fn with_unstable_deno_features<V: Into<Vec<i32>>>(mut self, value: V) -> Self {
+        self.unstable_deno_features = value.into();
+        self // etc..
+    }
+}
+
+impl RuntimeConfig {
+    /// TODO
+    pub const DEFAULT_INSPECTOR_SOCKET_ADDR: &'static str = "127.0.0.1:9222";
+
+    /// TODO
+    pub fn main_module_specifier(&self) -> Option<&str> {
+        self.main_module_specifier.as_deref()
+    }
+
+    /// TODO
+    pub fn root_dir(&self) -> Option<&Path> {
+        self.root_dir.as_deref()
+    }
+
+    /// TODO
+    pub fn db_dir(&self) -> Option<&Path> {
+        self.db_dir.as_deref()
+    }
+
+    /// TODO
+    pub fn log_dir(&self) -> Option<&Path> {
+        self.log_dir.as_deref()
+    }
+
+    /// TODO
+    pub fn inspector_name(&self) -> Option<&str> {
+        self.inspector_name.as_deref()
+    }
+
+    /// TODO
+    pub fn inspector_addr(&self) -> &str {
+        self.inspector_addr.as_deref().unwrap_or(Self::DEFAULT_INSPECTOR_SOCKET_ADDR)
+    }
+
+    /// TODO
+    pub fn inspector_wait(&self) -> bool {
+        self.inspector_wait
+    }
+
+    /// TODO
+    pub fn unstable_deno_features(&self) -> &[i32] {
+        self.unstable_deno_features.as_ref()
+    }
+}
+
+#[derive(Debug)]
+pub enum RuntimeConfigError {
+    /// Indicates the root dir couldn't be resolved from any registered source.
+    ///
+    /// In the case of a runtime which provides a sensible default (like the
+    /// current working directory on Windows/macOS/*nix/etc.), this usually
+    /// means we both didn't find a project root specified in configs or args,
+    /// but we also failed to look up a sensible default.
+    MissingRootDir,
+
+    /// TODO
+    MissingMainModuleSpecifier,
+
+    /// TODO
+    MissingLogDir,
+
+    /// TODO
+    MissingDataDir,
+
+    /// TODO
+    MissingInspectorName,
+
+    /// TODO
+    MissingInspectorAddr,
+
+    /// TODO
+    InvalidInspectorAddr(std::net::AddrParseError),
+}
+
+impl std::fmt::Display for RuntimeConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RuntimeConfigError::MissingRootDir => write!(f, "missing root dir"),
+            RuntimeConfigError::MissingMainModuleSpecifier => write!(f, "missing main module specifier"),
+            RuntimeConfigError::MissingLogDir => write!(f, "missing log dir"),
+            RuntimeConfigError::MissingDataDir => write!(f, "missing data dir"),
+            RuntimeConfigError::MissingInspectorName => write!(f, "missing inspector name"),
+            RuntimeConfigError::MissingInspectorAddr => write!(f, "missing inspector addr"),
+            RuntimeConfigError::InvalidInspectorAddr(error) => write!(f, "invalid inspector addr '{error}'"),
+        }
+    }
+}
+
+impl std::error::Error for RuntimeConfigError {}
+
+impl From<std::net::AddrParseError> for RuntimeConfigError {
+    fn from(error: std::net::AddrParseError) -> Self {
+        RuntimeConfigError::InvalidInspectorAddr(error)
+    }
+}

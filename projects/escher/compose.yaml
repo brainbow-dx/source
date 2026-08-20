@@ -14,18 +14,61 @@ services:
   #         action: sync+restart
   #   ports:
   #     - "8100:8000"
+  web:
+    build:
+      # Repo root, not this directory. escher's Cargo workspace has a path dependency on
+      # ../atlas, outside projects/escher.
+      context: ../..
+      dockerfile: projects/escher/runtimes/web/Dockerfile
+    volumes:
+      # Whole monorepo, matching --workspace below. Served/created pages map to real repo paths.
+      - ../..:/workspace
+      # Named volumes so toolchain/target/crate downloads survive a container restart.
+      - web-cargo-target:/workspace/projects/escher/.cargo/target
+      - web-cargo-registry:/usr/local/cargo/registry
+      - web-wasm-cargo-home:/root/.cargo/wasm-home
+    # Runs dev.tsx directly. deno task's arg passthrough doesn't reach Deno.args reliably.
+    # --workspace /workspace roots served/created pages at the whole monorepo (required for
+    # escher.brainbow.localhost, see Caddyfile, not just escher's own subproject).
+    command: ["deno", "run", "-A", "--env-file", "./scripts/dev.tsx", "--workspace", "/workspace"]
+    ports:
+      # projects/escher/Caddyfile's escher.brainbow.localhost route hardcodes this port.
+      - "3615:3615"
+    restart: unless-stopped
+  # `docker compose --profile docs watch` — serves docs/ (a real mdbook) at :8096 and keeps it
+  # live: `develop.watch` syncs local edits into the container, mdbook's own file watcher then
+  # rebuilds + live-reloads the served page. `docker compose --profile docs up` alone (no
+  # `watch`) still works — it just serves whatever was present at image build time.
+  docs:
+    build:
+      context: .
+      dockerfile: docs/Dockerfile
+    profiles: [docs]
+    ports:
+      - 8096:3000
+    develop:
+      watch:
+        - path: ./docs
+          action: sync
+          target: /book
   db0:
     image: ghcr.io/tursodatabase/libsql-server:latest
     platform: linux/amd64
     ports:
-      - "5100:5100" # HTTP
-      - "5101:5101" # gRPC
+      # sqld listens internally on 8080 (HTTP) and 5001 (gRPC), regardless of these env vars.
+      - "5100:8080" # HTTP
+      - "5101:5001" # gRPC
     environment:
       SQLD_NODE: primary
       SQLD_PRIMARY_URL: TODO
       SQLD_DB_PATH: db0
     volumes:
       - ./.output/data:/var/lib/sqld
+
+volumes:
+  web-cargo-target:
+  web-cargo-registry:
+  web-wasm-cargo-home:
 
 networks:
   default:

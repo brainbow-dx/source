@@ -1,6 +1,19 @@
 // use tracing::Level;
 
 //---
+/// Default filter for a normal run: quiet third-party crates, informational for `ethos` itself.
+#[cfg(all(not(feature = "debug"), not(feature = "verbose")))]
+pub const DEFAULT_LOG_FILTER: &str = "error,ethos_core=info,ethos=info";
+
+/// Default filter under the `debug` feature.
+#[cfg(all(feature = "debug", not(feature = "verbose")))]
+pub const DEFAULT_LOG_FILTER: &str = "warn,ethos_core=debug,ethos=debug";
+
+/// Default filter under the `verbose` feature.
+#[cfg(all(not(feature = "debug"), feature = "verbose"))]
+pub const DEFAULT_LOG_FILTER: &str = "info,ethos_core=trace,ethos=trace";
+
+//---
 /// Init a basic global logger with a few configurable bells-n-whistles.
 pub fn init(filter: &str) {
     #[cfg(feature = "profiling")]

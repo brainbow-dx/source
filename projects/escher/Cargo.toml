@@ -42,11 +42,10 @@ atlas = { workspace = true }
 prost = { workspace = true }
 prost-types = { workspace = true }
 
-# Bumpalo is the primary allocator used in the hot-path during scaffolding.
-# Note: For the moment (at least) we lean heavily on the allocator-api.
-# TODO: Deprecate nightly support wherever possible. Maybe here?
+# Bumpalo is the primary allocator used in the hot-path during scaffolding, via the stable
+# allocator-api2 crate rather than nightly's own allocator_api.
 bumpalo = { workspace = true, features = [
-    "allocator_api",
+    "allocator-api2",
     "boxed",
     "collections",
 ] }
@@ -71,7 +70,7 @@ hashbrown = { workspace = true, features = [
     "alloc",
     "default-hasher",
     "serde",
-    "nightly",
+    "allocator-api2",
     "rayon",
 ] }
 
@@ -102,33 +101,12 @@ tracing-subscriber = { workspace = true, features = ["fmt", "ansi"] }
 
 hashbrown = { workspace = true, features = ["default-hasher"] }
 
-derive_more = { workspace = true, features = ["full"] }
+# Only "display" is used (examples/events.rs). "full" also enables derive_more's own `Debug`
+# derive, which can collide with a plain `#[derive(Debug)]` elsewhere in the workspace (E0659).
+derive_more = { workspace = true, features = ["display"] }
 
 eyre = { workspace = true, features = ["default"] }
 oops = { workspace = true, features = ["default"] }
-
-clap = { workspace = true, features = ["std", "derive", "color", "help", "usage"] }
-
-tokio = { workspace = true, features = ["full"] }
-tower = { workspace = true, features = ["full"] }
-tower-http = { workspace = true, features = ["full"] }
-axum = { workspace = true, features = [
-    "tokio",
-    "http1",
-    "http2",
-    "json",
-    "query",
-    "form",
-    "multipart",
-    "matched-path",
-    "original-uri",
-    "macros",
-    "tower-log",
-    "tracing",
-    "ws"
-] }
-notify = { workspace = true, default-features = false, features = ["macos_fsevent", "serde"] }
-axum-extra = { workspace = true, default-features = false, features = ["typed-header"]}
 
 [build-dependencies]
 prost-build = { workspace = true }
@@ -139,6 +117,7 @@ napi-build = { workspace = true }
 #---
 [workspace]
 members = [
+    "apps/anvil",
     "apps/desktop",
     "apps/hudd",
     "extensions/vscode",
@@ -146,11 +125,16 @@ members = [
     "extensions/penpot",
     "extensions/blender",
     "packages/core",
+    "packages/chalk",
+    "packages/styleguide",
+    "packages/edit",
     "packages/jsx",
     "packages/macros",
     "packages/syn",
     "runtimes/os",
+    "runtimes/appkit",
     "runtimes/web",
+    "runtimes/webview",
     "runtimes/bevy",
     "runtimes/terminal",
     "runtimes/unity",
@@ -159,9 +143,13 @@ members = [
 
 [workspace.dependencies]
 escher = { path = "." }
+escher-anvil = { path = "./apps/anvil" }
 escher-hud = { path = "./apps/hud" }
 escher-desktop = { path = "./apps/desktop" }
 escher-core = { path = "./packages/core" }
+escher-chalk = { path = "./packages/chalk" }
+escher-styleguide = { path = "./packages/styleguide" }
+escher-edit = { path = "./packages/edit" }
 escher-macros = { path = "./packages/macros" }
 escher-syn = { path = "./packages/syn" }
 escher-etch-io = { path = "./services/etch-io" }
@@ -169,6 +157,9 @@ escher-bevy = { path = "./runtimes/bevy" }
 escher-terminal = { path = "./runtimes/terminal" }
 escher-unity = { path = "./runtimes/unity" }
 escher-unreal = { path = "./runtimes/unreal" }
+escher-os = { path = "./runtimes/os" }
+escher-appkit = { path = "./runtimes/appkit" }
+escher-webview = { path = "./runtimes/webview" }
 
 atlas = { path = "../atlas" }
 
@@ -180,7 +171,9 @@ parking_lot = { version = "0.12", default-features = false }
 spin = { version = "0.10", default-features = false }
 derive_more = { version = "2.0", default-features = false }
 num-traits = { version = "0.2", default-features = false }
+unicode-width = { version = "0.2", default-features = false }
 palette = { version = "0.7", default-features = false }
+serde_yaml = { version = "0.9", default-features = false }
 ui-events = { version = "0.3", default-features = false }
 
 hashbrown = { version = "0.16", default-features = false }
@@ -194,6 +187,7 @@ dyn-clone = { version = "1.0", default-features = false }
 
 bumpalo = { version = "3.19", default-features = false }
 bumpalo-herd = { version = "0.1", default-features = false }
+allocator-api2 = { version = "0.2", default-features = false }
 
 slotmap = { version = "1.0", default-features = false }
 indexmap = { version = "2.10", default-features = false }
@@ -209,6 +203,7 @@ into-response = { version = "0.3", default-features = false }
 ansi-to-tui = { version = "8.0", default-features = false }
 crossterm = { version = "0.29", default-features = false }
 ratatui = { version = "0.30", default-features = false }
+arboard = { version = "3.6", default-features = false }
 
 bevy = { version = "0.18", default-features = false }
 
@@ -216,10 +211,18 @@ winit = { version = "0.30", default-features = false }
 notify = { version = "8.2", default-features = false }
 dirs = { version = "6.0", default-features = false }
 
+raw-window-handle = { version = "0.6", default-features = false }
+objc2 = { version = "0.6" }
+objc2-foundation = { version = "0.3" }
+objc2-app-kit = { version = "0.3" }
+objc2-web-kit = { version = "0.3" }
+block2 = { version = "0.6" }
+
 tracing = { version = "0.1", default-features = false }
 tracing-core = { version = "0.1", default-features = false }
 tracing-subscriber = { version = "0.3", default-features = false }
 tracy-client = { version = "0.18", default-features = false }
+signal-hook = { version = "0.3", default-features = false, features = ["iterator"] }
 
 clap = { version = "4.5", default-features = false }
 eyre = { version = "0.6", default-features = false }
@@ -238,6 +241,8 @@ prost-build = { version = "0.14", default-features = false }
 napi = { version = "3.8", default-features = false }
 napi-build = { version = "2.3", default-features = false }
 wasm-bindgen = { version = "0.2", default-features = false }
+web-sys = { version = "0.3", default-features = false }
+js-sys = { version = "0.3", default-features = false }
 bindgen = { version = "0.72", default-features = false }
 cbindgen = { version = "0.29", default-features = false }
 cwrap = { git = "https://github.com/open-dx/cwrap-rs", default-features = false, features = ["macros"] }

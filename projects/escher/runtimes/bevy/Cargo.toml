@@ -3,12 +3,41 @@ name = "escher-bevy"
 version = "0.0.0"
 edition = "2024"
 
+[features]
+default = ["terminal"]
+# `escher-terminal`'s real `Scaffold`-based UI, drawn to the OS terminal the Bevy app was
+# launched from, alongside the game window, driven from Bevy's own schedule rather than a
+# competing event loop. See `src/terminal.rs` and `src/legacy/README.md`.
+terminal = ["dep:ratatui", "dep:crossterm", "dep:smallvec", "dep:escher-terminal", "dep:parking_lot"]
+debug = []
+verbose = []
+
 [dependencies]
-bevy = { workspace = true, features = [] }
+bevy = { workspace = true, features = ["default"] }
 futures = { workspace = true }
+winit = { workspace = true }
+tracing = { workspace = true }
+
+escher-core = { workspace = true }
+escher-webview = { workspace = true }
+escher-os = { workspace = true }
+bumpalo-herd = { workspace = true }
+
+ratatui = { workspace = true, features = ["crossterm"], optional = true }
+crossterm = { workspace = true, features = ["events", "bracketed-paste"], optional = true }
+smallvec = { workspace = true, optional = true }
+escher-terminal = { workspace = true, optional = true }
+parking_lot = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch="wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
 
+[target.'cfg(unix)'.dependencies]
+signal-hook = { workspace = true }
+
 [target.'cfg(target_arch="wasm32")'.dependencies]
 uuid = { workspace = true, features = ["v4", "js"] }
+
+[dev-dependencies]
+clap = { workspace = true, features = ["std", "derive", "color", "help", "usage"] }
+tracing-subscriber = { workspace = true, features = ["std", "env-filter", "fmt"] }

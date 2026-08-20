@@ -1,5 +1,6 @@
 #!/usr/bin/env deno
 import { join, resolve, normalize, basename, globToRegExp, parse as parsePath } from "@std/path";
+import { bold, brightBlue, brightYellow, dim, italic, magenta } from "@std/fmt/colors";
 import { exists, walk, WalkOptions } from "@std/fs";
 
 import { $ } from "@ethos/dev/shell";
@@ -60,7 +61,7 @@ export const ETHOS_WORKSPACE_DIR: string = resolve("/Users/lorren/Dev/Brainbow")
 export const OUT_DIR: string = resolve(Deno.cwd(), args._[0]?.toString() ?? ".");
 
 if (args.verbose && args.inspect) {
-    console.debug($.brightBlue(`Args:`), args);
+    console.debug(brightBlue(`Args:`), args);
 }
 
 if (!args.name) {
@@ -74,11 +75,11 @@ console.debug(` .. from ${args.tpldir}`);
 console.debug(` .. to ${OUT_DIR}`);
 
 if (args.reset === true && await exists(OUT_DIR)) {
-    console.warn($.brightYellow(`Got reset:`), `Nuke and replace '${OUT_DIR}'?`);
+    console.warn(brightYellow(`Got reset:`), `Nuke and replace '${OUT_DIR}'?`);
 
     // Confirm the destruction of the previous directory ..
     const encoder = new TextEncoder();
-    const confirm = encoder.encode($.dim.italic(`Press <enter> to continue or <ctrl+c> to exit ..`));
+    const confirm = encoder.encode(dim(italic(`Press <enter> to continue or <ctrl+c> to exit ..`)));
     await Deno.stdout.write(confirm);
 
     const stdinBuffer = new Uint8Array(1);
@@ -86,7 +87,7 @@ if (args.reset === true && await exists(OUT_DIR)) {
         // Re-iterate intent to destroy.
         const decoder = new TextDecoder();
         const _input = decoder.decode(stdinBuffer);
-        console.log($.magenta.italic(`Roger, go to boom.`));
+        console.log(magenta(italic(`Roger, go to boom.`)));
     }
 
     // TODO: Flush much?? Gross ..
@@ -114,7 +115,7 @@ if (args.rust === true) {
     //     .replace(/\\"|"(?:\\"|[^"])*"|(\/\/.*|\/\*[\s\S]*?\*\/)/g, (m, g) => g ? "" : m);
     // const cargoWorkspaceConfig = JSON.parse(cargoWorkspaceConfigContents);
 
-    console.debug($.brightBlue(`Rust`), cargoWorkspaceConfigPath);
+    console.debug(brightBlue(`Rust`), cargoWorkspaceConfigPath);
 
     const exts = ["toml", "rs"];
     const include = [
@@ -138,7 +139,7 @@ if (args.rust === true) {
         },
         onCopy(_content, relPath) {
             if (!isValidPath(relPath, include, exclude)) {
-                console.debug($.dim(`x skip ${relPath}`));
+                console.debug(dim(`x skip ${relPath}`));
                 return false;
             }
 
@@ -148,7 +149,7 @@ if (args.rust === true) {
             //  - Iterate the document's structure, looking for template directives.
 
             if (args.verbose) {
-                console.debug($.dim(`>`), `copy ${relPath}`);
+                console.debug(dim(`>`), `copy ${relPath}`);
 
                 if (args.inspect) {
                     // console.log('Parsed:', parsePath(relPath));
@@ -158,7 +159,7 @@ if (args.rust === true) {
         },
         onMakeDir(relPath) {
             if (args.verbose) {
-                console.debug($.dim(`  /`), `make ${relPath}`);
+                console.debug(dim(`  /`), `make ${relPath}`);
             }
         },
     });
@@ -189,7 +190,7 @@ if (args.deno === true) {
     console.debug(`Workspace config: ${denoWorkspaceConfigPath}`, denoWorkspaceConfigContents);
     const denoWorkspaceConfig = JSON.parse(denoWorkspaceConfigContents);
 
-    console.debug($.brightBlue(`Deno`), denoWorkspaceConfigPath);
+    console.debug(brightBlue(`Deno`), denoWorkspaceConfigPath);
 
     const exts = ["json", "jsonc", "ts", "tsx", "js", "jsx"];
     const include = [
@@ -210,12 +211,12 @@ if (args.deno === true) {
         },
         onCopy(_content, relPath) {
             if (!isValidPath(relPath, include, exclude)) {
-                console.debug($.dim(`x skip ${relPath}`));
+                console.debug(dim(`x skip ${relPath}`));
                 return false;
             }
 
             if (args.verbose) {
-                console.debug($.dim(`>`), `copy ${relPath}`);
+                console.debug(dim(`>`), `copy ${relPath}`);
 
                 if (args.inspect) {
                     // TODO: Draw in an inline Escher tui block?
@@ -226,7 +227,7 @@ if (args.deno === true) {
         },
         onMakeDir(relPath) {
             if (args.verbose) {
-                console.debug($.dim(`  /`), `make ${relPath}`);
+                console.debug(dim(`  /`), `make ${relPath}`);
             }
         },
     });
@@ -267,7 +268,7 @@ if (args.flutter === true) {
     // const workspacePubspecContents = await Deno.readTextFile(workspacePubspecPath);
     // const workspacePubspec = JSON.parse(workspacePubspecContents);
 
-    console.debug($.brightBlue(`Flutter`), workspacePubspecPath);
+    console.debug(brightBlue(`Flutter`), workspacePubspecPath);
 
     const tmplPubspecPath = globToRegExp("./pubspec.{yml,yaml}");
 
@@ -290,12 +291,12 @@ if (args.flutter === true) {
         },
         onCopy(content, relPath) {
             if (!isValidPath(relPath, include, exclude)) {
-                console.debug($.dim(`Skipping ${relPath}`));
+                console.debug(dim(`Skipping ${relPath}`));
                 return false;
             }
 
             if (args.verbose) {
-                console.debug($.dim(`>`), `copy ${relPath}`);
+                console.debug(dim(`>`), `copy ${relPath}`);
 
                 if (args.inspect) {
                     console.log('Parsed Path:', parsePath(relPath));
@@ -305,7 +306,7 @@ if (args.flutter === true) {
         },
         onMakeDir(relPath) {
             if (args.verbose) {
-                console.debug($.dim(`  /`), `make ${relPath}`);
+                console.debug(dim(`  /`), `make ${relPath}`);
             }
         },
     });
@@ -324,12 +325,12 @@ if (args.flutter === true) {
 }
 
 if (args.dry) {
-    console.info($.bold(`Dry run. Exiting!`));
+    console.info(bold(`Dry run. Exiting!`));
     Deno.exit(0);
 }
 
 //---
-console.warn($.magenta.bold(`Fin. <3`));
+console.warn(magenta(bold(`Fin. <3`)));
 // TODO: More information pls ..
 
 //---

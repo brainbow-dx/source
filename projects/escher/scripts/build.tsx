@@ -1,4 +1,5 @@
 import { join, resolve } from "@std/path";
+import { red } from "@std/fmt/colors";
 
 import { $ } from "@ethos/dev/shell";
 import * as sh from "@ethos/dev/shell";
@@ -27,8 +28,8 @@ if (args.cwd != undefined) {
 args.cwd = undefined;
 
 console.info(sh.banner`
-    Project: ${args.cwd ?? $.red("<unknown>")}
-  Workspace: ${args.workdir ?? $.red("<unknown>")}
+    Project: ${args.cwd ?? red("<unknown>")}
+  Workspace: ${args.workdir ?? red("<unknown>")}
     Version: ${await sh.which("rustc") ?? "<not-found>"}
        Rust: ${await sh.which("rustc") ?? "<not-found>"}
        Deno: ${await sh.which("deno") ?? "<not-found>"}

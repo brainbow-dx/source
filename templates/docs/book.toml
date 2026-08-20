@@ -1,0 +1,10 @@
+[book]
+title = "__PROJECT_NAME__"
+authors = ["Brainbow"]
+language = "en"
+multilingual = false
+src = "."
+
+[build]
+build-dir = "dist/public"
+create-missing = true

@@ -8,6 +8,11 @@ use crate::draw::DrawUpdate;
 use crate::scaffold::Scaffold;
 
 //---
+pub mod prelude {
+    pub use super::Surface;
+    pub use super::SurfaceUpdate;
+}
+
 pub trait Surface {
     type Event;
     

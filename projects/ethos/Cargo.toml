@@ -9,12 +9,13 @@ std = ["clap/std", "tracing-subscriber"]
 debug = []
 verbose = []
 profiling = []
+dev = []
 
 [dependencies]
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter", "fmt", "ansi"], optional = true }
 clap = { workspace = true, features = ["derive"] }
-derive_more = { workspace = true }
+derive_more = { workspace = true, features = ["from"] }
 oops = { workspace = true }
 serde = { workspace = true }
 url = { workspace = true }
@@ -30,15 +31,24 @@ members = [
     # TODO
     "packages/core",
     "packages/log",
+    "packages/deno",
+    "packages/macros",
     "services/dev",
     "services/registry",
     "dialects/ecma",
+    "dialects/c",
+    "dialects/lua",
+    "apps/cli",
 ]
 
 [workspace.dependencies]
 ethos = { path = "." }
-ethos-core = { path = "./packages/log" }
+ethos-core = { path = "./packages/core" }
 ethos-log = { path = "./packages/log" }
+ethos-deno = { path = "./packages/deno" }
+ethos-macros = { path = "./packages/macros" }
+ethos-ecma = { path = "./dialects/ecma" }
+ethos-lua = { path = "./dialects/lua" }
 ethos-dev-service = { path = "./services/dev" }
 
 uuid = { version = "1.17", default-features = false }
@@ -62,10 +72,12 @@ enum_dispatch = { version = "0.3", default-features = false }
 
 tracing = { version = "0.1", default-features = false }
 tracing-subscriber = { version = "0.3", default-features = false }
+tracing-log = { version = "0.2", default-features = false }
 tracy-client = { version = "0.18", default-features = false }
 
 tempfile = { version = "3.27", default-features = false }
 sys_traits = { version = "0.1", default-features = false }
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
 
 eyre = { version = "0.6", default-features = false }
 anyhow = { version = "1.0", default-features = false }
@@ -88,6 +100,8 @@ cwrap = { git = "https://github.com/open-dx/cwrap-rs", default-features = false,
 proc-macro2 = { version = "1.0", default-features = false }
 quote = { version = "1.0", default-features = false }
 syn = { version = "2.0", default-features = false }
+
+mlua = { version = "0.10", default-features = false }
 
 deno_core = { version = "0.397", default-features = false }
 deno_runtime = { version = "0.252", default-features = false }

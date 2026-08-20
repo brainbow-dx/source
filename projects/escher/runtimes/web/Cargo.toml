@@ -42,12 +42,12 @@ hashbrown = { workspace = true, features = [
     "alloc",
     "default-hasher",
     "serde",
-    "nightly",
+    "allocator-api2",
     "rayon",
 ] }
 
 bumpalo = { workspace = true, features = [
-    "allocator_api",
+    "allocator-api2",
     "boxed",
     "collections",
 ] }
@@ -61,18 +61,28 @@ oops = { workspace = true, features = ["macros"] }
 eyre = { workspace = true }
 color-eyre = { workspace = true }
 
-serde = { workspace = true }
+serde = { workspace = true, features = ["std"] }
+# Needed on native too, not just wasm32. `description::parse` runs on both targets.
+serde_json = { workspace = true, features = ["std"] }
 
 wasm-bindgen = { workspace = true, features = [] }
 
 [target.'cfg(not(target_arch="wasm32"))'.dependencies]
-escher-terminal = { workspace = true }
 crossterm = { workspace = true, features = ["events", "bracketed-paste"] }
 ratatui = { workspace = true, features = ["crossterm"] }
 ansi-to-tui = { workspace = true }
 
 [target.'cfg(target_arch="wasm32")'.dependencies]
 uuid = { workspace = true, features = ["v4", "v5", "js"] }
+web-sys = { workspace = true, features = [
+    "Document",
+    "Element",
+    "HtmlElement",
+    "CssStyleDeclaration",
+    "Node",
+    "Window",
+] }
+js-sys = { workspace = true }
 
 [target.'cfg(target_os="windows")'.dependencies]
 crossterm = { workspace = true, features = ["windows"] }

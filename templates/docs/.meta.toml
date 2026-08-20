@@ -1,0 +1,11 @@
+[template]
+name = "docs"
+include = [
+    "Dockerfile",
+    "book.toml",
+    "SUMMARY.md",
+    "src/**/*.md",
+]
+
+[hooks.generate]
+command = "deno run -A scripts/.generate.tsx"

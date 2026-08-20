@@ -26,6 +26,7 @@ uuid = { workspace = true, features = ["v4"] }
 ratatui = { workspace = true, features = ["crossterm"] }
 crossterm = { workspace = true, features = ["events", "bracketed-paste"] }
 ansi-to-tui = { workspace = true }
+arboard = { workspace = true }
 
 slotmap = { workspace = true }
 indexmap = { workspace = true }
@@ -37,9 +38,9 @@ enum_dispatch = { workspace = true }
 
 num-traits = { workspace = true }
 
-hashbrown = { workspace = true, features = ["core", "alloc", "default-hasher", "serde", "nightly", "rayon"] }
+hashbrown = { workspace = true, features = ["core", "alloc", "default-hasher", "serde", "allocator-api2", "rayon"] }
 
-bumpalo = { workspace = true, features = ["allocator_api", "boxed", "collections"] }
+bumpalo = { workspace = true, features = ["allocator-api2", "boxed", "collections"] }
 bumpalo-herd = { workspace = true }
 
 tracing = { workspace = true }
@@ -55,14 +56,13 @@ color-eyre = { workspace = true }
 crossterm = { workspace = true, features = ["windows"] }
 
 #--
+[target.'cfg(unix)'.dependencies]
+signal-hook = { workspace = true }
+
+#--
 [dev-dependencies]
 clap = { workspace = true, features = ["std", "derive", "color", "help", "usage"] }
+unicode-width = { workspace = true }
 
 tracing = { workspace = true, features = ["std"] }
-tracing-subscriber = { workspace = true, features = ["std", "env-filter", "fmt", "ansi"] }
-
-tokio = { workspace = true, features = ["full"] }
-
-axum = { workspace = true, features = ["tokio", "http1", "http2", "json", "query", "form", "multipart", "matched-path", "original-uri", "macros", "tower-log", "tracing"] }
-tower = { workspace = true, features = ["full"] }
-tower-http = { workspace = true, features = ["full"] }
+tracing-subscriber = { workspace = true, features = ["std", "env-filter", "fmt", "ansi", "registry"] }

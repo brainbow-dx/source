@@ -1,6 +1,7 @@
 #!/usr/bin/env deno
 import { resolve } from "@std/path";
 import { exists } from "@std/fs";
+import { blue } from "@std/fmt/colors";
 
 import { $ } from "@ethos/dev/shell";
 import * as sh from "@ethos/dev/shell";
@@ -25,8 +26,8 @@ const workspaceRoot = resolve(args.workdir, "../..");
 console.info(sh.banner`
     Workspace: ${workspaceRoot}
     Project: ${Deno.cwd()}
-    Rust: ${$.blue(await sh.which("rustc") ?? "<not-found>")}
-    Deno: ${$.blue(await sh.which("deno") ?? "<not-found>")}
+    Rust: ${blue(await sh.which("rustc") ?? "<not-found>")}
+    Deno: ${blue(await sh.which("deno") ?? "<not-found>")}
 `);
 
 if (args.reset && await exists(`.output/pkg/web`)) {
@@ -39,16 +40,13 @@ if (args.generate) {
 
 if (!args.dry) {
     // await $`cargo build -p escher-web --lib --target wasm32-unknown-unknown`;
-    await $`wasm-pack build --dev --no-pack --target web \
-        --out-name escher --out-dir .output/pkg/web`;
-    
-    await $`deno bundle --platform browser --quiet \
-        --allow-import --inline-imports --sourcemap --unstable \
-        --outdir .output/pkg/web \
-        assets/download/index.html \
-        assets/404.html \
-        assets/draw.html \
-        assets/index.html`;
+    await $`wasm-pack build --dev --no-pack --target web --out-name escher --out-dir .output/pkg/web`;
+
+    await $`deno bundle --platform browser --quiet --allow-import --inline-imports --sourcemap --unstable --outdir .output/pkg/web assets/download/index.html assets/404.html assets/draw.html assets/index.html`;
+
+    // Dependency-free (only imports the co-located wasm-pack output), so a straight copy is
+    // enough — no bundling step needed.
+    await Deno.copyFile("src/scaffold-element.js", ".output/pkg/web/scaffold-element.js");
 }
 
 if (args.clean) {

@@ -1,0 +1,32 @@
+[package]
+name = "escher-appkit"
+version = "0.0.0"
+edition = "2024"
+
+#--
+# Renders an `escher_core::Scaffold` tree as real, native AppKit views (`NSView`/`NSButton`/
+# `NSTextField`/`NSImageView`) — the AppKit analog of `escher-bevy`'s `BevySurface` or
+# `escher-web`'s DOM surface, not an OS-integration grab-bag like `escher-os` (dialogs/menu/
+# clipboard — unrelated to rendering a Scaffold tree at all). Superseded `runtimes/os/src/macos/
+# chrome.rs`'s SwiftUI-hosted chrome bar; no Swift toolchain dependency here, plain `objc2`.
+[features]
+# Optional Bevy-engine glue (`src/bevy.rs`) — kept behind a flag rather than an unconditional
+# dependency so a consumer of this crate's core rendering (which has nothing to do with any
+# particular engine) never pays for pulling in Bevy at all unless they actually want the plugin.
+bevy = ["dep:bevy"]
+
+[dependencies]
+raw-window-handle = { workspace = true }
+tracing = { workspace = true }
+escher-core = { workspace = true }
+escher-chalk = { workspace = true }
+escher-os = { workspace = true }
+dirs = { workspace = true }
+bumpalo = { workspace = true }
+bevy = { workspace = true, features = ["bevy_window", "bevy_winit"], optional = true }
+
+[target.'cfg(target_os="macos")'.dependencies]
+objc2 = { workspace = true }
+objc2-foundation = { workspace = true }
+objc2-app-kit = { workspace = true }
+block2 = { workspace = true }

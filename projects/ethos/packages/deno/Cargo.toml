@@ -1,0 +1,41 @@
+[package]
+name = "ethos-deno"
+version = "0.1.0"
+edition = "2021"
+build = "build.rs"
+
+[features]
+default = ["ffi"]
+ffi = []
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[[example]]
+name = "counter"
+required-features = ["ffi"]
+
+#--
+# The runtime for JS/TS dialects: constructs and drives a `MainWorker` (or, feature `ffi`, exposes
+# the C-ABI surface hosts like Unity call into). This crate owns everything about *executing*
+# JS/TS — a dialect (parsing/printing syntax) has no opinion on any of it. `ethos-ecma` used to
+# bundle both; the runtime/FFI half moved here so it isn't tied to one dialect's JS bootstrap.
+[dependencies]
+ethos-core = { workspace = true }
+
+deno_core = { workspace = true }
+deno_runtime = { workspace = true, features = ["include_js_files_for_snapshotting"] }
+deno_resolver = { workspace = true }
+
+sys_traits = { workspace = true }
+tempfile = { workspace = true }
+rustls = { workspace = true }
+eyre = { workspace = true }
+
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync", "time"] }
+
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
+
+[build-dependencies]
+deno_runtime = { workspace = true, features = ["include_js_files_for_snapshotting", "snapshot"] }

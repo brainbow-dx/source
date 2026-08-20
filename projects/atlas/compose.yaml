@@ -1,0 +1,30 @@
+services:
+  # `docker compose --profile docs watch` — serves docs/ (a real mdbook) at :8096 and keeps it
+  # live: `develop.watch` syncs local edits into the container, mdbook's own file watcher then
+  # rebuilds + live-reloads the served page. `docker compose --profile docs up` alone (no
+  # `watch`) still works — it just serves whatever was present at image build time.
+  docs:
+    build:
+      context: .
+      dockerfile: docs/Dockerfile
+    profiles: [docs]
+    ports:
+      - 8096:3000
+    develop:
+      watch:
+        - path: ./docs
+          action: sync
+          target: /book
+  relay:
+    build:
+      context: .
+      dockerfile: packages/relay/Dockerfile
+    ports:
+      - 9200:9200
+    volumes:
+      - .:/workspace
+      - relay-cargo-registry:/usr/local/cargo/registry
+      - relay-target:/workspace/target
+volumes:
+  relay-cargo-registry:
+  relay-target:

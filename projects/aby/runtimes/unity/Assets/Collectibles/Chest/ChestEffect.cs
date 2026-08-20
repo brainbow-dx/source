@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace Aby
+namespace Theta
 {
     public class ChestEffect : MonoBehaviour
     {

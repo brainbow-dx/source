@@ -9,20 +9,6 @@ namespace Platformer.Gameplay
     /// <typeparam name="EnemyDeath"></typeparam>
     public class EnemyDeath : Simulation.Event<EnemyDeath>
     {
-
-        //old stuff
-        /*public EnemyController enemy;
-
-        public override void Execute()
-        {
-            //get rid of this line and add triggers for the animation
-            enemy._collider.enabled = false;
-            enemy.control.enabled = false;
-            if (enemy._audio && enemy.ouch)
-                enemy._audio.PlayOneShot(enemy.ouch);
-        }*/
-
-        //new stuff to change enemy death animation
         public EnemyController enemy;
         public PlayerController player;
 

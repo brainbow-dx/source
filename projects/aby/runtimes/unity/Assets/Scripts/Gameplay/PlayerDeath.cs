@@ -19,11 +19,8 @@ namespace Platformer.Gameplay
             var player = model.player;
             if (player.health.IsAlive)
             {
-                Debug.Log("in PlayerDeath");
-                //player.health.Die();
                 model.virtualCamera.m_Follow = null;
                 model.virtualCamera.m_LookAt = null;
-                // player.collider.enabled = false;
                 player.controlEnabled = false;
 
                 if (player.audioSource && player.hurtSound)

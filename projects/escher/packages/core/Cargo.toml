@@ -23,7 +23,7 @@ atlas = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
 once_cell = { workspace = true }
 smallvec = { workspace = true }
-hashbrown = { workspace = true, features = ["default", "nightly"] }
+hashbrown = { workspace = true, features = ["default", "allocator-api2"] }
 foldhash = { workspace = true }
 ahash = { workspace = true }
 palette = { workspace = true, features = ["libm"] }
@@ -34,11 +34,13 @@ parking_lot = { workspace = true }
 derive_more = { workspace = true, features = ["from"] }
 
 num-traits = { workspace = true }
+unicode-width = { workspace = true }
 
 enum_dispatch = { workspace = true }
 
-bumpalo = { workspace = true, features = [ "boxed", "collections", "allocator_api"] }
+bumpalo = { workspace = true, features = [ "boxed", "collections", "allocator-api2"] }
 bumpalo-herd = { workspace = true }
+allocator-api2 = { workspace = true, features = ["alloc"] }
 
 dyn-clone = { workspace = true }
 

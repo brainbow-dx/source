@@ -4,8 +4,9 @@
 //! Note: if you see this in the public repo, pls open a PR and berate
 //! the repo maintainer (or whoever).
 
-use alloc::alloc::Allocator;
-use alloc::alloc::Global;
+use allocator_api2::alloc::Allocator;
+use allocator_api2::alloc::Global;
+use allocator_api2::vec::Vec;
 
 use core::borrow::Borrow;
 use core::hash::BuildHasher;

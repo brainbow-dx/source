@@ -1,0 +1,13 @@
+[package]
+name = "ethos-llvm"
+version = "0.1.0"
+edition = "2021"
+
+#--
+# Not a workspace member (see README.md) — needs a version-matched LLVM install for `inkwell` to
+# build against, not available in every dev environment. Add "dialects/llvm" to the root
+# Cargo.toml's [workspace] members once that's set up.
+[dependencies]
+ethos = { workspace = true }
+anyhow = { workspace = true }
+inkwell = { version = "0.5", default-features = false }

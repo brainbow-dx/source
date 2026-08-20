@@ -3,4 +3,25 @@ name = "atlas-relay"
 version = "0.0.0"
 edition = "2024"
 
+#--
+# A WebRTC signaling relay: room-based peer discovery plus SDP offer/answer and ICE-candidate
+# forwarding. Doesn't touch WebRTC itself (no `com.unity.webrtc`, no libwebrtc) — it only relays
+# the handshake messages two peers need to find each other and negotiate a direct connection.
+# Once that connection exists, peers talk to each other directly; this server is out of the loop.
 [dependencies]
+axum = { workspace = true, features = ["ws", "tokio", "json", "http1"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "sync"] }
+futures-util = "0.3"
+
+serde = { workspace = true, features = ["derive", "std"] }
+serde_json = { workspace = true }
+
+uuid = { workspace = true, features = ["v4", "serde"] }
+parking_lot = { workspace = true }
+
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+tokio-tungstenite = "0.24"

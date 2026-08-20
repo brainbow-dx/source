@@ -1,0 +1,28 @@
+[package]
+name = "ethos-cli"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "ethos"
+path = "src/main.rs"
+
+[dependencies]
+clap = { workspace = true, features = ["std", "derive", "color", "help", "usage"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["std", "env-filter", "fmt", "ansi"] }
+tracing-log = { workspace = true, features = ["std", "log-tracer"] }
+
+# `run-command` — runs a single JS command script and prints its result, for
+# escher-terminal's assistant example (see its `/`-command JS scripting). A separate process
+# rather than a direct `escher-terminal` dependency: `escher-core`'s own nightly `allocator_api`
+# bumpalo feature and `ethos-deno`'s (via `deno_runtime`'s build-time `swc_allocator`)
+# `allocator-api2` feature can't coexist in one Cargo.lock (see escher's changelog, 2026-08-13,
+# "Fixed swc_allocator/bumpalo feature conflict" — the same conflict, just unavoidable this time
+# since escher-terminal genuinely needs both `escher-core` and JS execution).
+ethos-core = { workspace = true }
+ethos-deno = { workspace = true }
+ethos-lua = { workspace = true }
+deno_core = { workspace = true }
+deno_runtime = { workspace = true }
+tokio = { workspace = true, features = ["rt"] }

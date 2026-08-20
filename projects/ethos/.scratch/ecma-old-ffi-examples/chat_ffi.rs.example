@@ -1,0 +1,83 @@
+#![allow(unused)]
+
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
+use std::process::ExitCode;
+use std::path::PathBuf;
+use std::ffi::CString;
+
+use core::ffi::CStr;
+
+use anyhow::Result;
+
+use cwrap::error::CStringError;
+
+use reclab::runtime::RuntimeError;
+use reclab::tracing::ffi::CJsRuntimeLogLevel;
+use reclab::runtime::ffi::CScriptRuntimeConfig;
+use reclab::runtime::ffi::CConstructRuntimeResultCode;
+use reclab::runtime::ffi::CSendBroadcastOptions;
+use reclab::runtime::ffi::CExecModuleOptions;
+
+//---
+/// TODO: Remove `swc_ecma_codegen` when we've resolved the sourcemap error.
+const TRACING_FILTER: &str = "reclab-chat=trace,reclab=trace,swc_ecma_codegen=off,warn";
+
+//---
+fn main() -> Result<ExitCode> {
+    // Step 1:
+    //  Setup logging facilities, etc.
+    reclab::tracing::mount(TRACING_FILTER);
+    
+    // TODO: Construct channels the threads can use to co-ordinate signals.
+
+    let num_live_threads: AtomicUsize = AtomicUsize::new(0);
+    
+    // TODO: Change this to a Slab in the managing structure ..
+    let mut handles = Vec::new();
+    
+    // Call to start main signaling server thread.
+    handles.push(std::thread::spawn(move || {
+        #[cfg(feature = "verbose")]
+        tracing::debug!("Starting new Queue thread ..");
+        
+        num_live_threads.fetch_add(1, Ordering::SeqCst);
+        
+        // TODO: Return report ..
+        Ok(true)
+    }));
+    
+    handles.push(std::thread::spawn(move || {
+        #[cfg(feature = "verbose")]
+        tracing::debug!("Starting new Runtime thread ..");
+        
+        num_live_threads.fetch_add(1, Ordering::SeqCst);
+        
+        // TODO: Thread Body
+        Ok(true)
+    }));
+    
+    // The following is for illustrative purposes only.
+    // The loop is typically managed by the caller in FFI schearios.
+    loop {
+        let mut finished = false;
+        if (finished) { // TODO
+            for handle in handles {
+                let _ = handle.join();
+            }
+            
+            break
+        }
+        
+        // TODO: Select from "control" channels for specific signals (shutdown, etc) ..
+        
+        std::thread::sleep(std::time::Duration::from_secs(1));
+    }
+    
+    #[cfg(feature = "dev")]
+    tracing::info!("Finished {:} threads ..", num_live_threads.load(Ordering::SeqCst));
+
+    // Yay! <3
+    Ok(ExitCode::SUCCESS)
+}

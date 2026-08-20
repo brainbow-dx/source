@@ -1,11 +1,10 @@
 // deno-lint-ignore-file no-explicit-any
 export type { Args } from "@std/cli";
 
-export { $ } from "dzx";
-export * as dzx from "dzx";
+import { build$ } from "@david/dax";
+import type { CommandChild } from "@david/dax";
 
-export * from "dzx/runtime/process";
-
+export * as dax from "@david/dax";
 export * from "@david/which";
 
 //--
@@ -14,8 +13,10 @@ import { exists } from "@std/fs";
 import { parseArgs } from "@std/cli";
 import type { Args } from "@std/cli";
 
-import { $ } from "dzx";
-import type { Process } from "dzx/runtime/process";
+export const $ = build$({
+    commandBuilder: (builder) =>
+        builder.stdout("inherit").stderr("inherit").stdin("inherit"),
+});
 
 /**
  * Mount a cli application.
@@ -23,11 +24,7 @@ import type { Process } from "dzx/runtime/process";
  * @returns Parsed arguments or nothing.
  */
 export function parse<A extends Args>(args: string[] = [], setupFn?: (args: A) => void): any {
-    $.verbose = 2;
-    $.shell = "bash";
-    $.stdout = "inherit";
-    $.stderr = "inherit";
-    $.stdin = "inherit";
+    $.setPrintCommand(true);
 
     const parsedArgs = parseArgs<A>(args);
 
@@ -40,84 +37,64 @@ export function parse<A extends Args>(args: string[] = [], setupFn?: (args: A) =
 
 //---
 /**
- * TODO: Deprecate this?
+ * A dax command that hasn't been started yet, wrapped so it can be launched
+ * later and killed on demand. `dax`'s `CommandChild` has no OS pid getter
+ * (unlike the old dzx `Process`), so only start/stop is tracked here, not pid.
  */
 export class ManagedProcess {
-    private running: boolean = false;
-    
+    #command: ReturnType<typeof $>;
+    #child?: CommandChild;
+    #running = false;
+
     constructor(
-        private readonly process: Process,
+        command: ReturnType<typeof $>,
         public readonly options?: {
             timeout?: number,
             delay?: number,
             runImmediately?: boolean,
         },
     ) {
-        process.timeout(options?.timeout ?? 20000);
-        process.delay(options?.delay ?? 3000);
-        
+        this.#command = command.timeout(options?.timeout ?? 20000);
+
         if (this.options?.runImmediately) {
             this.run().then(() => {
                 console.debug(`Auto-started process ..`);
             });
         }
     }
-    
-    public timeout(duration: number): Process {
-        return this.process.timeout(duration);
-    }
-    
-    public delay(duration: number): Process {
-        return this.process.delay(duration);
-    }
-    
+
     public isRunning(): boolean {
-        return this.running;
+        return this.#running;
     }
-    
-    public async run(): Promise<any> {
-        return await new Promise((resolve, reject) => {
-            try {
-                // Accessing the `pid` getter internally calls the original
-                // `process` getter (see original code), which creates and
-                // starts the Deno.Process, initializing this.#proc.
-                // We intentionally ignore the return value here.
-                if (!this.running && this.process?.pid) {
-                    this.running = true; // TODO: Wait + check?
-                    console.log(`Process started with PID '${this.process.pid}' ..`);
-                }
-            } catch (error) {
-                return reject(error);
-            }
-            
-            return resolve(this.running);
-        })
+
+    public async run(): Promise<boolean> {
+        if (this.#running) {
+            return this.#running;
+        }
+
+        if (this.options?.delay) {
+            await new Promise((resolve) => setTimeout(resolve, this.options!.delay));
+        }
+
+        this.#child = this.#command.spawn();
+        this.#running = true;
+        console.log(`Process started ..`);
+
+        return this.#running;
     }
-    
-    public async kill(signal: Deno.Signal = "SIGTERM"): Promise<any> {
-        return await new Promise((resolve, reject) => {
-            try {
-                if (this.running && this.process?.pid) {
-                    this.process.kill(signal);
-                    this.running = false; // TODO: Wait + check?
-                }
-            } catch (error) {
-                return reject(error);
-            }
-            
-            return resolve(this.running);
-        })
+
+    public async kill(signal: Parameters<CommandChild["kill"]>[0] = "SIGTERM"): Promise<boolean> {
+        if (this.#running && this.#child) {
+            this.#child.kill(signal);
+            this.#running = false;
+        }
+
+        return this.#running;
     }
 }
 
 //---
 export function $$(strings: TemplateStringsArray, ...expressions: any[]): ManagedProcess {
-    // for (let i = 0; i < strings.length; i++) {
-    //     if (expressions[i] == undefined) {
-    //         strings[i] += strings[i + 1];
-    //     }
-    // }
-    
     return new ManagedProcess($(strings, ...expressions));
 };
 
@@ -140,8 +117,8 @@ export function banner(strings: TemplateStringsArray, ...values: any[]): string 
         bannerTemplate += chunk + (values[i] || '');
         return bannerTemplate;
     };
-    
-    const bannerTemplate = ""; // TODO: GEt this from disk/env/config?
+
+    const bannerTemplate = "";
     const bannerOutput = strings.reduce(bannerBuilder, bannerTemplate);
 
     // Find and sync with the first indent in the banner block.

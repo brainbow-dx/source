@@ -1,14 +1,4 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+//! No Rust dependency on `ethos-ecma` here — see this crate's `Cargo.toml` doc comment. The
+//! actual native library Unity loads (`ethos-ecma`'s cdylib) is built directly from ethos's own
+//! workspace by `scripts/sync-plugin.sh`, independent of anything this crate compiles or links.
+//! This crate is the home for the Unity `Assets/` integration and its build/sync tooling.
