@@ -408,8 +408,10 @@ fn draw_frame(
             dust_effect: None,
             facing: 1.0,
             attack_cooldown: 0.0,
-            // Combat state isn't synced over the relay yet, only position, so a remote player
-            // always renders as idle and alive rather than mid-swing or dead.
+            // Combat events (see `relay::CombatEvent`) are synced now, but only applied to a
+            // player's own owning instance (`physics::apply_local_death`), not reflected back into
+            // how a third instance renders someone else's death here — a remote player still always
+            // renders as idle and alive on a screen that isn't theirs, even mid-swing or dead.
             time_since_last_attack: physics::MARIO_ATTACK_SPAM_WINDOW + 1.0,
             attack_spam_stacks: 0,
             kills: 0,
