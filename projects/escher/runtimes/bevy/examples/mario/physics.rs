@@ -107,6 +107,12 @@ pub struct MarioAttackEffect {
     pub dy: f32,
     pub remaining: f32,
     pub has_hit: bool,
+    /// Whether a trigger (`MARIO_HEAVY_HIT_BUTTONS`) was held the instant this swing fired. Set
+    /// once at fire time, not read live off the gamepad again when the hit actually lands (which
+    /// can be a tick or more later, by which point the button may already be released) — a heavy
+    /// swing should sound heavy because of how it was thrown, not whether the button still happens
+    /// to be down on impact.
+    pub heavy: bool,
 }
 
 /// A brief dust puff, see `MarioState::dust_effect`. `remaining` counts down from
@@ -196,6 +202,12 @@ pub const MARIO_STICK_DEADZONE: f32 = 0.2;
 pub const MARIO_CROUCH_SPEED_MULTIPLIER: f32 = 0.45;
 pub const MARIO_DUST_EFFECT_DURATION: f32 = 0.35;
 pub const MARIO_ATTACK_BUTTON: bevy::input::gamepad::GamepadButton = bevy::input::gamepad::GamepadButton::East;
+/// Held during an attack, this swing counts as "heavy" (see `MarioAttackEffect::heavy`) — purely
+/// a sound cue difference right now, no extra damage or reach, just a heavier crunch on landing.
+/// The analog triggers (`Trigger2`), not the shoulder bumpers (`Trigger`) — what most controllers'
+/// own labeling calls LT/RT rather than LB/RB.
+pub const MARIO_HEAVY_HIT_BUTTONS: [bevy::input::gamepad::GamepadButton; 2] =
+    [bevy::input::gamepad::GamepadButton::LeftTrigger2, bevy::input::gamepad::GamepadButton::RightTrigger2];
 pub const MARIO_ATTACK_EFFECT_DURATION: f32 = 0.18;
 /// Minimum time between two attacks from the same player.
 pub const MARIO_ATTACK_COOLDOWN: f32 = 0.35;
@@ -256,6 +268,7 @@ impl MarioState {
         jump_pressed: bool,
         jump_held: bool,
         attack_pressed: bool,
+        heavy_held: bool,
         crouch_held: bool,
         body_height: f32,
         body_width: f32,
@@ -334,7 +347,7 @@ impl MarioState {
                 self.vy = self.vy.max(MARIO_STOMP_DIVE_VELOCITY_ROWS_PER_SEC / body_height);
             }
 
-            self.attack_effect = Some(MarioAttackEffect { dx, dy, remaining: MARIO_ATTACK_EFFECT_DURATION, has_hit: false });
+            self.attack_effect = Some(MarioAttackEffect { dx, dy, remaining: MARIO_ATTACK_EFFECT_DURATION, has_hit: false, heavy: heavy_held });
         }
 
         if let Some(effect) = &mut self.attack_effect {
@@ -547,6 +560,7 @@ pub fn update_mario_physics(
         let jump_pressed = pad.just_pressed(bevy::input::gamepad::GamepadButton::South);
         let jump_held = pad.pressed(bevy::input::gamepad::GamepadButton::South);
         let attack_pressed = pad.just_pressed(MARIO_ATTACK_BUTTON);
+        let heavy_held = MARIO_HEAVY_HIT_BUTTONS.iter().any(|button| pad.pressed(*button));
 
         // The pause menu opens on a real gamepad Start button. Any one of this instance's owned
         // gamepads can open or close it.
@@ -583,7 +597,7 @@ pub fn update_mario_physics(
                 // new swing fires, not on every tick it stays visible.
                 let jumps_used_before = mario_state.jumps_used;
                 let had_attack_effect = mario_state.attack_effect.is_some();
-                mario_state.step(dt, move_input, attack_stick_y, jump_pressed, jump_held, attack_pressed, crouch_held, body_height, body_width);
+                mario_state.step(dt, move_input, attack_stick_y, jump_pressed, jump_held, attack_pressed, heavy_held, crouch_held, body_height, body_width);
                 if mario_state.jumps_used > jumps_used_before {
                     sfx::play(&mut commands, &sfx.jump);
                 }
@@ -653,7 +667,7 @@ pub fn update_mario_physics(
 
         mario[attacker_index].2.attack_effect.as_mut().unwrap().has_hit = true;
         mario[attacker_index].2.kills += 1;
-        sfx::play(&mut commands, &sfx.hit_crunch);
+        sfx::play(&mut commands, if effect.heavy { &sfx.heavy_hit } else { &sfx.hit_crunch });
         sfx::play(&mut commands, &sfx.hit_hurt);
 
         // The target gets the heavier rumble, since they're the one getting destroyed. The

@@ -1,9 +1,9 @@
-//! Short procedurally-synthesized sound effects: a jump blip, an attack slash, a hit crunch and
-//! hurt cue, and a death pop. No audio asset files, no external synthesizer or MIDI dependency:
-//! each clip is a handful of milliseconds of raw PCM built from a couple of oscillators and a
-//! decay envelope, encoded as a minimal WAV in memory, and handed to `bevy_audio` (`wav`/
-//! `bevy_audio` features enabled on `bevy` in `Cargo.toml` for exactly this) the same way a
-//! loaded asset file would be.
+//! Short procedurally-synthesized sound effects: a jump arpeggio, an attack slash, a light and
+//! heavy hit crunch plus a hurt cue, and a death pop. No audio asset files, no external
+//! synthesizer or MIDI dependency: each clip is a handful of milliseconds of raw PCM built from a
+//! couple of oscillators and a decay envelope, encoded as a minimal WAV in memory, and handed to
+//! `bevy_audio` (`wav`/`bevy_audio` features enabled on `bevy` in `Cargo.toml` for exactly this)
+//! the same way a loaded asset file would be.
 
 use std::f32::consts::TAU;
 
@@ -29,6 +29,10 @@ pub struct MarioSfx {
     pub jump: Handle<AudioSource>,
     pub attack: Handle<AudioSource>,
     pub hit_crunch: Handle<AudioSource>,
+    /// A heavier crunch for a hit landed while holding a trigger (see `MARIO_HEAVY_HIT_BUTTONS`
+    /// in `physics.rs`) — this is `synth_hit_crunch`, the same synth briefly used for `jump`
+    /// itself, moved here per direct user request once a real jump sound existed to replace it.
+    pub heavy_hit: Handle<AudioSource>,
     pub hit_hurt: Handle<AudioSource>,
     pub death: Handle<AudioSource>,
 }
@@ -36,14 +40,11 @@ pub struct MarioSfx {
 pub fn setup_mario_sfx(mut commands: Commands, mut audio_sources: ResMut<Assets<AudioSource>>) {
     let mut add = |samples: Vec<i16>| audio_sources.add(AudioSource { bytes: wav_bytes(SFX_SAMPLE_RATE, &samples).into() });
 
-    // `jump`/`hit_crunch` are deliberately cross-wired to each other's synth right now, per direct
-    // user request after hearing both in place: the hit's impact reads better as the sharper
-    // upward blip, and the jump reads better as the punchier crunch. `synth_jump_blip`/
-    // `synth_hit_crunch` themselves are unchanged, just swapped which event plays which.
     commands.insert_resource(MarioSfx {
-        jump: add(synth_hit_crunch()),
+        jump: add(synth_jump_sequence()),
         attack: add(synth_attack_slash()),
         hit_crunch: add(synth_jump_blip()),
+        heavy_hit: add(synth_hit_crunch()),
         hit_hurt: add(synth_hit_hurt()),
         death: add(synth_death_pop()),
     });
@@ -55,13 +56,31 @@ pub fn play(commands: &mut Commands, handle: &Handle<AudioSource>) {
     commands.spawn((AudioPlayer::new(handle.clone()), PlaybackSettings::DESPAWN));
 }
 
-/// A quick upward sine sweep, the classic "blip" read as a jump rather than an impact.
+/// A quick upward sine sweep. No longer used for the jump itself (see `synth_jump_sequence`
+/// below), but still a good short, light "blip" — now the light hit's own crunch.
 fn synth_jump_blip() -> Vec<i16> {
     synth(0.09, |t, duration| {
         let progress = t / duration;
         let freq = 420.0 + progress * 480.0;
         sine(freq, t) * linear_decay(progress)
     })
+}
+
+/// A quick ascending four-note square-wave arpeggio, closer to a real Mario jump cue than a
+/// single sliding tone — each note gets its own short percussive decay rather than one smooth
+/// sweep, so it reads as a "doot-doot-doot-doot" run.
+fn synth_jump_sequence() -> Vec<i16> {
+    const NOTES_HZ: [f32; 4] = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+    const NOTE_DURATION: f32 = 0.045;
+
+    let mut samples = Vec::new();
+    for &freq in &NOTES_HZ {
+        samples.extend(synth(NOTE_DURATION, move |t, duration| {
+            let progress = t / duration;
+            square(freq, t) * exponential_decay(progress, 4.0)
+        }));
+    }
+    samples
 }
 
 /// A fast downward sweep with a touch of noise mixed in, reading as a whoosh rather than a tone.
@@ -76,9 +95,10 @@ fn synth_attack_slash() -> Vec<i16> {
     })
 }
 
-/// A short burst of low-passed noise: a thud rather than a tone, for the impact half of a landed
-/// hit. The one-pole lowpass is deliberately crude (a running average of consecutive samples) —
-/// enough to round the noise off into a crunch instead of a hiss, nothing fancier is needed.
+/// A short burst of low-passed noise: a thud rather than a tone, for a landed heavy hit's impact
+/// (see `MarioSfx::heavy_hit`). The one-pole lowpass is deliberately crude (a running average of
+/// consecutive samples) — enough to round the noise off into a crunch instead of a hiss, nothing
+/// fancier is needed.
 fn synth_hit_crunch() -> Vec<i16> {
     let mut noise = Xorshift32::new(0xC70C_11);
     let mut previous = 0.0;
@@ -100,17 +120,20 @@ fn synth_hit_hurt() -> Vec<i16> {
     })
 }
 
-/// A longer, lower noise burst for a death: the same low-pass approach as the hit crunch, just
-/// longer and with a slower decay so it reads as a pop/explosion rather than a quick impact.
+/// A longer, heavier noise burst for a death: the same low-pass approach as the hit crunch, but
+/// longer, more aggressively filtered (less hiss, more thud), and layered with a low sine "sub"
+/// dropping in pitch underneath the noise — a boom, not just a bigger crunch.
 fn synth_death_pop() -> Vec<i16> {
     let mut noise = Xorshift32::new(0xDEAD_B0);
     let mut previous = 0.0;
-    synth(0.32, move |t, duration| {
+    synth(0.5, move |t, duration| {
         let progress = t / duration;
         let raw = noise.next_signed();
-        let filtered = previous * 0.75 + raw * 0.25;
+        let filtered = previous * 0.85 + raw * 0.15;
         previous = filtered;
-        filtered * exponential_decay(progress, 4.0)
+        let sub_freq = 90.0 - progress * 50.0;
+        let sub = sine(sub_freq, t);
+        (filtered * 0.6 + sub * 0.6) * exponential_decay(progress, 2.5)
     })
 }
 
