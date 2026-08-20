@@ -71,6 +71,10 @@ pub struct WantsWebView {
     /// doc comment. `None` means no custom scheme is registered, same "no opinion unless asked"
     /// reasoning as `user_agent`/`on_link_context_menu`.
     pub custom_scheme: Option<CustomSchemeHandler>,
+    /// Forwarded straight to `escher_webview::WebView::attach`'s own `initial_script`. Empty
+    /// string (no script) is the common case, same "no opinion unless asked" reasoning as the
+    /// fields above.
+    pub initial_script: String,
 }
 
 pub struct WebViewPlugin;
@@ -106,6 +110,7 @@ fn attach_pending_webviews(
             wants.user_agent.as_deref(),
             move |url| on_link_context_menu.as_ref().map(|f| f(url)).unwrap_or_default(),
             wants.custom_scheme.clone(),
+            &wants.initial_script,
         ) {
             Ok(webview) => {
                 handles.0.insert(entity, webview);

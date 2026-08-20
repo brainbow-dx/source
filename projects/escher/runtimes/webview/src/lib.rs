@@ -125,6 +125,12 @@ impl WebView {
     /// by calling `handler.handler` instead of the network, same as any other in-app custom-scheme
     /// browser feature (an internal settings page, say).
     ///
+    /// `initial_script`: injected into this webview's very first page load and every one after
+    /// it, same as calling `add_script` right after `attach` returns would for every load *but*
+    /// the first — this webview's first navigation is already underway by the time `attach`
+    /// returns (it's what loads `url`), so a script only added afterward would miss it. Empty
+    /// string ("no extensions configured", the common case) is a harmless no-op.
+    ///
     /// Must be called from the main thread. Platform UI toolkits (AppKit included) require it.
     pub fn attach(
         parent: RawWindowHandle,
@@ -134,20 +140,22 @@ impl WebView {
         user_agent: Option<&str>,
         on_link_context_menu: impl Fn(&str) -> Vec<ContextMenuItem> + 'static,
         custom_scheme: Option<CustomSchemeHandler>,
+        initial_script: &str,
     ) -> Result<Self, WebViewError> {
         #[cfg(target_os = "macos")]
         {
-            macos::attach(parent, url, top_inset, left_inset, user_agent, on_link_context_menu, custom_scheme).map(|inner| WebView { inner })
+            macos::attach(parent, url, top_inset, left_inset, user_agent, on_link_context_menu, custom_scheme, initial_script).map(|inner| WebView { inner })
         }
 
         #[cfg(target_os = "windows")]
         {
-            windows::attach(parent, url, top_inset, left_inset, user_agent, on_link_context_menu, custom_scheme).map(|inner| WebView { inner })
+            windows::attach(parent, url, top_inset, left_inset, user_agent, on_link_context_menu, custom_scheme, initial_script)
+                .map(|inner| WebView { inner })
         }
 
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
-            let _ = (parent, url, top_inset, left_inset, user_agent, on_link_context_menu, custom_scheme);
+            let _ = (parent, url, top_inset, left_inset, user_agent, on_link_context_menu, custom_scheme, initial_script);
             Err(WebViewError::UnsupportedWindowHandle)
         }
     }
@@ -237,6 +245,23 @@ impl WebView {
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
             let _ = hidden;
+        }
+    }
+
+    /// Injects `js` into every page this webview loads from now on — not the currently-loaded
+    /// page retroactively, only navigations from this point on. No `chrome.*`/`browser.*` API
+    /// surface, no manifest-driven per-URL matching, no isolated execution context: this is a
+    /// deliberately minimal dev-tool mechanism (see `spec/.agents/proposals/
+    /// webview-script-injection-mvp.md` for the MVP this backs, and `webview-extension-support-
+    /// full.md` for what a real extension model would add on top), not an extension runtime.
+    pub fn add_script(&self, js: &str) {
+        #[cfg(any(target_os = "macos", target_os = "windows"))]
+        {
+            self.inner.add_script(js);
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        {
+            let _ = js;
         }
     }
 

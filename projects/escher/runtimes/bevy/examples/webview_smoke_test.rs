@@ -61,6 +61,7 @@ fn attach_webview_once(window_query: Query<&RawHandleWrapper>, mut keep_alive: N
         Some(escher_webview::DEFAULT_USER_AGENT),
         |_link_url| Vec::new(),
         None,
+        "",
     ) {
         Ok(webview) => {
             tracing::info!("WebView attached");

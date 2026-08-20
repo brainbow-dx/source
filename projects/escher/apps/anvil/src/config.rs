@@ -33,6 +33,11 @@ pub struct AnvilConfig {
     pub ollama: Option<ServiceConfig>,
     pub window: Option<WindowConfig>,
     pub welcome: Option<WelcomeConfig>,
+    /// Directories (relative to this project's own directory, same convention as everything else
+    /// here) of `.js`/`.css` files mounted into every browser tab's webview at startup. See
+    /// `extensions::load_extensions` and `spec/.agents/proposals/
+    /// webview-script-injection-mvp.md` — a dev-tool mechanism, not a real extension runtime.
+    pub extensions: Option<Vec<String>>,
 }
 
 /// Lets a project override the new-user welcome overview's one-line tagline and the small usage
@@ -93,7 +98,8 @@ pub fn run_init(sqld_url_override: Option<String>, ollama_url_override: Option<S
     let sqld_url = resolve_service("sqld", "sqld-url", sqld_url_override, DEFAULT_SQLD_URL, "db0");
     let ollama_url = resolve_service("Ollama", "ollama-url", ollama_url_override, DEFAULT_OLLAMA_URL, "ollama");
 
-    let config = AnvilConfig { sqld: Some(ServiceConfig { url: sqld_url }), ollama: Some(ServiceConfig { url: ollama_url }), window: None, welcome: None };
+    let config =
+        AnvilConfig { sqld: Some(ServiceConfig { url: sqld_url }), ollama: Some(ServiceConfig { url: ollama_url }), window: None, welcome: None, extensions: None };
 
     match config.save_to_cwd() {
         Ok(()) => println!("Wrote {CONFIG_FILE_NAME} — future `anvil` launches here will use these addresses directly."),

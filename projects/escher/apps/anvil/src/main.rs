@@ -1,6 +1,7 @@
 extern crate alloc;
 
 mod config;
+mod extensions;
 mod persistence;
 mod process;
 mod shape;
@@ -795,6 +796,7 @@ fn attach_pending_tab_webviews(
             Some(escher_webview::DEFAULT_USER_AGENT),
             link_context_menu_items(state.pending_browser_urls.clone(), Clone::clone(&event_loop_proxy)),
             Some(anvil_scheme_handler()),
+            &state.extensions_script,
         ) {
             Ok(webview) => {
                 webview.set_hidden(active != Some(tab.id));
@@ -1196,6 +1198,13 @@ fn main() -> Result<ExitCode> {
     let welcome_config = project_config.as_ref().and_then(|config| config.welcome.as_ref());
     let welcome_tagline = welcome_config.and_then(|welcome| welcome.tagline.clone()).unwrap_or_else(|| WELCOME_TAGLINE.to_string());
     let welcome_footer = welcome_config.and_then(|welcome| welcome.footer.clone()).unwrap_or_else(|| DEFAULT_WELCOME_FOOTER.to_string());
+    // `.anvil.toml`'s `[extensions]` list, read once at startup and mounted into every browser
+    // tab's webview from then on (`attach_pending_tab_webviews`) — see `extensions.rs`.
+    let extensions_script = project_config
+        .as_ref()
+        .and_then(|config| config.extensions.as_ref())
+        .map(|dirs| extensions::load_extensions(dirs))
+        .unwrap_or_default();
 
     // `--connect` first, then `ATLAS_SYNC_URL` (the same env var Atlas's own `examples/sync`
     // already reads for exactly this; reusing it rather than inventing an Anvil-specific one),
@@ -1333,6 +1342,7 @@ fn main() -> Result<ExitCode> {
         always_on_top,
         welcome_tagline,
         welcome_footer,
+        extensions_script,
     ));
 
     // "Relay console, escher, etc" should always be reachable from a `*.localhost` URL for as
@@ -2313,6 +2323,12 @@ struct AppState {
     /// `.anvil.toml`'s `[welcome]` table (or this app's own built-in default text).
     welcome_tagline: String,
     welcome_footer: String,
+    /// Combined JS from `.anvil.toml`'s `[extensions]` directories (see `extensions.rs`), resolved
+    /// once in `main`. Mounted into every browser tab's webview as it attaches
+    /// (`attach_pending_tab_webviews`), not re-read from disk per tab. Empty string, not `Option`,
+    /// since `WebView::add_script("")` is already a harmless no-op — one fewer branch at every
+    /// call site for a value that's almost always empty anyway.
+    extensions_script: String,
 }
 
 impl AppState {
@@ -2332,6 +2348,7 @@ impl AppState {
         always_on_top: bool,
         welcome_tagline: String,
         welcome_footer: String,
+        extensions_script: String,
     ) -> Self {
         let mut commands = builtin_commands();
         commands.extend(discover_js_commands(&anvil_root()));
@@ -2386,6 +2403,7 @@ impl AppState {
             always_on_top,
             welcome_tagline,
             welcome_footer,
+            extensions_script,
         };
 
         state.spawn_connect_persistence(sqld_url);

@@ -68,6 +68,10 @@ pub struct WebViewInner {
     /// of dropping it. It's applied the moment the completion callback populates `ready` (see
     /// `attach`'s own closure).
     pending_url: Rc<RefCell<Option<String>>>,
+    /// Same "not ready yet" degradation as `pending_url`, for `add_script`. Unlike `pending_url`
+    /// (only the *last* call matters, a webview only ever shows one URL at a time), every queued
+    /// script here gets applied, in order, once `ready` is populated.
+    pending_scripts: Rc<RefCell<Vec<String>>>,
 }
 
 fn current_bounds(hwnd: HWND, top_inset: f64, left_inset: f64) -> RECT {
@@ -152,6 +156,24 @@ impl WebViewInner {
             if let Err(error) = ready.controller.put_bounds(bounds) {
                 tracing::warn!("WebView2 put_bounds failed: {error}");
             }
+        }
+    }
+
+    /// Injects `js` into every page this webview loads from now on (not the currently-loaded
+    /// page retroactively). Queued in `pending_scripts` and applied once `ready` is populated if
+    /// called before then, the same "not ready yet" degradation `load` already uses for exactly
+    /// this reason (see this module's own doc comment on why that window is real, not
+    /// theoretical). This is the dev-tool "extension" mechanism (see `spec/.agents/proposals/
+    /// webview-script-injection-mvp.md`): no `chrome.*`/`browser.*` API surface, no
+    /// manifest-driven per-URL matching, just "run this JS on every page."
+    pub fn add_script(&self, js: &str) {
+        match self.ready.borrow().as_ref() {
+            Some(ready) => {
+                if let Err(error) = ready.webview.add_script_to_execute_on_document_created(js, |_id| Ok(())) {
+                    tracing::warn!("WebView2 add_script_to_execute_on_document_created failed: {error}");
+                }
+            }
+            None => self.pending_scripts.borrow_mut().push(js.to_string()),
         }
     }
 }
@@ -240,6 +262,7 @@ pub fn attach(
     _user_agent: Option<&str>,
     _on_link_context_menu: impl Fn(&str) -> Vec<ContextMenuItem> + 'static,
     custom_scheme: Option<CustomSchemeHandler>,
+    initial_script: &str,
 ) -> Result<WebViewInner, WebViewError> {
     let RawWindowHandle::Win32(win32_handle) = parent else {
         return Err(WebViewError::UnsupportedWindowHandle);
@@ -247,9 +270,14 @@ pub fn attach(
     let hwnd = win32_handle.hwnd.get() as HWND;
 
     let url = url.to_string();
+    let initial_script = initial_script.to_string();
     let loading = Arc::new(AtomicBool::new(false));
     let ready: Rc<RefCell<Option<Ready>>> = Rc::new(RefCell::new(None));
     let pending_url: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
+    // Seeded with `initial_script` up front (rather than calling `add_script` after this function
+    // returns) so even this webview's very first navigation, kicked off before `attach` returns,
+    // gets it -- the completion closure below drains this queue before that first `navigate`.
+    let pending_scripts: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(if initial_script.is_empty() { Vec::new() } else { vec![initial_script] }));
     let left_inset_cell = Rc::new(RefCell::new(left_inset));
     let hidden_cell = Rc::new(RefCell::new(false));
 
@@ -261,6 +289,7 @@ pub fn attach(
     let build_result = {
         let ready = ready.clone();
         let pending_url = pending_url.clone();
+        let pending_scripts = pending_scripts.clone();
         let left_inset_cell = left_inset_cell.clone();
         let hidden_cell = hidden_cell.clone();
         let loading = loading.clone();
@@ -317,6 +346,14 @@ pub fn attach(
 
                 subclass_for_resize(hwnd, top_inset, left_inset_cell.clone(), controller.clone());
 
+                // Registered before the first navigation, so even the very first page load gets
+                // whatever scripts were queued (e.g. this instance's extensions) applied to it.
+                for script in pending_scripts.borrow_mut().drain(..) {
+                    if let Err(error) = webview.add_script_to_execute_on_document_created(&script, |_id| Ok(())) {
+                        tracing::warn!("WebView2 add_script_to_execute_on_document_created failed: {error}");
+                    }
+                }
+
                 let initial_url = pending_url.borrow_mut().take().unwrap_or(url);
                 webview.navigate(&initial_url)?;
 
@@ -330,5 +367,5 @@ pub fn attach(
         return Err(WebViewError::PlatformError(error.to_string()));
     }
 
-    Ok(WebViewInner { hwnd, top_inset, left_inset: left_inset_cell, hidden: hidden_cell, loading, ready, pending_url })
+    Ok(WebViewInner { hwnd, top_inset, left_inset: left_inset_cell, hidden: hidden_cell, loading, ready, pending_url, pending_scripts })
 }

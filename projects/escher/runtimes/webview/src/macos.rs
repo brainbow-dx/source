@@ -48,6 +48,8 @@ use objc2_web_kit::WKNavigationDelegate;
 use objc2_web_kit::WKUIDelegate;
 use objc2_web_kit::WKURLSchemeHandler;
 use objc2_web_kit::WKURLSchemeTask;
+use objc2_web_kit::WKUserScript;
+use objc2_web_kit::WKUserScriptInjectionTime;
 use objc2_web_kit::WKWebView;
 use objc2_web_kit::WKWebViewConfiguration;
 
@@ -432,6 +434,27 @@ impl WebViewInner {
         self.loading.load(Ordering::Relaxed)
     }
 
+    /// Injects `js` into every page this webview loads from now on (not the currently-loaded
+    /// page retroactively — `WKUserScript`s only apply to navigations that happen after they're
+    /// added). At document start, in every frame, in the page's own JS world (not an isolated
+    /// one), so injected code can freely read/modify the page exactly like a real inline
+    /// `<script>` would. This is the dev-tool "extension" mechanism (see `spec/.agents/
+    /// proposals/webview-script-injection-mvp.md`): no `chrome.*`/`browser.*` API surface, no
+    /// manifest-driven per-URL matching, just "run this JS on every page," the same as a
+    /// userscript.
+    pub fn add_script(&self, js: &str) {
+        let mtm = MainThreadMarker::new().expect("add_script must be called from the main thread, same as every other WebView method");
+        let script = unsafe {
+            WKUserScript::initWithSource_injectionTime_forMainFrameOnly(
+                WKUserScript::alloc(mtm),
+                &NSString::from_str(js),
+                WKUserScriptInjectionTime::AtDocumentStart,
+                false,
+            )
+        };
+        unsafe { self.handle.configuration().userContentController().addUserScript(&script) };
+    }
+
     /// Re-trims the left edge (e.g. a tab strip being collapsed/expanded after this webview was
     /// already attached). Same inset math `attach` uses, just re-run against the host's current
     /// frame instead of a one-time snapshot of it.
@@ -467,6 +490,7 @@ pub fn attach(
     user_agent: Option<&str>,
     on_link_context_menu: impl Fn(&str) -> Vec<ContextMenuItem> + 'static,
     custom_scheme: Option<CustomSchemeHandler>,
+    initial_script: &str,
 ) -> Result<WebViewInner, WebViewError> {
     let RawWindowHandle::AppKit(appkit_handle) = parent else {
         return Err(WebViewError::UnsupportedWindowHandle);
@@ -558,6 +582,12 @@ pub fn attach(
         _context_menu_delegate: context_menu_delegate,
         _scheme_task_handler: scheme_task_handler,
     };
+    // Registered before the initial `load` below: `WKUserScript`s only apply to navigations that
+    // start after they're added, so this order is what makes the very first page this webview
+    // ever shows get `initial_script` too, not just every one after it.
+    if !initial_script.is_empty() {
+        inner.add_script(initial_script);
+    }
     inner.load(url)?;
 
     ns_view.addSubview(&inner.handle);
