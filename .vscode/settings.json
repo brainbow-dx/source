@@ -15,5 +15,12 @@
     },
     "files.associations": {
         "*.ethos": "hcl"
+    },
+    // Markdown parsers generally respect line breaks in the source as real breaks (or at least
+    // paragraph boundaries) — hand-wrapping prose at some fixed column bakes formatting into the
+    // content itself and fights any renderer with its own width. Let lines run long and use the
+    // editor's own soft-wrap display instead.
+    "[markdown]": {
+        "editor.wordWrap": "on"
     }
 }

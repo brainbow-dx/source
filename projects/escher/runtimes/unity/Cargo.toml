@@ -11,8 +11,7 @@ edition = "2024"
 # (a `pub use ethos_ecma::runtime::ffi as ffi;` convenience re-export, never actually consumed by
 # anything), but that pulled `deno_runtime`'s build-time `swc_allocator` into escher's main
 # workspace Cargo.lock, conflicting with escher-core's own nightly `allocator_api` bumpalo feature
-# (bumpalo treats the two as mutually exclusive — see `escher/spec/.agents/changelog.md`'s
-# 2026-08-13 "Fixed swc_allocator/bumpalo feature conflict" entry). Removing the unused dependency
+# (bumpalo treats the two as mutually exclusive). Removing the unused dependency
 # instead of isolating this crate into its own workspace keeps it a normal member of escher's main
 # workspace, consistent with every other `runtimes/*` crate — no Rust-level FFI surface here means
 # nothing here ever needs deno_runtime in the first place. This is the home for the Unity `Assets/`
@@ -23,3 +22,7 @@ edition = "2024"
 # `deno_runtime`/`bumpalo`.
 [dependencies]
 csbindgen = { version = "1.9" }
+# Only for `src/bin/export_shape.rs`'s JSON parsing of `ethos-cli run-command`'s stdout — plain
+# `serde_json`, not `ethos-ecma`/`ethos-deno`, so the `bumpalo`/`swc_allocator` conflict this
+# crate's own doc comment above describes doesn't apply here.
+serde_json = { workspace = true, features = ["std"] }

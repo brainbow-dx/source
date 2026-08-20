@@ -2,7 +2,8 @@
 
 Drafted 2026-08-15. Proposed split of Escher work across two people, each running their own
 Claude Code agents at an agreed cadence, so both stay busy without stepping on each other or
-blocking on work the other hasn't finished yet.
+blocking on work the other hasn't finished yet. Confirmed and scope-clarified 2026-08-17, once
+Nasia was actually onboarded — see that section below for what changed.
 
 ## The split
 
@@ -10,6 +11,25 @@ blocking on work the other hasn't finished yet.
 
 **Track B (Nasia):** Bring the existing apps/examples up to speed, then build out the Escher
 editor's UI — everything visual and interactive, up to the exact line below.
+
+**2026-08-17 scope clarification**: "the Escher editor's UI" reads narrowly on its own — confirmed
+directly that Track B's scope is Escher's whole editor-facing surface, not just `packages/edit`'s
+own UI: Anvil (including the browser chrome) and Hudd (the floating toolbar/annotation overlay,
+`apps/hudd` — still a stub as of this writing) both fall under Track B, and Desktop (`apps/desktop`)
+will once real work starts there. `spec/.agents/proposals/anvil-hudd-vertical-slice.md` is the
+concrete near-term work this split feeds into — its "Anvil workstream" and "Hudd workstream" are
+both Track B; its "Atlas workstream" is Track A. That doc deliberately doesn't reuse "Track A/B"
+for its own three pieces, precisely to avoid colliding with the meaning of those letters here.
+
+## Prerequisite: Anvil peer chat
+
+Before these two tracks can actually run independently day to day rather than needing a separate
+channel for "hey, are you touching this file right now" — priority #1 as of 2026-08-17, ahead of
+either track's own work below. See `spec/.agents/proposals/anvil-peer-chat.md` for the concrete
+plan: a minimal two-person chat inside Anvil's existing transcript UI, persisted through whichever
+of the two hosts is running `sqld`. Deliberately not built on Atlas/WebRTC — see
+`atlas/spec/.agents/proposals/direct-peer-connections-threshold.md` for why coordination-shaped
+data like this is sqld-sync's job, not the peer-connectivity work Track A owns.
 
 ## The editor boundary, precisely
 

@@ -33,6 +33,7 @@
         "@std/async/debounce": "jsr:@std/async@1.5.0/debounce",
         "@std/fmt/colors": "jsr:@std/fmt@1.0.8/colors",
         "@std/fs": "jsr:@std/fs@1.0.24",
+        "@std/http/file-server": "jsr:@std/http@1.0.13/file-server",
         "@std/path": "jsr:@std/path@1.1.6",
         "@std/uuid": "jsr:@std/uuid@1.1.1",
         "@std/async": "jsr:@std/async@1.5.0",
@@ -58,6 +59,7 @@
         "../ethos"
     ],
     "workspace": [
+        "./apps/anvil",
         "./apps/hudd",
         "./apps/desktop",
         "./packages/core",

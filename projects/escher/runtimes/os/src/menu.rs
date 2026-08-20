@@ -1,10 +1,10 @@
-//! The application menu bar (macOS) — built from standard, pre-wired roles (quit, hide, copy,
-//! paste, etc.) rather than arbitrary custom actions. Standard AppKit action selectors
-//! (`terminate:`, `copy:`, ...) route through the responder chain automatically with no target
-//! object needed — that's *why* only roles are supported today: a custom click-handler (an
-//! arbitrary Rust closure firing on click) needs a real Objective-C target object receiving the
-//! action selector, which is real, nontrivial work not attempted in this pass. Plain `Item`s are
-//! visible but inert until that lands.
+//! The application menu bar (macOS) — standard, pre-wired roles (quit, hide, copy, paste, etc.)
+//! route through AppKit's responder chain automatically with no target object needed; a custom
+//! `MenuItem::Item` action needs a real Objective-C target object receiving the click, which
+//! `macos::menu::MenuActionTarget` provides (same shape as `escher_appkit::action::ActionTarget`,
+//! duplicated rather than depended on — `escher-appkit` depends on this crate, not the reverse).
+
+use std::sync::Arc;
 
 use crate::OsError;
 
@@ -30,11 +30,15 @@ pub enum MenuRole {
     SelectAll,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum MenuItem {
     Role(MenuRole),
-    /// A plain, currently-inert item (see this module's doc comment).
-    Item { label: String, key_equivalent: String },
+    /// A custom action item — `action` fires on click, real and wired (not the inert placeholder
+    /// this used to be). `Arc<dyn Fn() + Send + Sync>`, not a plain `Rc`/`Box`: `MenuItem` has to
+    /// stay `Send + Sync` since it lives in `escher_bevy::os::OsPlugin`, a real Bevy `Plugin`
+    /// (which requires that bound); `Arc` also keeps a `MenuItem` tree cheaply `Clone`, matching
+    /// `MenuRole`'s own `Copy`.
+    Item { label: String, key_equivalent: String, action: Arc<dyn Fn() + Send + Sync> },
     Separator,
     Submenu { label: String, items: Vec<MenuItem> },
 }

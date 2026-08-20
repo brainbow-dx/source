@@ -19,6 +19,8 @@ mod action;
 mod favicon;
 mod hover;
 #[cfg(target_os = "macos")]
+mod icons;
+#[cfg(target_os = "macos")]
 pub mod surface;
 #[cfg(target_os = "macos")]
 mod views;
@@ -30,9 +32,11 @@ pub mod shortcuts;
 
 #[cfg(all(target_os = "macos", feature = "bevy"))]
 pub mod bevy;
+#[cfg(all(target_os = "macos", feature = "bevy"))]
+mod bevy_state;
 
 #[cfg(target_os = "macos")]
-pub use surface::{AppKitSurface, FaviconImage, NativeEvent};
+pub use surface::{AppKitSurface, FaviconImage, NativeEvent, MAX_WIDTH, MIN_WIDTH, RESIZE_HANDLE_WIDTH};
 
 /// Fixed height, in points, every scene window reserves at its top for the toolbar — matches
 /// `runtimes/os/src/macos/chrome.rs`'s old `CHROME_BAR_HEIGHT`, kept the same value for parity.

@@ -4,21 +4,57 @@
 //! RawWindowHandle`, not a Bevy (or any other engine's) window type, so any runtime that can
 //! produce one can use this crate directly.
 
+use std::sync::Arc;
+
 use raw_window_handle::RawWindowHandle;
 
 #[cfg(target_os = "macos")]
 mod macos;
 
+#[cfg(target_os = "windows")]
+mod windows;
+
+/// One caller-supplied item appended to a link's native right-click context menu — see
+/// [`WebView::attach`]'s `on_link_context_menu` parameter. `Arc<dyn Fn() + Send + Sync>`, not
+/// `Box`, for the same reason `escher_os::menu::MenuItem::Item`'s action is: this needs to survive
+/// being handed across into AppKit's target-action mechanism, which requires a stable, shareable
+/// handle, not a one-shot `FnOnce`. Deliberately carries no built-in actions (no "Open in New Tab"
+/// here) — this crate only detects *that* a link was right-clicked and exposes its URL; deciding
+/// what to actually offer is entirely the caller's job; see `apps/anvil`'s use site.
+pub struct ContextMenuItem {
+    pub label: String,
+    pub action: Arc<dyn Fn() + Send + Sync>,
+}
+
+/// Registers a custom URL scheme (e.g. `"anvil"`, for `anvil://settings`) this webview serves
+/// itself instead of asking the network for — see [`WebView::attach`]'s `custom_scheme`
+/// parameter. `handler` is called with the full requested URL; `Some(html)` serves that HTML back
+/// as the response, `None` fails the request (WebKit reports it as a load error, same as a real
+/// 404 would read to the page). This crate has no opinion on what scheme or what content a caller
+/// wants — deciding that is entirely the caller's job, same reasoning as `ContextMenuItem`.
+#[derive(Clone)]
+pub struct CustomSchemeHandler {
+    pub scheme: String,
+    pub handler: Arc<dyn Fn(&str) -> Option<String> + Send + Sync>,
+}
+
 /// Why [`WebView::attach`] failed.
 #[derive(Debug)]
 pub enum WebViewError {
     /// No backend exists for this platform/window handle type yet (only `RawWindowHandle::AppKit`
-    /// on macOS is supported today).
+    /// on macOS and `RawWindowHandle::Win32` on Windows are supported today).
     UnsupportedWindowHandle,
     /// AppKit calls are main-thread-only; `attach` wasn't called from it.
     NotOnMainThread,
-    /// `url` failed to parse as an `NSURL`.
+    /// `url` failed to parse (an `NSURL` on macOS; a plain navigate failure on Windows).
     InvalidUrl,
+    /// A platform backend's own underlying call failed in a way none of the variants above
+    /// already describe — carries that failure's `Display` text verbatim rather than
+    /// classifying every possible native error (COM `HRESULT`s on Windows, say) into its own
+    /// variant. Windows-only today (`windows::attach`'s `EnvironmentBuilder::build` failing to
+    /// even kick off the async environment/controller creation), but not gated to that platform
+    /// — any backend can reach for this instead of inventing a new variant per failure mode.
+    PlatformError(String),
 }
 
 impl std::fmt::Display for WebViewError {
@@ -27,6 +63,7 @@ impl std::fmt::Display for WebViewError {
             WebViewError::UnsupportedWindowHandle => write!(f, "no webview backend for this window handle type"),
             WebViewError::NotOnMainThread => write!(f, "must be called from the main thread"),
             WebViewError::InvalidUrl => write!(f, "invalid URL"),
+            WebViewError::PlatformError(message) => write!(f, "{message}"),
         }
     }
 }
@@ -55,6 +92,9 @@ pub struct WebView {
     #[cfg(target_os = "macos")]
     #[allow(dead_code)]
     inner: macos::WebViewInner,
+    #[cfg(target_os = "windows")]
+    #[allow(dead_code)]
+    inner: windows::WebViewInner,
 }
 
 impl WebView {
@@ -73,16 +113,41 @@ impl WebView {
     /// is right is an app-level policy choice, not something a reusable webview-attach crate should
     /// decide unasked.
     ///
+    /// `on_link_context_menu`: called with a link's URL whenever the user right-clicks it,
+    /// returning whatever extra items to append to WebKit's own default menu (Open Link, Copy
+    /// Link, etc.) — an empty `Vec` leaves that default menu untouched. Never called for a
+    /// right-click that isn't over a link (image, plain text, ...); that case always gets WebKit's
+    /// unmodified default menu, no hook available yet for it.
+    ///
+    /// `custom_scheme`: `None` registers nothing extra — every URL goes over the network as
+    /// normal. `Some(handler)` makes this webview able to load `<handler.scheme>://...` URLs
+    /// (typed in an address bar, navigated to in code, or loaded at attach time via `url` itself)
+    /// by calling `handler.handler` instead of the network, same as any other in-app custom-scheme
+    /// browser feature (an internal settings page, say).
+    ///
     /// Must be called from the main thread — platform UI toolkits (AppKit included) require it.
-    pub fn attach(parent: RawWindowHandle, url: &str, top_inset: f64, left_inset: f64, user_agent: Option<&str>) -> Result<Self, WebViewError> {
+    pub fn attach(
+        parent: RawWindowHandle,
+        url: &str,
+        top_inset: f64,
+        left_inset: f64,
+        user_agent: Option<&str>,
+        on_link_context_menu: impl Fn(&str) -> Vec<ContextMenuItem> + 'static,
+        custom_scheme: Option<CustomSchemeHandler>,
+    ) -> Result<Self, WebViewError> {
         #[cfg(target_os = "macos")]
         {
-            macos::attach(parent, url, top_inset, left_inset, user_agent).map(|inner| WebView { inner })
+            macos::attach(parent, url, top_inset, left_inset, user_agent, on_link_context_menu, custom_scheme).map(|inner| WebView { inner })
         }
 
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(target_os = "windows")]
         {
-            let _ = (parent, url, top_inset, left_inset, user_agent);
+            windows::attach(parent, url, top_inset, left_inset, user_agent, on_link_context_menu, custom_scheme).map(|inner| WebView { inner })
+        }
+
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        {
+            let _ = (parent, url, top_inset, left_inset, user_agent, on_link_context_menu, custom_scheme);
             Err(WebViewError::UnsupportedWindowHandle)
         }
     }
@@ -90,11 +155,11 @@ impl WebView {
     /// Navigates the *existing* webview to `url` in place — no new native view, no re-attach.
     /// The one thing `attach` can't do: change what an already-open webview shows.
     pub fn load(&self, url: &str) -> Result<(), WebViewError> {
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "windows"))]
         {
             self.inner.load(url)
         }
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
             let _ = url;
             Err(WebViewError::UnsupportedWindowHandle)
@@ -102,9 +167,10 @@ impl WebView {
     }
 
     /// Steps back in this webview's own back/forward list (in-page navigation included, not just
-    /// top-level loads — see `WKWebView.goBack`). A no-op if there's nowhere to go back to.
+    /// top-level loads — see `WKWebView.goBack`/`ICoreWebView2.GoBack`). A no-op if there's
+    /// nowhere to go back to.
     pub fn go_back(&self) {
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "windows"))]
         {
             self.inner.go_back();
         }
@@ -112,50 +178,63 @@ impl WebView {
 
     /// Steps forward — see `go_back`.
     pub fn go_forward(&self) {
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "windows"))]
         {
             self.inner.go_forward();
         }
     }
 
     pub fn can_go_back(&self) -> bool {
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "windows"))]
         {
             return self.inner.can_go_back();
         }
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         false
     }
 
     pub fn can_go_forward(&self) -> bool {
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "windows"))]
         {
             return self.inner.can_go_forward();
         }
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         false
     }
 
     /// Whether the main frame is currently loading — a plain instant poll (not a push callback),
-    /// backed by `WKNavigationDelegate` on macOS. Meant to be read every frame from wherever a
-    /// caller already ticks (a toolbar's own redraw system, say), not subscribed to.
+    /// backed by `WKNavigationDelegate` on macOS / `NavigationStarting`/`NavigationCompleted` on
+    /// Windows. Meant to be read every frame from wherever a caller already ticks (a toolbar's
+    /// own redraw system, say), not subscribed to.
     pub fn is_loading(&self) -> bool {
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "windows"))]
         {
             return self.inner.is_loading();
         }
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         false
+    }
+
+    /// The loaded page's own title, polled the same way as `is_loading` (see that method's own
+    /// doc comment) rather than pushed via a callback. `None` on a platform with no backend, or
+    /// before any page has set one yet.
+    pub fn title(&self) -> Option<String> {
+        #[cfg(any(target_os = "macos", target_os = "windows"))]
+        {
+            return self.inner.title();
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        None
     }
 
     /// Shows or hides this webview in place — how multiple webviews sharing one window (one per
     /// browser tab, say) take turns being the visible one without tearing down and reattaching.
     pub fn set_hidden(&self, hidden: bool) {
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "windows"))]
         {
             self.inner.set_hidden(hidden);
         }
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
             let _ = hidden;
         }
@@ -164,11 +243,11 @@ impl WebView {
     /// Re-trims the left edge of an already-attached webview — for a host UI element (a tab strip)
     /// whose width can change after this webview was created, e.g. being collapsed/expanded.
     pub fn set_left_inset(&self, left_inset: f64) {
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "windows"))]
         {
             self.inner.set_left_inset(left_inset);
         }
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
             let _ = left_inset;
         }

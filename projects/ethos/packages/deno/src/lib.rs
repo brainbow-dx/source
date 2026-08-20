@@ -4,6 +4,7 @@
 //! where "how do you actually run JS/TS" lives, independent of any dialect.
 
 pub mod bootstrap;
+pub mod command;
 pub mod config;
 pub mod event;
 pub mod logging;

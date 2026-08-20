@@ -805,7 +805,7 @@ impl Style for ScrollPosition {
 
 //---
 /// Extra edge inset for a detached overlay's fixed-corner positioning (see
-/// `Scaffold::with_overlay`). Deliberately distinct from `Margin`: `Margin` shrinks a node's
+/// `Scaffold::overlay`). Deliberately distinct from `Margin`: `Margin` shrinks a node's
 /// *own* internal content layout, while this only tells the runtime where to place the
 /// overlay's rect — reusing `Margin` for both would mean setting one also (unintentionally)
 /// applies the other.

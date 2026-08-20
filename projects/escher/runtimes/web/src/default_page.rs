@@ -15,16 +15,16 @@ pub struct BodySlot;
 
 pub fn build_page_scaffold(arena: &Bump) -> Scaffold<'_> {
     Scaffold::new_in(arena)
-        .with_style(Padding::all(24))
-        .with_style(Gap(Value::from(12)))
-        .with_style(FlexDirection::Column)
-        .with_style(BackgroundColor::try_from("#1a1a1a").unwrap_or_default())
-        .with_slot::<HeadingSlot>(|slot| {
-            slot.with_content(Some("New Escher Page"))
-                .with_style(ContentColor::try_from("#f5f5f5").unwrap_or_default())
+        .style(Padding::all(24))
+        .style(Gap(Value::from(12)))
+        .style(FlexDirection::Column)
+        .style(BackgroundColor::try_from("#1a1a1a").unwrap_or_default())
+        .slot::<HeadingSlot>(|slot| {
+            slot.content(Some("New Escher Page"))
+                .style(ContentColor::try_from("#f5f5f5").unwrap_or_default())
         })
-        .with_slot::<BodySlot>(|slot| {
-            slot.with_content(Some("This page is rendered by a Scaffold, mounted through the escher-web wasm build."))
-                .with_style(ContentColor::try_from("#a0a0a0").unwrap_or_default())
+        .slot::<BodySlot>(|slot| {
+            slot.content(Some("This page is rendered by a Scaffold, mounted through the escher-web wasm build."))
+                .style(ContentColor::try_from("#a0a0a0").unwrap_or_default())
         })
 }

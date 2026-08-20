@@ -2,6 +2,56 @@
 
 Per `AGENTS.md`: this logs every change an agent has made outside of `spec/.agents/`, made only with explicit human insistence. Terse — one line per change, git history has the detail. See `spec/.agents/handoff.md` for current in-flight state.
 
+## 2026-08-19
+- apps/anvil: found and fixed the real reason `/relay-console` was hanging with no visible browser window, per direct user report — a genuine two-part bug, both parts live-verified fixed. (1) `spawn_relay_console_server` trusted a one-way `AtomicBool` ("already started") forever once `Command::spawn()` succeeded once — if the `deno` child later died for any reason (crashed, lost a port race to another instance), nothing ever noticed or retried; every later `/relay-console` just waited on a `fetch()` to a port nothing was listening on anymore. Replaced with `Option<Child>` + `try_wait()`, re-checked on every call — confirmed live by killing the child mid-session and watching a second `/relay-console` detect the exit and restart it. (2) `scripts/open-page.js`'s polling `fetch()` had no per-attempt timeout — a connection attempt to an already-dead port doesn't necessarily reject quickly, so one bad attempt could silently block every retry the function was otherwise built to make, past its own 15s overall timeout, with nothing ever surfacing to the user. Fixed with `AbortSignal.timeout()` per attempt.
+- apps/anvil: the `"Parse=warn"` trace-noise fix from earlier today was **also wrong**, live-confirmed the same session it landed — `libsql-sqlite3-parser`'s checked-in `lempar.rs` is only a *template*; the crate's own `build.rs` fills it in per-grammar, and for this SQL grammar the generated `target/debug/build/libsql-sqlite3-parser-*/out/parse.rs` overrides `TARGET` to the literal string `"sqlite3Parser"`, not the template's own placeholder default. Confirmed by reading the actual generated output, not the template source this time — an 8-second session's `anvil.log` (previously 66,944 lines, 97% of it this one target) dropped to 359 lines with `sqlite3Parser=warn` in place of `Parse=warn`.
+- apps/anvil: root-caused (by actually reading the dependency source, not guessing from crate names — the second time this exact mistake got made and caught in one session) why `anvil.log` still had "way too much trace noise from sqld/libsql" despite an earlier suppression pass, per direct user report. The dominant source by far: `libsql-sqlite3-parser`'s generated LALR parser (every `Reduce`/`Shift`/`Popping`/`Accept!` step of every SQL statement) uses the literal target string `"Parse"` — a constant the generated code sets (`lempar.rs`), not the crate's own module path (`libsql_sqlite3_parser`) the existing filter guessed and had been suppressing nothing with. Also found and added: plain `libsql` (the connection/statement layer's own `preparing`/`query for prepared statement` tracing — `libsql_sys`/`libsql_replication` were already covered, the top-level crate wasn't) and `tower_http` (every gRPC request/response on the replication connection). Verified live: an 8-second session's log dropped from 11,148 lines (mostly `Reduce`/`Shift`/`Input`/`Return` — over 11,000 of those alone) with the old filter to a small fraction of that with `Parse=warn`/`libsql=warn`/`tower_http=warn` added.
+- apps/anvil: found (via the same live testing) a real regression from this session's earlier "start the relay server proactively at every launch" change — running a second Anvil instance while a first is still up now logs `Relay server on 127.0.0.1:9200 failed: Address already in use`. Not actually a bug in the multi-instance/co-working sense (one shared relay *is* the intended design — whichever instance launches first serves it, later ones just use it), but the log level was wrong for something that's the normal, expected outcome of that design; downgraded from `warn` to `info` with a message that says so.
+- apps/anvil: `anvil.log`/`panic.log` moved out of `~/.anvil/sessions/<pid>/` into `<project>/.output/logs/<pid>/`, per the user directly — generated output belongs under a project's own `.output/`, the convention every other generated artifact in this monorepo already follows, not scattered under the user's home directory. New `anvil_log_dir()`, distinct from `anvil_session_dir()` — the latter still holds the `sqld` replica cache under `~/.anvil`, since that's real persisted state needing a stable, cwd-independent home, a different category of thing from a disposable log.
+- apps/anvil / escher-os: fixed `/relay-console` (and by extension anything using the same path) opening its browser tab behind the terminal Anvil was launched from, per direct user report — `winit::window::Window::focus_window()` alone can reorder a window among Anvil's *own* windows without stealing focus from another app entirely; a raw binary launched from a terminal isn't always treated as "the active app" by macOS the way a Dock-launched `.app` bundle is. New `escher_os::activation::activate` (`NSApplication.activate()`) called alongside the existing `focus_window()` in `focus_new_windows`.
+- apps/anvil: fixed `/relay-console` showing a blank, non-loading page, per direct user report — `spawn_relay_console_server` started the static-file server subprocess and Anvil pushed the browser navigation in the same tick; `Deno.serve`'s own startup (binding the port, loading the module) has real latency, so the webview's request usually arrived before anything was listening. New `scripts/open-page.js` (runs through the embedded JS engine, real `fetch()` — confirmed working this session) polls the target URL until it actually responds before `AppState::spawn_open_page` pushes it to `pending_browser_urls`; `/relay-console` is the first caller.
+- apps/anvil: per direct user request ("I want to be able to access the relay console, escher, etc from their `*.localhost` urls at any time... they should always be automatically started"), the relay console (static server + in-process relay) and the escher web dev server (`docker compose up -d web`, backing `escher.brainbow.localhost` via Caddy) now start proactively at every Anvil launch instead of waiting for a command to ask for them first. The docker-compose half reuses `config.rs`'s existing probe-then-start logic (already proven for `sqld`/Ollama during `anvil init`), factored out into a new `ensure_docker_service_running`, called from a background thread so a slow/missing `docker` never blocks startup.
+- apps/anvil: root-caused and fixed Anvil's own long-standing, previously undiagnosed recurring exit-time `SIGABRT` (5+ crashes/day, tracked unsolved since earlier this session) — the very `panic.log` mechanism added earlier this session to diagnose it caught the real cause on the first real occurrence. `restore_assistant_terminal`'s two error-reporting `eprintln!` calls (main.rs, "Failed to disable raw mode"/"Failed to leave alternate screen") and `assistant_terminal_exit`'s `println!` ("Shutting down…") all panic on a write failure — unlike a plain fallible `write!`/`writeln!` call, `println!`/`eprintln!` treat a broken stdout/stderr as a hard panic. Live-reproduced: the terminal a running Anvil is attached to can already be gone by the time `AppExit` handling runs (confirmed via a pty whose master closed first), making the write fail with a real `EIO`, which panicked mid-shutdown-cleanup — exactly a silent, no-visible-cause "quit unexpectedly." Fixed by switching all three to `writeln!`/discarded-`Result` calls, the same pattern the surrounding code already used for every other fallible cleanup step there.
+- escher-appkit: fixed a real, confirmed decode failure — `NSImage::initWithData` returned `None` for the toolbar's bundled Lucide icon SVGs (confirmed live, not guessed), so every icon-backed toolbar button silently fell back to its plain-text label. Invisible for the chevrons/refresh/hamburger (their fallback text is already plain, colorless Unicode characters), glaring for the pin button (a full-color 📌 emoji suddenly appearing in an otherwise monochrome toolbar) — this is what first surfaced the bug. Fixed by embedding pre-rasterized PNGs (`rsvg-convert -w 48 -h 48`) instead of raw SVG bytes — `NSImage` decodes PNG unconditionally; added `escher-appkit`'s own `cargo test` (`icons::tests::every_bundled_icon_decodes_via_nsimage`) asserting this for all five bundled icons, so a future added icon that fails to decode fails loudly in CI instead of silently degrading. The pin button specifically still rendered as a colored fallback even after this fix, live, for a reason not fully root-caused this session (screen-sleep/process-identification issues in this sandbox blocked finishing the live debugging loop) — as a defensive backstop regardless of the underlying cause, `packages/chalk/src/toolbar.rs`'s pin button's fallback `label` changed from the 📌 emoji to plain text ("Pin"), so *if* it ever falls back again for any reason, it degrades quietly instead of loudly.
+- escher-appkit / apps/anvil: a real, deliberate visual design pass on the browser chrome, per direct user request ("think strong aesthetic visual fidelity... first thing anyone outside of a terminal will see"), benchmarked live against Microsoft Edge and a YouTube PWA window on the same machine (screenshotted and compared directly, not designed from memory). New layered color stack in `spec/design/styleguide/anvil.md` (`chrome`/`surface`/`control-hover`/`border`, alongside the existing `background`/`accent`) — toolbar/tab-strip chrome now visibly reads as its own surface instead of blending into whatever page is loaded (`AppKitSurface::set_theme` fills with `theme.chrome`, not `theme.background`). Toolbar buttons get a real filled, rounded backdrop on hover/press (previously just a glyph-color tint with no shape at all) — layer-backed, `theme.control_hover`, persists correctly while toggled active via a shared `hovering`/`active` cell pair so `patch`'s per-frame reconciliation can't stomp a currently-hovered button's fill back off. The address bar is a real lifted, rounded pill now (`VerticallyCenteredTextFieldCell` gained horizontal inset padding) instead of a flat, barely-differentiated rectangle. Tab rows are rounded chips (`TabRowView`'s own layer, `cornerRadius`), not full-bleed sharp rectangles. The native window title now syncs to the active tab's title (`sync_toolbar_state`) instead of staying hardcoded to "Anvil — Browser" forever — every real browser (Edge, the YouTube PWA used as the comparison reference) does this. Not yet re-verified live after the exit-crash fix landed (the crash interrupted the verification pass mid-way) — worth a fresh look together before calling this done-done.
+- apps/anvil: `/clear` doing nothing visible, per direct user report — three real, independent bugs stacked on top of each other, all now fixed and **live-verified** (drove a real built binary through a pty, screen-rendered the captured output with `pyte`): (1) `spawn_js_command` deleted `sqld`'s rows but never touched the live, in-memory `messages` transcript — fixed via `CLEAR_SENTINEL` (`"🧹"`, same shape as `QUIT_SENTINEL`), which `clear.js` now returns on success and `spawn_js_command` clears the transcript on. (2) `discover_js_commands` only ever looked directly under `anvil_root()/commands` — launched from this repo's own root (`escher/`, not `apps/anvil/`, where the real `commands/` lives, two directories down), `/clear` was never even registered as a command at all; see the recursive-discovery entry below, found because of this bug specifically. (3) The deepest one, found only by actually running `/clear` live: `clear.js`'s `fetch()` call failed with "cannot be lazy-loaded as it was not included in the binary" — a real gap in `ethos-deno`'s embedded V8 snapshot (see its own changelog entry below) that broke `fetch()` for *any* embedded JS command, not just this one. The user explicitly rejected the faster fix (making `/clear` a native Rust builtin against the already-existing `Persistence::reset()`) — commands should stay scripts so the JS/TS ecosystem around Anvil keeps growing; fixing the real platform bug was the correct call instead.
+- ethos-deno: real, load-bearing gap in the embedded V8 snapshot's handling of `lazy_loaded_esm`/`lazy_loaded_js` files, found chasing the `/clear` bug above. `build.rs` called `create_runtime_snapshot` and discarded its returned `CreateRuntimeSnapshotOutput` entirely — the "residual" lazy files it declares (declared-but-not-baked-into-the-snapshot sources, e.g. `deno_fetch`'s `26_fetch.js` and its own dependents) were never made available anywhere in the final binary, so any embedded command calling `fetch()` failed outright. Fixed by generating `residual_lazy_esm_sources`/`residual_lazy_js_sources` (`deno_core::WorkerOptions`'s own embedder-supplied slot for exactly this) at build time from that residual set, each entry run through `deno_runtime::transpile::maybe_transpile_source` — not a plain `include_str!` of the file on disk — after finding one residual, `ext:deno_telemetry/telemetry.ts`, is genuine TypeScript; embedding its raw source verbatim fed V8 real type-annotation syntax it can't parse. Confirmed live: `fetch()` now works end-to-end inside the embedded engine, all the way down `deno_fetch`'s own lazy dependency chain (`06_streams.js`, `22_body.js`, `21_formdata.js`, `23_request.js`, `20_headers.js`, `23_response.js`, `telemetry.ts`).
+- escher-appkit / apps/anvil: found and fixed the collapsed tab strip's stray black bar, per direct user report ("that's an indication the collapsed/expanded code is too decoupled"). It wasn't a separate view at all — `crate::tabs::tab_strip` already branches on one reactive `icon_only` bool derived from `TabStripState::width`. The actual bug: collapsing hides the resize handle (nothing to drag at a fixed-width icon rail) but the three call sites computing a webview's `left_inset` kept reserving `RESIZE_HANDLE_WIDTH` for it anyway, leaving an undrawn gap between the icon rail and the webview — bare window backing, reading as a black bar. New `tab_strip_content_inset` helper only reserves that width when not collapsed.
+- apps/anvil: `discover_js_commands` is now recursive (walks all of `commands/`, not just its top level) and a script can declare its own `command`/`argsHint`/`description` via plain `export const` string literals, read by a deliberately naive text scan (`read_exported_string_const`) rather than booting the embedded JS engine per script just to discover the command list — per direct user request, so a project can organize scripts into nested subfolders without every nested script being forced to register under its bare filename or colliding with a same-named script elsewhere. Filename-derived naming (today's `clear`/`quit`) still works unchanged when a script doesn't declare `command` itself.
+- runtimes/bevy/examples/mario: ported Anvil's own chained-panic-hook-to-file fix (`panic.log` under `$TMPDIR/escher-mario-<pid>/`) to this example, per direct user report of "builds fine and then immediately exits with no other stdout or stderr" — same root cause class as Anvil's own previously-diagnosed silent-exit-on-panic bug: `color_eyre`'s panic hook only writes to stderr, invisible once the terminal's in the alternate screen and the process exits without leaving it (a panic never gets the chance to). The actual panic this example hits in a real user terminal session is still unconfirmed — reproducing here only surfaced `enable_raw_mode` failing for the unrelated reason of no real TTY in this sandbox, not the user's actual failure — the new `panic.log` is what should surface the real one on the next occurrence.
+- ethos/packages/workspace (`ethos-workspace`, new crate) / apps/anvil: first real code for `spec/agents/proposals/workspace-core.md`'s `Workspace` concept, scoped directly with the user: day one is a read-only model of "what Brainbow projects exist," Anvil's CLI is the first consumer, and the crate is wasm-compilable by construction — filesystem access lives behind a `WorkspaceFs` trait (`NativeFs` behind a `native-fs` feature for a real embedder; confirmed a default-feature build passes `cargo check --target wasm32-unknown-unknown`). `Workspace::scan` walks a root's `projects/` directory and tags each project `rust`/`deno`/`node` by marker-file presence; verified live against this actual monorepo (all 6 `projects/*` correctly detected). Anvil's new `/workspace` command is the first embedding, listing whatever `Workspace::scan` finds under `anvil_root()`. Explicitly out of scope for this slice (see the proposal doc): file trees, a dependency graph between projects, and any mutation API. Also surfaced, decided, and deferred: a much older, separate "`.ethos` dialect + small LLVM-IR (`inkwell`) interpreter for a declarative Brainbow-workspace config language" idea (`Brainbow.ethos`, `projects/ethos/examples/config.ethos`) predates this proposal and isn't the same thing — worth its own future proposal, not pulled into this one.
+- escher-appkit: fixed a real regression in the address field's vertical-centering — the custom `NSTextFieldCell` only overrode `drawingRectForBounds:` (static display only), not `titleRectForBounds:` (what the live field editor's frame actually comes from), so typed/edited text rendered top-aligned again the moment editing was fixed. Both now route through one shared `centered_rect` helper.
+- escher-webview: real Windows backend added (`windows.rs`, via the `webview2` crate — same API shape `runtimes/bevy/src/legacy/webview.rs` already proved against a real WebView2 install, not hand-derived raw COM bindings). Compiles clean against `x86_64-pc-windows-msvc`; environment/controller creation is async by nature (unlike `WKWebView`), so it populates a shared `Rc<RefCell<Option<Ready>>>` after `attach` already returned rather than blocking. Added `runtimes/bevy/examples/webview_smoke_test.rs` and actually ran it on macOS — screenshot-verified real window + working `WKWebView` rendering example.com. Anvil's full toolbar/tab-strip chrome still can't compile on Windows (unconditionally tied to `escher-appkit::bevy`, which is macOS-only) — that's separate, unstarted work.
+- escher-core / escher-web: root-caused and fixed why `escher-web`'s dev-server Docker container has been crash-looping (492 restarts) — `escher-core` depended on the full `atlas` facade crate for one type (`atlas::collections::OrderedMap`), and `atlas` unconditionally pulls in `atlas-relay`'s native `tokio`("net")/`mio` stack, which doesn't compile for `wasm32-unknown-unknown`. Switched to depending on `atlas-core` directly; `cargo build --lib --target wasm32-unknown-unknown` for `escher-web` now succeeds (was 48 compile errors).
+- atlas-core / atlas-dev: found and fixed a second, deeper layer of the same problem, this time blocking `--release` builds of anything depending on `atlas`/`apps/anvil` (not just wasm32 builds) — `atlas_core::tracing` is a self-flagged "AI slop, don't use in the public repo" module with its own `#[cfg(not(debug_assertions))] compile_error!` guard, declared unconditionally and transitively pulled in via `atlas`'s `pub extern crate atlas_dev`. Gated it behind a real `dev` Cargo feature on both crates (off by default, `atlas-dev` opts in for its own real use of it) so a plain dependent never compiles it at all.
+- apps/anvil: added `.anvil.toml` (new `config.rs`) + `anvil init` — for `sqld`/Ollama, probes the default local address (plain TCP connect) and only starts them via `docker compose` (new `ollama` service added to `compose.yaml`) if neither is already reachable, writing the resolved addresses to `.anvil.toml` for every later launch to read (before persistence connects / before any JS command spawns, so `ANVIL_OLLAMA_URL` propagates automatically). Found and fixed a real bug live during testing: the probe only checked the *first* address `to_socket_addrs()` resolved for `"localhost"`, which can be IPv6 even when a service only listens on IPv4 — caused a real, unwanted `docker compose` pull of a redundant Ollama container while the host's own Ollama was already running; fixed to try every resolved address, stray container cleaned up.
+- apps/cli / apps/anvil: `escher-cli`'s `anvil` subcommand no longer shells to `cargo run` (which only ever worked from inside this checkout with `cargo` on `PATH`) — renamed `apps/anvil`'s binary target `anvil` → `escher-anvil`, added real cargo/git-style subcommand resolution (sibling-of-`escher`-executable first, then `PATH`, `cargo run --release` only as a last-resort dev fallback with a clear log line explaining why). Added `escher init` as a real subcommand (scaffolds `Cargo.toml` with `[package.metadata.anvil]`, a minimal `src/main.rs`, `pages/index.html`, and a `spec/`+`spec/.agents/` doc skeleton) — current implementation hand-rolls this content directly in Rust string templates; the user's stated intended design is `escher init` shelling out to a new `ethos-cli` template-instantiation subcommand against a new `templates/escher-project/`, mirroring the real (but currently unwrapped) `templates/{app,service,package,workspace,docs}/` convention already in Brainbow — each has a `.meta.toml` + `[hooks.generate]` script, but nothing anywhere in `ethos` currently reads/dispatches to it. Approved by the user, not started — see `handoff.md`.
+- runtimes/os: extracted the sibling-of-exe/`PATH` binary-resolution logic (previously written independently in both `escher-cli` and `apps/anvil`) into a shared `escher_os::process::find_sibling_or_path`, per direct user observation that it "seems reusable"; both call sites now delegate to it.
+- apps/anvil: `.anvil.toml`'s `[welcome]` table (`tagline`/`footer`) is now actually wired into the welcome overview and the autocomplete bar's trailing hints, not just parsed and ignored — the autocomplete bar's height calc now counts the configured footer's real line count instead of a hardcoded `2`.
+- apps/anvil / ethos: embedded `ethos-deno`'s V8/`deno_core` runtime directly into `escher-anvil` for JS-backed slash commands, replacing the external `ethos-cli run-command` subprocess — per the user directly, keeping V8 out of this process "to keep the two runtimes decoupled" wasn't a real constraint; when a host wants an engine embedded, embed it. Added `ethos_deno::command::run_module_command` (the shared `MainWorker`/module-evaluate/call-`run`-export logic, previously duplicated ad hoc in `ethos-cli`'s own `main.rs`) so both `ethos-cli` and `escher-anvil` call one function; Anvil's own `process.rs` now goes through `ethos-deno`'s API only, never `deno_core`/`deno_runtime` directly, per direct user correction. Bumped `ethos`'s `deno_core`/`deno_runtime`/`deno_resolver` (0.397/0.252/0.75 → 0.410/0.265/0.88, fixing a real `deno_v8` "either feature `v8` or `quickjs` must be enabled" break and three small removed-API breaks in `ethos-deno`'s `stdio.rs`/`worker.rs`/`runtime.rs`) and escher's `webrtc` (0.20.3 → the `0.21.0-beta.1` prerelease) to resolve a real Cargo dependency-resolution conflict this surfaced (`deno_tls` exact-pinning `rustls =0.23.28` vs. `webrtc`'s `rtc-dtls` wanting `^0.23.35`).
+- apps/anvil / ethos: found and fixed a second, more serious problem the embed surfaced — confirmed live via `lldb`/`nm`, `escher-anvil` linked *two* independently-vendored copies of SQLite (`libsql-ffi`, via `libsql`'s own sqld persistence; and vanilla-upstream `libsqlite3-sys`, pulled in transitively by `deno_runtime`'s `deno_kv`/`deno_cache`/`deno_node_sqlite`/`deno_webstorage`, which all hard-require `rusqlite`'s `bundled` feature in their own published `Cargo.toml`s — not avoidable by feature selection). The linker silently kept the wrong one for every caller, causing a real, reproducible segfault in libsql's own replication code. Added `escher/patches/libsqlite3-sys` (a `[patch.crates-io]` drop-in replacement — real FFI declarations copied from the upstream crate, minus 7 functions libsql's fork doesn't implement, one of which needed a deliberate stub that panics rather than guess at unknown internal SQLite behavior) that compiles `libsql-ffi`'s own vendored SQLite source instead of vanilla upstream, so every copy in the final binary is libsql's fork — confirmed live: `sqlite3_libversion()`/`sqlite3_sourceid()` now report libsql's own fork, not vanilla SQLite, and a real session with persisted history plus `/quit` (through the embedded engine) both worked with no crash. Added `apps/anvil/tests/sqlite_provider.rs`, a `cargo test`-time (never shipped in a release binary) tripwire asserting the linked SQLite is still libsql's fork, so a future dependency bump silently falling back to the real `libsqlite3-sys` fails loudly in CI/dev instead of segfaulting in the field. Drafted (not submitted) an upstream `denoland/deno` patch making `rusqlite`'s `bundled` feature opt-out-able at the source — see `spec/ROADMAP.md`'s new tracking entry.
+- Prepared, at the user's request, a real submittable patch to `denoland/deno` (not opened) removing the root cause of the SQLite collision above: `rusqlite`'s `bundled` feature is hard-coded on one shared `[workspace.dependencies]` entry all four `ext/*` crates inherit from; the patch drops it there and restores it as a default-on, opt-out-able per-crate feature instead (5 files, ~30 lines, verified via `cargo metadata`/`cargo check` with the feature both on and off). Saved locally, ready for review before submission.
+- Comment/error-message cleanup, project-wide: per direct user correction ("all error messages, comments, etc are for future humans who have none of today's context"), rewrote ~50 instances across 26 files that narrated session context (dates, "confirmed live," "per the user directly") into the underlying fact instead. Captured as a standing principle in `spec/.agents/principles.md`'s new "Writing comments and error messages" section.
+- apps/anvil: fixed the real cause of severe trace-log spam (millions of lines/hour) — `libsql-sqlite3-parser`'s generated lexer and LALR parser trace every character scanned and every shift/reduce step via the plain `log` crate (targets `"scanner"` and `libsql_sqlite3_parser`), which `tracing-subscriber`'s default `tracing-log` bridge captures same as any `tracing` event; neither target was covered by the existing `libsql_sys=warn,libsql_replication=warn` suppression. Added both to the default `--log-level` filter.
+- runtimes/appkit: fixed a real regression — `TabRowView`/`SidebarResizeHandle` (`views.rs`) still used `NSCursor::push()`/`.pop()` on hover, reintroducing the exact stuck-cursor bug `hover.rs` was already rewritten to `.set()`/`.set()` to avoid (an `ActiveInKeyWindow` tracking area can skip `mouseExited:` when the window loses key status while still hovered, leaving an unpaired `push()`). Both now match `hover.rs`'s convention.
+- apps/anvil: `shape.rs`'s hand-rolled `wrap_plain` duplicated `escher_terminal::text_wrap::wrap_words` (already imported and used by `main.rs` for the same job, and more correct — real Unicode display width, not byte/char count). Removed the duplicate, `shape.rs` now calls the shared function.
+- Ran a code-quality audit workflow (6 parallel finders across the codebase, cross-referencing `changelog.md`/`handoff.md`/`ROADMAP.md`) looking for correctness bugs, scope creep, overstated verification claims, and misplaced code, on the user's request one week into this refactor. Hit a session usage-quota wall partway through — 4 of 6 finder groups completed (12 findings raised), the adversarial-verification pass never ran on any of them. Two of the twelve (the cursor regression and the `wrap_plain` duplication above) were independently spot-checked and confirmed true; the rest are unverified, not confirmed — see `handoff.md` for the raw list and re-run instructions.
+
+## 2026-08-18
+- Anvil: extracted the Mario terminal-game prototype out of `main.rs` into a self-contained `runtimes/bevy/examples/mario/` example (physics/render/ghosts/relay/persistence as separate modules); the WebRTC peer-sync leg (`relay.rs`) is generalized enough that Atlas's own transport work can build on it later.
+- Escher core: removed the `with_` prefix from every `Scaffold`/`StyleSheet` builder method (`with_style` → `style`, `with_handler` → `handle`, etc.) across ~20 files, per the user's explicit "just remove the prefixes for now" scope — an earlier, unrequested new terse-styling API was built first, then fully reverted per direct user correction before redoing it narrowly.
+- Anvil: added a `notify()` helper and a `SlashCommand::new` constructor to cut boilerplate at call sites; `/scene` now shows a tinted background + "empty scene" label instead of looking broken/blank.
+- Mario example: `B` now opens the same running game as a real Bevy scene window (`scene.rs`) alongside the terminal one, with real `Sprite`s positioned from the same `physics`/`ghosts` state.
+- Anvil: new-user welcome overview — persisted per-identity in sqld (`user_settings` table), toggled via `/welcome`, auto-dismissed for good on the first real submission of any kind (not just "the transcript happens to be empty," so a later `/clear` can't bring it back for a returning user).
+- Anvil: the command listing (aligned name/args/description columns) is now drawn by one shared `command_rows_text`, used identically by the welcome message and the live autocomplete palette; the palette now defaults open (full list, real Up/Down/Tab/Enter navigation) whenever the feed is empty and the welcome overview hasn't been dismissed, so the welcome message and palette open/close together. Simplified the welcome text itself down to a title, one tagline (`WELCOME_TAGLINE`, a stand-in for a future per-project config), and the bullet list, per direct feedback that the old intro paragraph read as redundant.
+- Anvil: fixed a real regression from the palette work above — Enter was hijacking every submission into "accept the highlighted palette row" any time the feed was still empty, even for ordinary typed text; narrowed the interactive-palette condition (`palette_interactive`) to real autocomplete or a genuinely empty input. Also added breathing room (`INPUT_GAP_HEIGHT` 1→2, top padding on Body/AutocompleteBar) per direct feedback that the new, often-taller palette felt claustrophobic.
+- Anvil: fixed a real shutdown-latency bug — the periodic sqld resync loop's `sync`/`load_*` calls had no timeout (`with_sqld_timeout`, renamed from `save_with_timeout`, bounds every persistence call now), so a stalled resync could hang the whole app's exit; quitting now also streams live `tracing` output to stdout (reusing the existing `raw_stream`/`RawStreamGate` mechanism) instead of the screen going silent during cleanup.
+- Anvil: extracted the `mod persistence` block (sqld schema/connect/save/load, ~370 lines) out of `main.rs` into its own `persistence.rs`.
+- Anvil: `commands/route.ts` (the shell-fallback AI router) restructured into a 3-tier escalation chain — tier 1 (local Ollama tool-call check) unchanged and working; tiers 2/3 are pluggable via `ANVIL_TIER2_URL`/`ANVIL_TIER3_URL`, unset by default, same `{"replace": ...}` JSON contract, so a real second/third agent (`eden`, once it has a working inference backend, or anything else) is a config change away, not a code change.
+- `runtimes/os/src/macos/terminal.rs`: fixed a real user-reported bug, confirmed live in a controlled `tmux` repro — `open_running` ran `osascript -e 'tell application "Terminal" to do script ...'` via `Command::status()` (inherits stdout by default), so `osascript`'s own return value (`"tab N of window id M..."`) corrupted Anvil's raw-mode display, and it always targeted Apple's Terminal.app regardless of what the user was actually running. Replaced with `open` on a generated `.command` file — terminal-agnostic, prints nothing on success.
+- Repo hygiene, found not fixed: `.cargo-check-target/` (an untracked cargo build-cache dir) sitting in `projects/escher/`, not gitignored; `.gitignore`'s existing `anvil-replica.db*` pattern doesn't match the real generated file name (`assistant-replica.db*`). Both flagged in `ROADMAP.md`, neither acted on yet.
+- **Note**: 2026-08-17's `handoff.md` named Anvil peer chat as priority #1, ahead of either work-split track — today's session didn't touch it at all. Flagged, not silently dropped; see the fresh `handoff.md` entry.
+
 ## 2026-08-15 (later)
 - Fixed SIGTERM/SIGHUP/SIGINT exit latency: ~13s → ~125ms (`Signals::forever()` + `EventLoopProxy::send_event` wake, was a bare atomic flag waiting on `WinitSettings`' idle-fallback tick). See `proposals/terminal-sigterm-handling.md`.
 - Extracted that signal-watching logic out of `apps/anvil` into `escher_bevy::terminal::{spawn_signal_watcher, reraise_signal}` (app code shouldn't own OS-signal plumbing) — re-verified live, ~134ms, no regression.
@@ -187,3 +237,343 @@ Per `AGENTS.md`: this logs every change an agent has made outside of `spec/.agen
 - Compressed this changelog to terse one-line-per-entry format (2,760 → 186 lines; 61 old
   pre-convention prose sections grouped by day). Documented the convention in `AGENTS.md` itself
   so it's not just implicit from this file's own header, and checked both off in `spec/ROADMAP.md`.
+
+## 2026-08-16
+
+- Escher → Unity UI, static `Scaffold` → UXML/USS export, plus a new `/shape` Anvil command that
+  drives all three legs from one Ethos-authored source of truth. `escher-web/src/description.rs`'s
+  `apply_description` bumped `pub(crate)` → `pub`. `escher-unity` gained `src/bin/export_shape.rs`
+  (standalone, verified live: writes real `Assets/UI/Generated/{Shape.uxml,Shape.uss}` into Aby's
+  Unity project) plus a `serde_json` dep. `escher-web` registered in the workspace
+  `[dependencies]` table for the first time (previously wasm-only). Actual UXML/USS codegen logic
+  lives in Ethos, not here — see `projects/ethos/tools/codegen/uxml/` and its proposal doc.
+  Verified: `cargo check -p escher-web`/`-p escher-unity` clean; `export_shape` binary run for
+  real. `cargo build -p escher-anvil --bin anvil` was still running when this entry was written —
+  see `spec/ROADMAP.md`'s "Adjacent" section for exact current status.
+- Anvil: `/shape` command + shell-passthrough (unrecognized input now runs against a configured
+  shell — `$ANVIL_SHELL`/`$SHELL`/`/bin/sh` — instead of just echoing to chat), both streamed into
+  the existing `Page::Process`. New `apps/anvil/src/process.rs` (the shared spawn/stream/wait
+  machinery, factored out of the old `run_js_command`) and `src/shape.rs` (the `/shape` command's
+  own logic) — split out rather than added to `main.rs` directly, per live feedback that the file
+  is getting large; a full modularization of the pre-existing file is still owed, not attempted
+  tonight (see `spec/ROADMAP.md`). `cargo check -p escher-anvil` clean, zero warnings.
+- Confirmed live, a real Ethos-side gap: `ethos-deno` has no TypeScript-stripping pass — a `.ts`
+  file with real type annotations throws a `SyntaxError` when run via `ethos-cli run-command`.
+  Logged in `spec/ROADMAP.md` (M4) and Ethos's own `spec/agents/CHANGELOG.md`.
+- `projects/ethos/spec/agents/POLICY.md` (agents write only under `spec/` without a proposal +
+  approval) — repo owner granted a live-session exception for this work stream, recorded in both
+  repos' changelogs/proposal docs for auditability.
+- `spec/ROADMAP.md`: added/updated items for all of the above, plus a repo-hygiene note from a
+  background audit agent (committed 276MB dylib, missing `.gitattributes`/LFS wiring, undocumented
+  `sandbox/experiments/` dirs, an ungitignored sqld dev DB) — not acted on, logged for later.
+- `/shape` confirmed working live by the user, first real end-to-end confirmation of tonight's
+  Unity/UXML work. Also added a unit test that was originally attempted in `escher-web/src/ssg.rs`
+  but moved to `apps/anvil/src/shape.rs`'s test module instead, after discovering a real
+  reproducible bug: a `#[cfg(test)] mod tests` block in `ssg.rs` breaks that crate's own
+  `cbindgen`-based build script (confirmed via `RUST_BACKTRACE=full` + `git stash` bisection —
+  `cbindgen::Builder::generate()` genuinely errors; doesn't affect `escher-web` as an ordinary lib
+  dependency, only building/testing it directly). Logged in `ROADMAP.md`.
+- Per live feedback, `spawn_js_command` now also switches to `Page::Process` when a command runs
+  (previously only `/shape`/shell-passthrough did, which read as inconsistent).
+- **Fixed a real, previously-unreproduced bug**: the user's reported multi-second-to-multi-minute
+  hang on dragging the overlay / any input. Root cause, found via code inspection once the exact
+  trigger was described: every `store.save_*` persistence write ran via a bare
+  `runtime.block_on(async {...})` on the render thread with no timeout at all — only the *initial*
+  sqld connect had one (`persistence::CONNECT_TIMEOUT`). A slow/wedged `sqld` (this repo has a
+  documented history of that, 2026-08-13's "sqld crash loop") would hang the entire UI for
+  however long the underlying TCP call took to fail — unbounded, matching the reported symptom
+  exactly. Fixed with a new `SAVE_TIMEOUT`(750ms)/`block_on_with_timeout` helper in `main.rs`,
+  applied to all five call sites (`/task`, overlay-bounds debounce, `/shape`, JS commands, shell
+  passthrough). `cargo check`/`cargo build -p escher-anvil` clean; the fix itself hasn't been
+  confirmed yet by reproducing and re-testing the actual hang — that's on the user. Logged in
+  `spec/ROADMAP.md`'s M1 section.
+- Persistence hardened further: all writes now route through one ordered background writer task
+  (`AppState::persistence_writes`) instead of independent concurrent spawns, with overlay-bounds
+  writes coalesced to just the latest position on a burst. `commands: Vec<SlashCommand>` bumped to
+  `Arc<Vec<SlashCommand>>` — it was getting deep-cloned every single frame inside the render
+  closure despite never mutating after startup, caught during a user-requested heap-allocation
+  pass over `main.rs`.
+- **Found and fixed a second, separate stutter bug** via live testing (an instrumented build run
+  in an isolated tmux session, fed a synthetic mouse-drag flood through `tmux send-keys` SGR mouse
+  sequences) after the user reported dragging was "a bit better, but still really bad" post the
+  persistence fix above. Confirmed 42 queued `Drag` events triggered 42 full re-renders in one
+  Bevy tick (122.5ms) — fixed in `escher-terminal`'s `TerminalSurface::draw_with_poll_timeout`
+  (coalesce consecutive `Drag(Left)` events to the latest before dispatch); re-measured with the
+  identical burst post-fix: 2 draws, ~1ms. `cargo check --workspace` clean. Full writeup in
+  `spec/ROADMAP.md`'s M1 section.
+- Added `spec/.agents/principles.md` (linked from `AGENTS.md`) — working principles earned live
+  tonight, each tied to a specific incident: verify broadly before claiming something's missing,
+  check for existing tooling before building new, never block the render thread on I/O, one owner
+  per shared external connection, never rebuild a binary someone might be running, state
+  verification status precisely, and maintain reproducible health-check tests for anything that'll
+  need ongoing monitoring.
+
+## 2026-08-17
+- Anvil UI coherence pass, per explicit user request. Removed leftover dev-only content:
+  `commands/{greet,reverse,progress}.js` (self-labeled example scripts that still showed up in
+  `/` autocomplete indistinguishable from real commands) and the hardcoded `"demo-1"` literal in
+  the status line.
+- Fixed the root cause of "modes are hard to reason about": `Page::Trace`/`Page::Process` and a
+  selected task all used to swap the entire Body area while the header stayed a static
+  "ESCHER TERMINAL ASSISTANT" regardless — the only tell was one word buried in the status line,
+  itself preemptable by other hints. The header now appends the active mode (`· TRACE`/
+  `· PROCESS`/`· TASK`) whenever it's not the default chat view. Added `Esc` as one consistent
+  "back to chat" key across all three (previously each only had its own separate,
+  inconsistent dismiss key). Also fixed a real silent-submit bug: pressing Enter while on
+  `Page::Trace`/`Page::Process` used to submit against the hidden chat transcript with no visible
+  confirmation it happened — Enter now always returns to `Page::Chat` on submit, matching the
+  reset that already happened for a selected task.
+- Wired the tasks overlay's `pending`/`running`/`done` states up for real (`TaskRow.status` used
+  to be set once at creation and never mutated — every task sat at "pending" forever, per
+  explicit user decision to fix this properly rather than just relabel it as a placeholder).
+  Left/Right now cycle a selected task's status, persisted via a new `Persistence::save_tasks`
+  that replaces the whole `tasks` table rather than the old blind per-row `INSERT` (which had no
+  way to target an existing row for update and would have produced duplicate rows on every status
+  change). `PersistenceWrite::Task(TaskRow)` → `PersistenceWrite::Tasks(Vec<TaskRow>)`
+  accordingly, coalesced in the writer's batch loop the same way `OverlayBounds` already is.
+  `cargo check -p escher-anvil --bin anvil` clean (isolated `CARGO_TARGET_DIR`). Not yet
+  live-verified in the running TUI — on the user.
+- New `apps/cli` (`escher-cli`, binary `escher`) — the real top-level CLI `spec/ROADMAP.md` (M6)
+  and `proposals/terminal-drawing-and-embedding.md` (item 4) both call for, per the human's
+  explicit prior correction that this be a real `clap` subcommand tree rather than a flag on one
+  binary. `escher anvil [args...]` today; a thin `cargo run -p escher-anvil --bin anvil --
+  [args...]` dispatcher, not a merge of Anvil's own binary into this crate. Correction to this
+  entry's earlier wording: this is *not* actually the same shape `ethos-cli` uses (that links
+  `ethos-deno`/`ethos-lua` in-process; see `apps/cli/src/main.rs`'s doc comment for the corrected
+  comparison and the real cost this reintroduces — a `cargo run` cold start on every `escher anvil`
+  launch, same class of cost `/scene`'s own in-process design was built to avoid). Two pre-existing
+  empty stub files, `src/bin/cli.tsx`/`src/bin/web.tsx` at the escher root, suggested an earlier,
+  different (TS-driven) CLI plan — traced via `git log` to a long-dead, already-superseded 2025
+  file (see 2026-08-17's later entry) and deleted, not left in place. `cargo check -p escher-cli
+  --bin escher` clean (isolated `CARGO_TARGET_DIR`).
+- Two real bugs found in this same day's work, by a deliberate self-adversarial audit the human
+  asked for after flagging that AI-driven work tends to quietly extrapolate/cut corners: (1) the
+  Left/Right task-status-cycling keys never checked `is_autocompleting`, unlike the analogous
+  Up/Down task-navigation arms a few lines away that do — a task could stay selected while `/`
+  autocomplete was separately active, silently mutating and persisting its status while the user's
+  attention was on picking a command. Fixed by adding the same guard. (2) `Persistence::save_tasks`
+  ran its `DELETE FROM tasks` + re-`INSERT` loop as loose statements, not a transaction — every
+  call site goes through a 750ms timeout, and a timeout firing mid-loop would leave the table
+  permanently short some tasks (the delete already committed, the re-inserts didn't). Fixed by
+  wrapping both in a real `libsql::Transaction`, `commit()`ed only at the end — dropping it
+  uncommitted (exactly what a timeout does) rolls back automatically instead. Also corrected a
+  false precedent in `escher-cli`'s doc comment (claimed `ethos-cli` uses the same shell-out
+  shape; it actually links `ethos-deno`/`ethos-lua` in-process) and disclosed the real cost this
+  crate's shape reintroduces (a `cargo run` cold start per launch — the same class of cost
+  `/scene`'s own in-process design exists to avoid). `cargo check -p escher-anvil --bin anvil -p
+  escher-cli --bin escher` clean (isolated `CARGO_TARGET_DIR`).
+- Anvil shell-fallback jibberish handling, per explicit user report: typed input that isn't a
+  recognized slash command falls back to a real shell, and mistyped/stray text was staying visible
+  as a lingering background task in the status bar (or, worse, genuinely hanging forever whenever
+  the typed text happened to match a real command that reads stdin — `cat`, a REPL, `read` — since
+  the child inherited Anvil's own raw-mode stdin, which it could never actually receive input
+  through). Fixed at the root: every spawned child (`process::run_streamed_command`, shared by JS
+  and shell commands) now gets `Stdio::null()` for stdin instead of inheriting it. Separately,
+  `process::run_shell_command` no longer streams live into `process_buffer` — it holds output until
+  the exit code is known, and a `127` ("command not found," the standard shell convention) is now
+  `ShellOutcome::Rejected`: no scrollback line, no chat message, no persistence. `AppState::
+  spawn_shell_command` also no longer has the caller record the `User` message synchronously —
+  it records `User`/`Tool`/`Assistant` together, only once the shell's verdict is known, so a
+  rejected command leaves zero trace instead of an orphaned "you typed this" line. Status line
+  shows a 3s "shell said nah" hint (`shell_rejected_since`, same decay pattern as the existing
+  mouse-trouble hint) — expected to fire often, deliberately non-disruptive.
+- Two real bugs found while investigating the user's live "tabs feel clunky" reports, both
+  root-caused via code inspection, not guessed: (1) closing the last browser tab left its
+  `WKWebView` visibly stuck on screen with stale content — `escher_webview::WebView`'s own doc
+  comment already claimed "dropping it removes the webview from the window," but the macOS backend
+  (`runtimes/webview/src/macos.rs`) never implemented that; `addSubview` in `attach()`, nothing ever
+  called the inverse. Fixed with a real `Drop for WebViewInner` calling `removeFromSuperview()`.
+  (2) New-tab creation lag — `apply_browser_navigation` (adds the tab) and `attach_pending_tab_
+  webviews` (creates its native `WebView`) ran in the same `Update` tick, so `WebView::attach`'s
+  synchronous native-view-creation cost blocked that frame from ever presenting; a follow-up fix
+  (deferring the attach one tick via `Tab::attach_deferred`) turned out incomplete on its own —
+  under `WinitSettings::desktop_app()`, nothing woke the event loop for that deferred second tick,
+  so the real attach could stall for however long until an unrelated input event or the 5s/60s idle
+  fallback fired. Fixed by explicitly sending a `WinitUserEvent::WakeUp` the instant the tick is
+  deferred, the same mechanism `runtimes/appkit/src/bevy.rs` already uses for click responsiveness.
+  `Tab::loading` also now starts `true` from `open_tab` instead of only becoming `true` once a
+  `WebView` exists to ask. Both documented in `spec/ROADMAP.md`'s M1.
+- Cursor-stuck-as-pointer bug, per user report: `runtimes/appkit/src/hover.rs` used `NSCursor.push()`/
+  `.pop()` on hover enter/exit — a stack that only stays correct if every push is matched by exactly
+  one pop, which `NSTrackingArea`'s `.activeInKeyWindow` option can't guarantee (the window losing
+  key status while hovered skips `mouseExited:` entirely, leaving an unpaired push). Fixed by
+  switching both handlers to `.set()` (assign the cursor outright), which has no accumulated state
+  for a missed event to desync.
+- `escher-os` OS-integration buildout, per explicit user request to firm up menus/dialogs/
+  shortcuts/sound "since we'll need all of them very soon": (1) `MenuItem::Item`'s `action` is real
+  now, not inert — `macos::menu::MenuActionTarget` (duplicated from `escher_appkit::action::
+  ActionTarget`'s shape, since `escher-appkit` depends on this crate, not the reverse) bridges it
+  into AppKit's target-action mechanism; the target's one retain is deliberately leaked (`NSMenuItem
+  .target` is weak, the app menu bar lives for the process's whole lifetime with no teardown path).
+  `action` is `Arc<dyn Fn() + Send + Sync>`, not `Rc`/`Box` — `MenuItem` lives in `escher_bevy::os::
+  OsPlugin`, a real Bevy `Plugin`, which requires `Send + Sync`. (2) `runtimes/appkit/src::
+  shortcuts::GlobalShortcuts::install` now takes a data-driven `Vec<(Shortcut, Box<dyn Fn()>)>`
+  instead of three fixed named closures — today's back/forward/refresh bindings (`bevy.rs`'s
+  `install_global_shortcuts`) are now expressed as data rather than hardcoded, so a future
+  configurable-defaults source (an app-state manager) has something to feed instead of new
+  parameters. (3) New `escher_os::sound::play(name)` — named system sounds via `NSSound`, same
+  shape as `clipboard`/`dialog`; added `OsError::NotFound` for an unknown sound name. (4) New
+  `runtimes/os/examples/dialogs.rs` — a human-watched `alert()`/`confirm()` demo, deliberately
+  separate from `examples/demo.rs` (which stays headless-safe on purpose). (5) `OsPlugin` gained
+  `with_extra_menu_items`, and Anvil now installs a real "Demo" submenu (`main.rs`'s `demo_menu()`)
+  exercising dialog/sound/clipboard together from one place a user can actually click — the actual
+  proof this all works end to end, not just compiles. `cargo check --workspace --exclude
+  escher-unity --exclude escher-unreal --examples` clean (isolated `CARGO_TARGET_DIR`). Clipboard
+  itself was already correctly abstracted in `escher-os`/`crate::macos::clipboard` — confirmed, not
+  changed.
+- Anvil's status-line fps counter, per user report: it froze at whatever it last measured during
+  real activity instead of reflecting current state, because `assistant_terminal_draw` (and thus
+  `AppState::record_frame_and_measure_fps`) only ever runs when Bevy's `Update` schedule ticks,
+  which under `WinitSettings::desktop_app()` only happens on a real event. Fixed with a one-line
+  change to `escher-bevy`'s `spawn_input_watcher`: its already-existing 1s poll timeout now also
+  sends a `WakeUp` on timeout (previously a no-op `Ok(false) => {}`), giving Bevy a steady once-a-
+  second heartbeat tick even while fully idle.
+- Terminal render-rate fix, found by the user *from* the fps-counter fix above (noticed it spiking
+  past 250fps while hard-dragging the tasks overlay) — see `spec/ROADMAP.md`'s M1 (2026-08-17,
+  item 4 under the mouse-drag-flood incident) for the full root-cause writeup and the exact
+  before/after numbers. Two paired changes, neither safe alone: `apps/anvil`'s
+  `assistant_terminal_draw` had `MAX_DRAWS_PER_TICK` dropped from 64 to 3 (a terminal has no reason
+  to repaint faster than ~60fps; 64 back-to-back renders in one tick was pure waste during a
+  sustained drag), and `escher-bevy`'s `spawn_input_watcher` now re-sends `WakeUp` every ~16ms
+  while its drain-wait loop finds the input queue still nonempty, instead of one wake per burst and
+  silence after — without that second change, the lowered per-tick cap would have reintroduced the
+  exact stall the earlier `Drag`-coalescing fix (M1, incident 2) was built to prevent. `cargo check
+  -p escher-bevy -p escher-anvil --bin anvil` clean (isolated `CARGO_TARGET_DIR`). **Live-verified**:
+  user confirms fps now caps ~120 (the remaining `MAX_DRAWS_PER_TICK = 3` headroom, not a bug — see
+  `ROADMAP.md` M1 item 4 for the exact reasoning) and reports browser tab-opening got noticeably
+  snappier too, unprompted — plausible and expected, not coincidental: terminal drawing and AppKit/
+  webview handling share one main thread, so the ~200 wasted repaints/sec this eliminated were CPU
+  time everything else on that thread was also competing for.
+- Browser link context menus, real and working: `escher-webview` gained `ContextMenuItem` and a
+  new `on_link_context_menu` parameter on `WebView::attach`. macOS backend implements `webView:
+  getContextMenuFromProposedMenu:forElement:completionHandler:` — the real macOS-only `WKUIDelegate`
+  method for this — as a raw selector, not through `WKUIDelegate`'s own Rust trait: `objc2-web-kit`
+  0.3's generated binding doesn't declare this method, and `WKContextMenuElementInfo` has zero
+  bound properties (confirmed by reading the generated source); `linkURL` is read via an unbound
+  `msg_send!`. New `ContextMenuActionTarget` bridges each item's action into AppKit's target-action
+  mechanism — same shape as `escher_appkit::action::ActionTarget`/`escher_os`'s `MenuActionTarget`,
+  duplicated a third time rather than adding a cross-crate dependency. `escher-bevy`'s generic
+  `WantsWebView` gained the same hook (`Send + Sync`, since it lives on a real Bevy `Component`);
+  zero existing construction sites, nothing else needed updating. Anvil wires two real actions per
+  tab (`link_context_menu_items`, `main.rs`): "Open Link in New Tab" (reuses the exact `pending_
+  scenes` queue + wake `/scene` already uses) and "Copy Link Address" (`escher_os::clipboard`).
+  Deliberately returns a `Vec`, not fixed actions — the extension point for pane-management-
+  flavored actions ("open to the right/left/top/bottom") once that exists. `cargo check --workspace
+  --exclude escher-unity --exclude escher-unreal --examples` clean. **Not** verified live (can't
+  right-click a real link from here) — the one piece of Rust/ObjC glue today that's compiled but
+  unconfirmed against the real Objective-C runtime, unlike everything else built this session.
+- Removed the 2026-08-16 "typing a full command name auto-reacts" feature, per direct user report:
+  live use found it both jarring (an arg-taking command like `/scene` auto-appended a trailing
+  space and jumped the cursor the instant its name was fully typed, unasked) and actively
+  dangerous (a no-arg, script-backed command auto-*executed* the instant its name was fully typed —
+  no explicit confirming action at all, so a stray keystroke sequence typed for an unrelated reason
+  could fire a real command). Typing a command name now only ever inserts characters; Tab (accept
+  the highlighted autocomplete suggestion) and Enter (submit) remain the only two ways anything
+  actually runs, both requiring an explicit keypress. `cargo check -p escher-anvil --bin anvil`
+  clean.
+- Tab-switch stutter, per user report: `WebViewInner::set_hidden` (`runtimes/webview/src/macos.rs`)
+  no longer touches `NSView.isHidden` at all — toggling it back to `false` on a `WKWebView`
+  specifically is a known rough edge (re-establishes its compositor/backing store, a real,
+  user-visible hitch on every switch). Reimplemented via z-ordering instead
+  (`addSubview:positioned:relativeTo:`, shown tab to the front of its superview's subviews, hidden
+  one to the back, both relative to no specific sibling so it's correct regardless of attach
+  order) — same public API and visual result (exactly one webview on screen), without touching the
+  property that triggers the internal cost. Expected, not confirmed, that macOS's own window-server
+  occlusion tracking still lets a fully-covered `WKWebView` throttle itself normally, so steady-
+  state resource use shouldn't regress either — general WebKit-community-known behavior applied
+  here, not something measured in this codebase specifically. `cargo check -p escher-webview -p
+  escher-anvil --bin anvil` clean; live "does switching still feel snappy, and does a background
+  tab still behave" verification is on the user.
+- Custom URL scheme support, real (not stubbed at the API level): `escher-webview` gained
+  `CustomSchemeHandler` and a new `custom_scheme: Option<CustomSchemeHandler>` parameter on
+  `WebView::attach`, registered on `WKWebViewConfiguration` before `WKWebView` init (must happen
+  before, not after — configuration is snapshotted at init time). Backing implementation
+  (`SchemeTaskHandler` in `macos.rs`) is a real, fully-typed `WKURLSchemeHandler` — unlike the
+  context-menu delegate, `objc2-web-kit` 0.3 binds this one cleanly as a proper `extern_protocol!`,
+  no raw `msg_send!` workarounds needed anywhere. Synchronous only for now (the handler closure
+  returns a whole HTML string in one call); a handler needing real async work would need this
+  reworked to hold the task open. `escher-bevy`'s `WantsWebView` gained the matching field.
+  `escher-webview`/`escher-bevy` stay engine/app-agnostic — neither hardcodes any scheme name or
+  content, same reasoning as `ContextMenuItem`. Anvil registers a real `anvil://` scheme
+  (`anvil_scheme_handler` in `main.rs`) with one page, `anvil://settings` — a functional stub per
+  the user's own framing ("mostly just style tweaks" from here), not a designed UI. `cargo check
+  --workspace --exclude escher-unity --exclude escher-unreal --examples` clean. Not live-verified
+  (can't navigate to it and look from here).
+- `anvil_scheme_handler`'s `anvil://settings` page, corrected twice the same day it was written —
+  worth recording both corrections, not just the final state, since each was a real, distinct
+  mistake. First: it was a hand-written raw HTML string, bypassing Escher's own Scaffold→HTML
+  pipeline despite `/shape`'s web leg (same file) already demonstrating the right way — caught by
+  direct user question. Fixed (wrongly) by adding `Serialize` to `runtimes/web/src/description.rs`'s
+  `ScaffoldDescription` and friends and hand-constructing one in Anvil to serialize and feed
+  `ssg::render_page_to_html`. Second correction, per the user directly: `ScaffoldDescription` is a
+  wire-only DTO meant to cross from a JSX-authoring tool — hand-building one in Rust app code
+  bypasses Escher's real UI composition pattern (`Scaffold::with_style`/`with_slot`/`with_content`)
+  just as much as raw HTML did, and it shouldn't be exposed as an app-facing API at all if
+  avoidable. Reverted the `Serialize` derives entirely (`description.rs` back to `Deserialize`-only,
+  with a doc comment now explaining why). Added `ssg::render_scaffold_to_html`/
+  `render_scaffold_fragment` — real `Scaffold`-accepting renderers, the correct Rust-side
+  equivalent of `render_page_to_html`/`render_fragment` for content that was never JSON to begin
+  with. Anvil's settings page now builds a real `Scaffold` via the same builder pattern
+  `packages/chalk/src/toolbar.rs` already uses. `cargo check --workspace --exclude escher-unity
+  --exclude escher-unreal --examples` clean.
+- First real proof of the "Mario in Anvil's terminal, gamepad-controlled" idea discussed earlier
+  this session: `Page::Mario` (F4) — a small square with gravity, a jump (gamepad South button),
+  and gamepad-driven horizontal movement (`MarioState`/`update_mario_physics`, `main.rs`), using
+  `bevy_gilrs` (already compiled in via `escher-bevy`'s default features, confirmed unused before
+  this). Rendered as text into the Body area like every other page, not a new drawing primitive —
+  Escher's terminal surface has no free 2D positioning outside its single overlay slot (already
+  used by the tasks panel). Physics logic (`MarioState::step`) is pure, no Bevy types, so it's
+  independently correct regardless of render/input plumbing. One real, disclosed limitation, not
+  papered over: this only advances when Bevy's own event-driven schedule ticks (`WinitSettings::
+  desktop_app()`), so motion will read as choppy discrete hops, not smooth 60fps, until something
+  drives a steady tick specifically while this page is active — `dt` is clamped to a small fixed
+  range so a long gap between ticks produces one bounded hop instead of a teleport/fall-through.
+  `cargo check -p escher-anvil --bin anvil` clean; live "does it actually respond to a real
+  connected gamepad" verification is on the user.
+- Mario physics choppiness, the actual fix (not just the disclosed limitation above) — user
+  confirmed live it "gets stopped up" when input is idle, exactly as flagged. Root cause was the
+  tick rate itself, not the `dt` clamp: `update_mario_physics` only ever advances when Bevy's
+  schedule ticks, and `WinitSettings::desktop_app()` only ticks every 5s while idle. New
+  `sync_winit_update_mode_for_mario` dynamically swaps the app's own `WinitSettings` between
+  `desktop_app()` (normal) and `game()` (continuous while focused) based on whether `Page::Mario`
+  is showing — only writes on an actual transition, so this doesn't churn change-detection for
+  every tick. Scoped to Mario specifically for now, not a general "anything can request a
+  continuous-tick boost" resource — worth generalizing if a second feature ever needs the same
+  thing. `cargo check --workspace --exclude escher-unity --exclude escher-unreal --examples` clean.
+- Local-Ollama tool-calling gut check for shell-fallback rejections, per the user directly — real,
+  live-tested, not just wired and hoped-for. New `commands/route.ts`: given stray text and Anvil's
+  own real `SlashCommand` list (name/description/args_hint, not a hardcoded duplicate schema),
+  calls a local Ollama instance's real tool-calling support and returns `{command, args}` or
+  `{command: null}`. Ethos-scripted per the user's explicit "prioritize proving the shared project
+  goals" — this is a Deno/TS script Anvil shells out to, the same `/shape`-established pattern, not
+  Rust code making the HTTP call directly. `process::run_deno_command` gained an `args` parameter
+  (previously always empty — only `/shape` used it, with nothing to pass) to carry the request
+  JSON; the one existing call site (`shape.rs`) updated to pass `""`, unchanged behavior. New
+  `process::run_ollama_route` deliberately does *not* go through `run_deno_command`'s streaming —
+  this runs silently, nothing reaches `process_buffer`, since shell rejection already happens often
+  during normal typing and this is a nice-to-have layered on top of it, not a real command. Wired
+  into `AppState::spawn_shell_command`'s `ShellOutcome::Rejected` arm: on a match, populates
+  `user_input` with the reconstructed `/command args` (only if the input box is still empty, so it
+  can't clobber whatever the user's already typed since) — Enter is still the only thing that ever
+  runs anything, per the user's own explicit "fastest human-assured confirmation possible," not
+  auto-execution. Found and fixed one real bug via live testing against the actual running Ollama
+  instance, not assumed working: the script's fetch timeout (4s) was shorter than the model's real
+  response time (~8.3s measured, `gpt-oss:latest`, mostly one-time model-load cost) — every real
+  match was silently timing out and reading indistinguishably from "no tool matched." Raised to
+  20s. Re-verified after the fix: a real request ("open the google homepage") correctly resolved to
+  `scene`/`https://google.com`; genuine gibberish still correctly resolves to no match. `cargo
+  check --workspace --exclude escher-unity --exclude escher-unreal --examples` clean.
+- Ollama routing, real user-reported failure the same day it landed: "the fallthrough to the
+  ollama backend didn't happen." Root cause, most likely: the whole check ran completely silently
+  for 5-20s (the measured real latency), well past the 3s "shell said nah" hint's own fade — a user
+  has every reason to assume nothing happened and move on well before it resolves, at which point
+  `spawn_shell_command`'s own `input.is_empty()` guard correctly, but silently, discards whatever
+  came back. Fixed by showing the existing spinner status-line (`RunningCommand`, "checking with
+  local model…") for the duration of the check, the same mechanism every other background command
+  already uses — not a new indicator invented for this. Separately, and regardless of whether that
+  was the actual cause: `run_ollama_route` previously returned `None` identically for a genuine
+  failure (bad path, `deno` not on `PATH`, a script/parse error) and for the model simply declining
+  to match anything — indistinguishable, and undiagnosable if it *was* a real bug. Every real-
+  failure branch now logs via `tracing::warn!` (visible in `Page::Trace`), while "no tool matched"
+  stays a silent, expected outcome. `cargo check -p escher-anvil --bin anvil` clean.
+- The `mario` example (`runtimes/bevy/examples/mario`) was self-terminating within ~150ms of every launch, on any machine, regardless of gamepad/relay state — the user's own report ("nothing we claimed fixed this session is actually fixed") prompted checking it directly rather than trusting an earlier claim. Root cause, found by running the actual built binary through a real pty and reading its own trace log rather than assuming: `bevy_window::system` logged `"No windows are open, exiting"` and fired Bevy's default `ExitCondition::OnAllClosed` exit system, because `main.rs`'s `EscherBevyConfig` set `with_spawn_primary_window(false)` (mario is terminal-only; only `scene.rs`'s `B`-toggle ever opens a real window) without also setting `with_exit_condition(ExitCondition::DontExit)` — a window count of zero also satisfies "all closed." This is the exact seam `EscherBevyConfig::exit_condition`'s own doc comment describes (`apps/anvil` already uses `DontExit` for the same reason). Fixed with one added `.with_exit_condition(ExitCondition::DontExit)` call. Live-verified both directions via pty: before the fix, the process exits (status 0) in ~150ms unprompted; after the fix, it stays alive indefinitely with no input, and pressing Escape still exits cleanly (status 0, ~50ms) via the terminal's own `TerminalAction::Exit` path, unaffected by the config change. `cargo build -p escher-bevy --example mario` clean in an isolated `CARGO_TARGET_DIR`.

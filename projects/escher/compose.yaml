@@ -64,8 +64,20 @@ services:
       SQLD_DB_PATH: db0
     volumes:
       - ./.output/data:/var/lib/sqld
+  # `apps/anvil`'s local-LLM fallback (`commands/route.ts`'s `ANVIL_OLLAMA_URL`) — `anvil init`
+  # brings this up (alongside `db0`) when neither is already reachable, so a fresh checkout
+  # doesn't need Ollama installed on the host at all. Same default port Ollama's own client
+  # libraries assume, so no env var override is needed on either side when this is what's running.
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    restart: unless-stopped
 
 volumes:
+  ollama-data:
   web-cargo-target:
   web-cargo-registry:
   web-wasm-cargo-home:

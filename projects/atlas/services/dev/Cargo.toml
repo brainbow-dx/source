@@ -6,7 +6,10 @@ edition = "2024"
 [features]
 default = ["std"]
 std = []
-dev = []
+# Gates this crate's own `tracing` module (see its own doc comment on why) — off by default so
+# a plain dependent doesn't get dragged into atlas-core's `dev`-gated tracing subscriber, which a
+# `--release` build refuses to compile at all.
+dev = ["atlas-core/dev"]
 inspect = []
 
 #---

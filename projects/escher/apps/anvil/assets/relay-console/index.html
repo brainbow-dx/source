@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Relay Console</title>
+<style>
+  :root {
+    --bg: #eef2f4;
+    --surface: #ffffff;
+    --surface-sunken: #e2e8ec;
+    --border: #c9d3d8;
+    --text: #16202a;
+    --text-dim: #5b6b78;
+    --accent: #1f8f9c;
+    --accent-dim: #d6ecee;
+    --good: #3f8f5f;
+    --good-dim: #dcefe2;
+    --warn: #b3791f;
+    --warn-dim: #f5e6cd;
+    --bad: #b3413d;
+    --bad-dim: #f5dcda;
+    --peer-red: #c14b45;
+    --peer-green: #3f8f5f;
+    --peer-blue: #2f6fa8;
+    --peer-yellow: #ab8a2a;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "Consolas", "Liberation Mono", monospace;
+    --sans: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0d151b;
+      --surface: #141f27;
+      --surface-sunken: #0a1116;
+      --border: #23323c;
+      --text: #e7eef2;
+      --text-dim: #8ca0ad;
+      --accent: #4dd7e2;
+      --accent-dim: #123339;
+      --good: #5cbb84;
+      --good-dim: #123322;
+      --warn: #e0ac52;
+      --warn-dim: #3a2c11;
+      --bad: #e2726d;
+      --bad-dim: #3a1715;
+      --peer-red: #e2726d;
+      --peer-green: #5cbb84;
+      --peer-blue: #5b9bd6;
+      --peer-yellow: #dcb857;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #0d151b;
+    --surface: #141f27;
+    --surface-sunken: #0a1116;
+    --border: #23323c;
+    --text: #e7eef2;
+    --text-dim: #8ca0ad;
+    --accent: #4dd7e2;
+    --accent-dim: #123339;
+    --good: #5cbb84;
+    --good-dim: #123322;
+    --warn: #e0ac52;
+    --warn-dim: #3a2c11;
+    --bad: #e2726d;
+    --bad-dim: #3a1715;
+    --peer-red: #e2726d;
+    --peer-green: #5cbb84;
+    --peer-blue: #5b9bd6;
+    --peer-yellow: #dcb857;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .console {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 20px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+
+  .brand {
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-right: 8px;
+  }
+  .brand .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+
+  .field {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .field label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+    font-weight: 600;
+  }
+  .field input {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: var(--surface-sunken);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--text);
+    padding: 6px 8px;
+    width: 200px;
+  }
+  .field input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  button {
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: 12.5px;
+    border: 1px solid var(--accent);
+    background: var(--accent-dim);
+    color: var(--accent);
+    border-radius: 5px;
+    padding: 7px 14px;
+    cursor: pointer;
+  }
+  button:hover { filter: brightness(1.05); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  button.stop { border-color: var(--bad); background: var(--bad-dim); color: var(--bad); }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--surface-sunken);
+    color: var(--text-dim);
+    margin-left: auto;
+  }
+  .pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim); }
+  .pill.good { background: var(--good-dim); color: var(--good); }
+  .pill.good .dot { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 25%, transparent); }
+  .pill.warn { background: var(--warn-dim); color: var(--warn); }
+  .pill.warn .dot { background: var(--warn); }
+  .pill.bad { background: var(--bad-dim); color: var(--bad); }
+  .pill.bad .dot { background: var(--bad); }
+
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: 1px;
+    background: var(--border);
+  }
+
+  @media (max-width: 820px) {
+    main { grid-template-columns: 1fr; }
+  }
+
+  section {
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .panel-title {
+    font-family: var(--sans);
+    font-weight: 800;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    padding: 12px 16px 8px;
+  }
+
+  .roster {
+    padding: 0 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    overflow-y: auto;
+  }
+  .peer-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .peer-swatch { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .peer-info { min-width: 0; flex: 1; }
+  .peer-id {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .peer-meta {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+  .empty-note {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+    padding: 4px 4px 12px;
+  }
+
+  .split {
+    display: grid;
+    grid-template-rows: 1.15fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    flex: 1;
+    min-height: 0;
+  }
+  .split > section { background: var(--bg); }
+
+  .radar-wrap {
+    padding: 0 16px 16px;
+    flex: 1;
+    display: flex;
+    gap: 16px;
+    min-height: 0;
+  }
+  canvas {
+    background: var(--surface-sunken);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    aspect-ratio: 16 / 7;
+    width: 100%;
+    max-width: 640px;
+  }
+  .radar-legend {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 4px;
+    min-width: 140px;
+  }
+  .radar-legend div { display: flex; align-items: center; gap: 6px; }
+  .radar-legend .sw { width: 9px; height: 9px; border-radius: 50%; }
+
+  .log-wrap {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 16px 16px;
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .log-row {
+    display: grid;
+    grid-template-columns: 66px 88px 1fr;
+    gap: 10px;
+    padding: 4px 8px;
+    border-radius: 5px;
+    align-items: start;
+  }
+  .log-row:nth-child(odd) { background: var(--surface); }
+  .log-row time { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+  .log-row .tag {
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+  }
+  .log-row .tag.recv { color: var(--accent); }
+  .log-row .tag.send { color: var(--good); }
+  .log-row .tag.sys { color: var(--text-dim); }
+  .log-row .tag.err { color: var(--bad); }
+  .log-row .msg { overflow-wrap: anywhere; color: var(--text); }
+  .log-row .msg .dim { color: var(--text-dim); }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="console">
+  <header>
+    <div class="brand"><span class="dot" id="brandDot"></span>Relay Console</div>
+    <div class="field">
+      <label for="relayUrl">Relay</label>
+      <input id="relayUrl" value="ws://localhost:9200/ws" spellcheck="false" />
+    </div>
+    <div class="field">
+      <label for="roomName">Room</label>
+      <input id="roomName" value="anvil" spellcheck="false" style="width: 110px" />
+    </div>
+    <button id="connectBtn">Connect</button>
+    <div class="pill" id="statusPill"><span class="dot"></span><span id="statusText">idle</span></div>
+  </header>
+
+  <main>
+    <section>
+      <div class="panel-title">Peers</div>
+      <div class="roster" id="roster">
+        <div class="empty-note">Not connected.</div>
+      </div>
+    </section>
+
+    <div class="split">
+      <section>
+        <div class="panel-title">Live positions</div>
+        <div class="radar-wrap">
+          <canvas id="radar" width="640" height="280"></canvas>
+          <div class="radar-legend" id="legend">
+            <div><span class="dim">No position data yet.</span></div>
+            <div class="dim">A peer must open a data channel and broadcast position packets for dots to appear here.</div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="panel-title">Signaling &amp; data channel log</div>
+        <div class="log-wrap" id="log"></div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<script>
+  const PEER_COLORS = ["var(--peer-red)", "var(--peer-green)", "var(--peer-blue)", "var(--peer-yellow)"];
+  const peerColorFor = (index) => PEER_COLORS[index % PEER_COLORS.length];
+
+  const relayUrlInput = document.getElementById("relayUrl");
+  const roomInput = document.getElementById("roomName");
+  const connectBtn = document.getElementById("connectBtn");
+  const statusPill = document.getElementById("statusPill");
+  const statusText = document.getElementById("statusText");
+  const rosterEl = document.getElementById("roster");
+  const logEl = document.getElementById("log");
+  const legendEl = document.getElementById("legend");
+  const canvas = document.getElementById("radar");
+  const ctx = canvas.getContext("2d");
+
+  let ws = null;
+  let ownPeerId = null;
+  const peers = new Map(); // peerId -> { connection, channel, order, lastPacket, lastSeen, dcState }
+
+  function setStatus(kind, text) {
+    statusPill.className = "pill" + (kind ? " " + kind : "");
+    statusText.textContent = text;
+  }
+
+  function timeLabel() {
+    const d = new Date();
+    return d.toTimeString().slice(0, 8);
+  }
+
+  function log(tag, message) {
+    const row = document.createElement("div");
+    row.className = "log-row";
+    row.innerHTML = `<time>${timeLabel()}</time><span class="tag ${tag}">${tag}</span><span class="msg">${message}</span>`;
+    logEl.appendChild(row);
+    logEl.scrollTop = logEl.scrollHeight;
+    while (logEl.children.length > 300) logEl.removeChild(logEl.firstChild);
+  }
+
+  function renderRoster() {
+    if (peers.size === 0) {
+      rosterEl.innerHTML = '<div class="empty-note">No peers in this room yet.</div>';
+      return;
+    }
+    rosterEl.innerHTML = "";
+    for (const [peerId, info] of peers) {
+      const card = document.createElement("div");
+      card.className = "peer-card";
+      const dcState = info.dcState || "no channel";
+      card.innerHTML = `
+        <span class="peer-swatch" style="background:${peerColorFor(info.order)}"></span>
+        <div class="peer-info">
+          <div class="peer-id">${peerId.slice(0, 8)}…</div>
+          <div class="peer-meta">${dcState}${info.lastPacket ? " · " + info.lastPacket.candidate_id : ""}</div>
+        </div>
+      `;
+      rosterEl.appendChild(card);
+    }
+  }
+
+  function renderLegend() {
+    const withData = [...peers.entries()].filter(([, info]) => info.lastPacket);
+    if (withData.length === 0) {
+      legendEl.innerHTML =
+        '<div><span class="dim">No position data yet.</span></div><div class="dim">A peer must open a data channel and broadcast position packets for dots to appear here.</div>';
+      return;
+    }
+    legendEl.innerHTML = withData
+      .map(
+        ([peerId, info]) =>
+          `<div><span class="sw" style="background:${peerColorFor(info.order)}"></span>${info.lastPacket.candidate_id} · seq ${info.lastPacket.seq}</div>`
+      )
+      .join("");
+  }
+
+  function drawRadar() {
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    const gridColor = getComputedStyle(document.documentElement).getPropertyValue("--border").trim();
+    ctx.strokeStyle = gridColor;
+    ctx.lineWidth = 1;
+    for (let i = 1; i < 4; i++) {
+      const x = (w / 4) * i;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, h);
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.moveTo(0, h - 1);
+    ctx.lineTo(w, h - 1);
+    ctx.stroke();
+
+    for (const [, info] of peers) {
+      if (!info.lastPacket) continue;
+      const p = info.lastPacket;
+      const x = Math.max(4, Math.min(w - 4, p.x * w));
+      const y = Math.max(4, Math.min(h - 4, p.y * h));
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue(
+        ["--peer-red", "--peer-green", "--peer-blue", "--peer-yellow"][info.order % 4]
+      );
+      ctx.beginPath();
+      ctx.arc(x, y, 6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    requestAnimationFrame(drawRadar);
+  }
+  requestAnimationFrame(drawRadar);
+
+  function nextOrder() {
+    let max = -1;
+    for (const info of peers.values()) max = Math.max(max, info.order);
+    return max + 1;
+  }
+
+  function ensurePeer(peerId) {
+    if (!peers.has(peerId)) {
+      peers.set(peerId, { order: nextOrder(), dcState: "signaling" });
+    }
+    return peers.get(peerId);
+  }
+
+  function send(message) {
+    ws.send(JSON.stringify(message));
+    log("send", `<span class="dim">${message.type}</span> ${message.to ? "→ " + message.to.slice(0, 8) : ""}`);
+  }
+
+  async function openOfferTo(peerId) {
+    const info = ensurePeer(peerId);
+    const pc = new RTCPeerConnection();
+    info.connection = pc;
+    pc.onicecandidate = (event) => {
+      if (event.candidate) send({ type: "ice-candidate", to: peerId, candidate: event.candidate.candidate });
+    };
+    const channel = pc.createDataChannel("mario-sync", { ordered: false, maxRetransmits: 0 });
+    wireChannel(peerId, channel);
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    send({ type: "offer", to: peerId, sdp: offer.sdp });
+  }
+
+  async function acceptOfferFrom(peerId, sdp) {
+    const info = ensurePeer(peerId);
+    const pc = new RTCPeerConnection();
+    info.connection = pc;
+    pc.onicecandidate = (event) => {
+      if (event.candidate) send({ type: "ice-candidate", to: peerId, candidate: event.candidate.candidate });
+    };
+    pc.ondatachannel = (event) => wireChannel(peerId, event.channel);
+    await pc.setRemoteDescription({ type: "offer", sdp });
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    send({ type: "answer", to: peerId, sdp: answer.sdp });
+  }
+
+  function wireChannel(peerId, channel) {
+    const info = ensurePeer(peerId);
+    info.channel = channel;
+    info.dcState = channel.readyState;
+    channel.onopen = () => {
+      info.dcState = "open";
+      log("sys", `data channel with ${peerId.slice(0, 8)}… open`);
+      renderRoster();
+    };
+    channel.onclose = () => {
+      info.dcState = "closed";
+      renderRoster();
+    };
+    channel.onmessage = (event) => {
+      try {
+        const packet = JSON.parse(event.data);
+        info.lastPacket = packet;
+        info.lastSeen = Date.now();
+        renderRoster();
+        renderLegend();
+      } catch (error) {
+        log("err", "unparseable data channel message");
+      }
+    };
+  }
+
+  async function handleServerMessage(message) {
+    switch (message.type) {
+      case "joined": {
+        ownPeerId = message.peer_id;
+        setStatus("good", `joined as ${ownPeerId.slice(0, 8)}…`);
+        log("sys", `joined room — ${message.peers.length} peer(s) already present`);
+        for (const peerId of message.peers) {
+          ensurePeer(peerId);
+          await openOfferTo(peerId);
+        }
+        renderRoster();
+        break;
+      }
+      case "peer-joined": {
+        ensurePeer(message.peer_id);
+        log("sys", `peer joined: ${message.peer_id.slice(0, 8)}…`);
+        renderRoster();
+        break;
+      }
+      case "peer-left": {
+        peers.delete(message.peer_id);
+        log("sys", `peer left: ${message.peer_id.slice(0, 8)}…`);
+        renderRoster();
+        renderLegend();
+        break;
+      }
+      case "offer": {
+        log("recv", `offer from ${message.from.slice(0, 8)}…`);
+        await acceptOfferFrom(message.from, message.sdp);
+        break;
+      }
+      case "answer": {
+        log("recv", `answer from ${message.from.slice(0, 8)}…`);
+        const info = peers.get(message.from);
+        if (info?.connection) await info.connection.setRemoteDescription({ type: "answer", sdp: message.sdp });
+        break;
+      }
+      case "ice-candidate": {
+        const info = peers.get(message.from);
+        if (info?.connection) {
+          try {
+            await info.connection.addIceCandidate({ candidate: message.candidate, sdpMid: "0", sdpMLineIndex: 0 });
+          } catch (error) {
+            log("err", `ice candidate from ${message.from.slice(0, 8)}… failed to apply`);
+          }
+        }
+        break;
+      }
+      case "error": {
+        log("err", message.message);
+        break;
+      }
+    }
+  }
+
+  function connect() {
+    const url = relayUrlInput.value.trim();
+    const room = roomInput.value.trim() || "anvil";
+    setStatus("warn", "connecting…");
+    log("sys", `connecting to ${url}`);
+    ws = new WebSocket(url);
+
+    ws.onopen = () => {
+      log("sys", "socket open, joining room “" + room + "”");
+      send({ type: "join", room });
+    };
+    ws.onmessage = (event) => {
+      let message;
+      try {
+        message = JSON.parse(event.data);
+      } catch (error) {
+        log("err", "unparseable relay message");
+        return;
+      }
+      log("recv", `<span class="dim">${message.type}</span>`);
+      handleServerMessage(message);
+    };
+    ws.onclose = () => {
+      setStatus("bad", "disconnected");
+      log("sys", "socket closed");
+      connectBtn.textContent = "Connect";
+      connectBtn.classList.remove("stop");
+    };
+    ws.onerror = () => {
+      setStatus("bad", "connection error");
+      log("err", "websocket error — is the relay reachable from this browser?");
+    };
+
+    connectBtn.textContent = "Disconnect";
+    connectBtn.classList.add("stop");
+  }
+
+  function disconnect() {
+    if (ws) ws.close();
+    for (const info of peers.values()) info.connection?.close();
+    peers.clear();
+    ownPeerId = null;
+    renderRoster();
+    renderLegend();
+    setStatus("", "idle");
+  }
+
+  connectBtn.addEventListener("click", () => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      disconnect();
+    } else {
+      connect();
+    }
+  });
+
+  renderRoster();
+  renderLegend();
+
+  // Auto-connects to whatever's already in the Relay/Room fields (their own hardcoded defaults
+  // match Anvil's `/relay-console` — see `AppState::spawn_relay_server` — which now actually
+  // starts a real relay there) — per the user directly, this should just work by default instead
+  // of requiring a manual click every time the console opens.
+  connect();
+</script>
+</body>
+</html>

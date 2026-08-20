@@ -17,6 +17,7 @@
 //! load`/`go_back`/`go_forward` directly — see `apps/anvil`'s `poll_chrome_events`.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use bevy::app::App;
 use bevy::app::Plugin;
@@ -30,6 +31,8 @@ use bevy::window::RawHandleWrapper;
 use bevy::window::Window;
 use bevy::prelude::Query;
 
+use escher_webview::ContextMenuItem;
+use escher_webview::CustomSchemeHandler;
 use escher_webview::WebView;
 
 /// Requests a brand new, independent scene window — fired from wherever a running app decides
@@ -59,6 +62,15 @@ pub struct WantsWebView {
     /// keeps the platform webview's own default UA; this plugin has no opinion of its own on
     /// whether that's right for a given app.
     pub user_agent: Option<String>,
+    /// Forwarded straight to `escher_webview::WebView::attach`'s own `on_link_context_menu` — see
+    /// its doc comment. `None` means every link's context menu stays exactly WebKit's own default,
+    /// same "no opinion unless asked" reasoning as `user_agent`. `Arc`, not a plain closure type,
+    /// so this remains `Send + Sync` (required of any Bevy `Component`, which this is).
+    pub on_link_context_menu: Option<Arc<dyn Fn(&str) -> Vec<ContextMenuItem> + Send + Sync>>,
+    /// Forwarded straight to `escher_webview::WebView::attach`'s own `custom_scheme` — see its
+    /// doc comment. `None` means no custom scheme is registered, same "no opinion unless asked"
+    /// reasoning as `user_agent`/`on_link_context_menu`.
+    pub custom_scheme: Option<CustomSchemeHandler>,
 }
 
 pub struct WebViewPlugin;
@@ -85,7 +97,16 @@ fn attach_pending_webviews(
     pending: Query<(Entity, &RawHandleWrapper, &WantsWebView)>,
 ) {
     for (entity, raw_handle, wants) in &pending {
-        match WebView::attach(raw_handle.get_window_handle(), &wants.url, wants.top_inset, wants.left_inset, wants.user_agent.as_deref()) {
+        let on_link_context_menu = wants.on_link_context_menu.clone();
+        match WebView::attach(
+            raw_handle.get_window_handle(),
+            &wants.url,
+            wants.top_inset,
+            wants.left_inset,
+            wants.user_agent.as_deref(),
+            move |url| on_link_context_menu.as_ref().map(|f| f(url)).unwrap_or_default(),
+            wants.custom_scheme.clone(),
+        ) {
             Ok(webview) => {
                 handles.0.insert(entity, webview);
                 tracing::info!("Opened scene: {}", wants.url);

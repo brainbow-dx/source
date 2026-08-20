@@ -6,7 +6,12 @@ edition = "2024"
 [features]
 default = ["std"]
 std = []
-dev = []
+# Forwards to `atlas-core`'s own `dev` feature, which gates its self-flagged, `--release`-hostile
+# `tracing` module (see that crate's own doc comment) — real consumers of `atlas::tracing`
+# (`escher-terminal`'s `examples/ratatui.rs`) need to opt in explicitly through here now, rather
+# than getting it (and its release-blocking `compile_error!`) unconditionally just for depending
+# on this facade crate at all.
+dev = ["atlas-core/dev"]
 inspect = []
 profiling = []
 

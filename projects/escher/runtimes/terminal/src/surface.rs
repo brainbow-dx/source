@@ -94,7 +94,7 @@ use crate::app::TerminalAction;
 /// A mouse click at a specific terminal cell, deliberately not `ui_events::pointer`'s
 /// `PointerButtonEvent`, which is built for continuous, sub-pixel pointer devices (pressure,
 /// tilt, contact geometry, DPI scale), none of which have a meaningful value on a discrete
-/// terminal cell grid. A widget registers interest via `.with_handler::<ClickEvent>(..)`, same as
+/// terminal cell grid. A widget registers interest via `.handle::<ClickEvent>(..)`, same as
 /// any other event type.
 #[derive(Debug, Clone, Copy)]
 pub struct ClickEvent {
@@ -180,6 +180,25 @@ pub struct TerminalSurface<B: Backend> {
     /// starts it and the `Up` that ends it (which clears it back to `None`) — unlike
     /// `overlay_bounds`, this has no reason to outlive the gesture itself.
     overlay_drag: Option<OverlayDrag>,
+    /// The overlay's actual resolved position as of the last `draw`/`draw_with_poll_timeout` call
+    /// — `overlay_bounds`, when the user's dragged it at least once, otherwise wherever
+    /// `overlay_rect`'s own default (bottom-right-anchored) computation currently places it. Unlike
+    /// `overlay_bounds`, this is never `None` once at least one frame has drawn an overlay at all,
+    /// which is the whole reason it exists: a caller that needs "where is the overlay *actually*
+    /// on screen right now" (e.g. `apps/anvil`'s Mario colliding with it) needs this, not
+    /// `overlay_bounds`, which stays `None` until the user drags the overlay at least once — a
+    /// caller reading `overlay_bounds` for collision purposes would pass straight through the
+    /// overlay with no collision at all until the first drag.
+    last_overlay_rect: Option<Rect>,
+    /// Whether a bare Escape keypress exits the app immediately, before the `Scaffold`'s own
+    /// handlers ever see it. `true` by default — most callers (the examples in this crate) have
+    /// no other quit key, so this is their only way out. A caller with its own real navigation
+    /// model for Escape (e.g. `apps/anvil`: "back out of whichever mode you're in," with its own
+    /// separate real exit path via Ctrl+C/a signal) sets this `false` via `with_exit_on_escape` —
+    /// with this hardcoded on, a caller's own `KeyCode::Esc` handler is dead code that can never
+    /// run, since this dispatch step returns `Exit` and quits the whole app before the event ever
+    /// reaches it.
+    exit_on_escape: bool,
 }
 
 impl<B: Backend + core::fmt::Debug> core::fmt::Debug for TerminalSurface<B> {
@@ -199,7 +218,16 @@ impl<B: Backend> TerminalSurface<B> {
             selection: None,
             overlay_bounds: None,
             overlay_drag: None,
+            last_overlay_rect: None,
+            exit_on_escape: true,
         })
+    }
+
+    /// Opts out of the default "bare Escape exits the app" behavior — see `exit_on_escape`'s own
+    /// doc comment for why a caller would want this.
+    pub fn with_exit_on_escape(mut self, exit_on_escape: bool) -> Self {
+        self.exit_on_escape = exit_on_escape;
+        self
     }
 }
 
@@ -211,6 +239,8 @@ impl TerminalSurface<CrosstermBackend<Stdout>> {
             selection: None,
             overlay_bounds: None,
             overlay_drag: None,
+            last_overlay_rect: None,
+            exit_on_escape: true,
         })
     }
 }
@@ -223,6 +253,14 @@ impl<B: Backend> TerminalSurface<B> {
     /// have no reason to know anything about persistence themselves.
     pub fn overlay_bounds(&self) -> Option<Rect> {
         self.overlay_bounds
+    }
+
+    /// The overlay's actual resolved position as of the last draw — see `last_overlay_rect`'s own
+    /// field doc comment for why a caller that needs "where is it *really* on screen" (not just
+    /// "has the user ever dragged it") should read this instead of `overlay_bounds` above. `None`
+    /// only if the scaffold drawn so far has never had an overlay attached at all.
+    pub fn last_overlay_rect(&self) -> Option<Rect> {
+        self.last_overlay_rect
     }
 
     /// Seeds the overlay's live override — meant to be called once, right after construction,
@@ -334,12 +372,33 @@ impl TerminalSurface<CrosstermBackend<Stdout>> {
         // scaffold, the frame area, and `self.overlay_bounds`, none of which the closure above
         // mutated), not worth threading a value out of the closure for.
         let overlay_rect = scaffold.get_overlay().map(|overlay| Self::resolve_overlay_rect(self.overlay_bounds, overlay, &completed_frame.area));
+        self.last_overlay_rect = overlay_rect;
 
         #[cfg(all(feature="dev", feature="verbose"))]
         tracing::tracing!("Frame Area: {:?}", completed_frame.area);
 
         if crossterm::event::poll(poll_timeout)? {
-            let event = ratatui::crossterm::event::read()?;
+            let mut event = ratatui::crossterm::event::read()?;
+
+            // Coalesces a burst of consecutive mouse-drag events into just the latest one. A
+            // fast drag can queue up dozens of `Drag` events between one render and the next —
+            // a synthetic fast-drag test hit 42 events causing 42 full re-renders in a single
+            // Bevy tick, 122ms total, a real user-visible stutter — and every intermediate
+            // position between "drag started" and "drag as of right now" is never actually seen
+            // on screen anyway, only the final one each render reflects.
+            // Safe to just discard the skipped ones: `handle_mouse_event`'s `Up` branch resolves
+            // the drag's final resting position from the `Up` event's own point, not from
+            // whatever `Drag` event happened to precede it, so dropping an intermediate (or even
+            // the very last pre-`Up`) `Drag` position changes nothing about where a drag actually
+            // ends. Every other event kind still dispatches exactly one at a time, unchanged —
+            // this loop only ever runs while both the current candidate *and* the next queued
+            // event are `Drag(Left)`.
+            while let CrosstermEvent::Mouse(MouseEvent { kind: MouseEventKind::Drag(MouseButton::Left), .. }) = &event {
+                if !crossterm::event::poll(Duration::ZERO)? {
+                    break;
+                }
+                event = ratatui::crossterm::event::read()?;
+            }
 
             // A selection is only meaningful to copy once it's finished (mouse-up), reading
             // the just-rendered `completed_frame.buffer` has to happen here, before `dispatch`,
@@ -386,6 +445,7 @@ impl TerminalSurface<CrosstermBackend<Stdout>> {
                 &mut self.selection,
                 &mut self.overlay_bounds,
                 &mut self.overlay_drag,
+                self.exit_on_escape,
             );
         }
 
@@ -866,6 +926,7 @@ impl TerminalSurface<CrosstermBackend<Stdout>> {
         selection: &mut Option<Selection>,
         overlay_bounds: &mut Option<Rect>,
         overlay_drag: &mut Option<OverlayDrag>,
+        exit_on_escape: bool,
     ) -> Result<TerminalAction> {
         match event {
             CrosstermEvent::FocusGained => {
@@ -882,7 +943,7 @@ impl TerminalSurface<CrosstermBackend<Stdout>> {
                 // the Kitty keyboard protocol, which this app never enables, so on ordinary
                 // terminals no Release event is ever reported and this could never fire.
                 // `Down` covers the initial Press, which every terminal reports.
-                if event.code == Code::Escape && event.state == KeyState::Down {
+                if exit_on_escape && event.code == Code::Escape && event.state == KeyState::Down {
                     return Ok(TerminalAction::Exit(0));
                 }
 

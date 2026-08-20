@@ -14,7 +14,7 @@ Each project can define one or more styleguides — simple markdown documents wi
 
 ## Design requirements, refined with the human
 
-1. **Variables work like CSS custom properties.** A `variables:` block in frontmatter defines named values; anything else in the document (and eventually `.with_style()` calls in composition code) references them by name rather than embedding literals, so changing one variable propagates everywhere it's used. Requires a resolution pass: collect all variable definitions, expand references (including variables referencing other variables), detect cycles — the same problem the browser solves for `var(--name)`.
+1. **Variables work like CSS custom properties.** A `variables:` block in frontmatter defines named values; anything else in the document (and eventually `.style()` calls in composition code) references them by name rather than embedding literals, so changing one variable propagates everywhere it's used. Requires a resolution pass: collect all variable definitions, expand references (including variables referencing other variables), detect cycles — the same problem the browser solves for `var(--name)`.
 2. **Tokens should track the W3C Design Tokens Community Group format**, not an ad hoc flat key-value shape, given the explicit CSS/web-standards-parity goal. Concretely: each token has a typed `$value`/`$type` (`color`, `dimension`, `fontFamily`, `fontWeight`, `duration`, `cubicBezier`, `number`, etc.) and can alias another token via reference syntax (`{token.path}`), rather than being an untyped raw value. This is real, existing prior art (Figma, Style Dictionary, and other design tools already interoperate via this format) — worth tracking it directly rather than inventing a incompatible Escher-specific shape.
 3. **Component dependencies** — styleguides can express dependencies at the component level. **Open question, unresolved as of 2026-08-15** (see bottom).
 
@@ -49,11 +49,11 @@ explicit instruction ("I don't have much time"). Concretely:
   HashMap<String, f64>`. No variable/token aliasing (`{token.path}` references — §1 above), no W3C
   `$type`/`$value` tagging (§2 above), no component-dependency declarations (§3, still the open
   question). `Styleguide::color(name)`/`.dimension(name)` are the whole lookup API.
-- **`apps/anvil/anvil.styleguide.md`**: the actual token file — a Tokyo-Night-derived palette
+- **`spec/design/styleguide/anvil.md`**: the actual token file — a Tokyo-Night-derived palette
   (`background`, `surface`, `border`, `accent`, `accent-warn`, `success`, `danger`, `text`,
   `text-muted`) plus a handful of unused-so-far dimension tokens (`radius`, `spacing-*`).
 - **Terminal side**: `apps/anvil/src/main.rs`'s previously-hardcoded `ACCENT_BLUE`/`ACCENT_ORANGE`/
-  `GREEN`/`RED`/`DIM` consts (and two raw hex-literal `with_style` calls) now resolve from this
+  `GREEN`/`RED`/`DIM` consts (and two raw hex-literal `style` calls) now resolve from this
   file via a `LazyLock<Styleguide>`, with the original hardcoded values kept as fallbacks.
 - **AppKit side**: `escher-appkit` gained a minimal `Theme { background, accent, text }` (just
   three colors, deliberately not the full token set) on `AppKitSurface` — `set_theme()` paints the

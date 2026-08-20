@@ -55,7 +55,7 @@ Every finding below was verified by reading the actual current code (`packages/c
 
 1. **Retain per-frame `Rect`s** — `render()` computes each node's `content_area`/`slot_area` today and throws it away; hit-testing needs these kept somewhere addressable for the current frame.
 2. **Real hit-testing + target/bubble dispatch for pointer events** — find the deepest node under the pointer position, then walk its ancestor chain firing handlers target-to-root. This needs `Scaffold` to know its parent chain, which doesn't exist today (traversal is strictly top-down via `slots`) — this is the biggest structural addition in this whole proposal.
-3. **Wire `CrosstermEvent::Mouse` → `ui_events::pointer::PointerEvent`**, mirroring the existing `unpack_keyboard_event` conversion, so terminal apps can register `.with_handler::<PointerEvent>(...)`.
+3. **Wire `CrosstermEvent::Mouse` → `ui_events::pointer::PointerEvent`**, mirroring the existing `unpack_keyboard_event` conversion, so terminal apps can register `.handle::<PointerEvent>(...)`.
 4. **Add stop-propagation** — change `EventHandler::call`'s signature to let a handler signal "don't keep bubbling."
 5. **Leave keyboard dispatch's current broadcast behavior alone for v1** — focus-tracking ("which node currently has keyboard focus") is its own sizable feature; scoping it into this pass would balloon it further.
 6. **Explicitly out of scope**: full `addEventListener`-style API (capture-phase opt-in, `once`, passive listeners), synthetic event replay, focus management/tab order.
@@ -71,7 +71,7 @@ Scaffold trees are **rebuilt from scratch every frame** — arena-allocated fres
 ### Two paths
 
 - **(A) Solve retained-mode diffing first, then automatic transitions on top.** This is the "real" experience — just change a style value and it animates. It's also, on its own, roughly as large as the rest of this proposal combined (stable node identity across frames, a diff pass, animation state keyed to that identity).
-- **(B) Explicit `Transition<T>` helper, app-managed.** A small library type callers hold in their own persistent state (the same `Arc<RwLock<...>>` pattern every example already uses for things like `expanded`/`user_input`), read once per frame to produce the interpolated value they pass into `.with_style(...)`. Gets the CSS-transition *feel* — smooth interpolation, duration, easing — without requiring the framework to solve reconciliation first.
+- **(B) Explicit `Transition<T>` helper, app-managed.** A small library type callers hold in their own persistent state (the same `Arc<RwLock<...>>` pattern every example already uses for things like `expanded`/`user_input`), read once per frame to produce the interpolated value they pass into `.style(...)`. Gets the CSS-transition *feel* — smooth interpolation, duration, easing — without requiring the framework to solve reconciliation first.
 
 **Recommend (B) for v1.** It's honest about what's achievable without a much bigger prerequisite, ships something genuinely usable now, and doesn't foreclose (A) later — a future automatic system could reuse the same `Lerp`/`Easing` primitives underneath.
 

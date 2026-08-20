@@ -3,7 +3,7 @@
 //! `src/legacy/basic.rs.example`). That example depended on a `chizel::uix!`/`chizel::styles!`
 //! macro DSL and a `Div`/`Header`/`Footer`/`Sidebar`/`TextBlock`/`Button` component library that
 //! no longer exist. This one uses only what current `escher-core` actually provides: the
-//! `Scaffold` builder API directly (`with_style`/`with_slot`/`with_content`, the same idiom
+//! `Scaffold` builder API directly (`style`/`slot`/`content`, the same idiom
 //! `escher-terminal`'s `examples/ratatui.rs` already uses), `Container`/`Text` elements, and
 //! `Header`/`Body`/`Footer`/`Legend`/`Content` as plain slot-marker types — no macros, no bespoke
 //! component library, and it renders through the new `escher_bevy::surface::BevySurface`.
@@ -92,45 +92,45 @@ fn draw_scene(
 }
 
 fn build_scene(root: Scaffold) -> Scaffold {
-    root.with_style(ScaffoldFlexDirection::Column)
-        .with_slot::<Header>(|header| {
+    root.style(ScaffoldFlexDirection::Column)
+        .slot::<Header>(|header| {
             header
-                .with_style(ScaffoldFlexDirection::Row)
-                .with_style(Size::height(60))
-                .with_style(Padding::new(10))
-                .with_style(ScaffoldBackgroundColor::from("#2a2a2aff"))
-                .with_style(ContentColor::from("#eeeeeeff"))
-                .with_content(Some("Escher / Bevy — Simple Scene"))
+                .style(ScaffoldFlexDirection::Row)
+                .style(Size::height(60))
+                .style(Padding::new(10))
+                .style(ScaffoldBackgroundColor::from("#2a2a2aff"))
+                .style(ContentColor::from("#eeeeeeff"))
+                .content(Some("Escher / Bevy — Simple Scene"))
         })
-        .with_slot::<Body>(|body| {
-            body.with_style(ScaffoldFlexDirection::Row)
-                .with_style(Gap(10.into()))
-                .with_style(Padding::new(10))
-                .with_slot::<Legend>(|sidebar| {
+        .slot::<Body>(|body| {
+            body.style(ScaffoldFlexDirection::Row)
+                .style(Gap(10.into()))
+                .style(Padding::new(10))
+                .slot::<Legend>(|sidebar| {
                     sidebar
-                        .with_style(Size::width(200))
-                        .with_style(Padding::new(10))
-                        .with_style(ScaffoldBackgroundColor::from("#668866ff"))
-                        .with_style(ContentColor::from("#111111ff"))
-                        .with_content(Some("Sidebar"))
+                        .style(Size::width(200))
+                        .style(Padding::new(10))
+                        .style(ScaffoldBackgroundColor::from("#668866ff"))
+                        .style(ContentColor::from("#111111ff"))
+                        .content(Some("Sidebar"))
                 })
-                .with_slot::<ContentSlot>(|content| {
+                .slot::<ContentSlot>(|content| {
                     content
-                        .with_style(Size(Value::Percent(Unit::from(100)), Value::Auto, Value::Auto))
-                        .with_style(Padding::new(10))
-                        .with_style(Border::new(2, BorderStyle::Solid, Some("#88aa88ff".into())))
-                        .with_style(ScaffoldBackgroundColor::from("#333344ff"))
-                        .with_style(ContentColor::from("#eeeeeeff"))
-                        .with_content(Some("Main content area — redraws every 2 seconds."))
+                        .style(Size(Value::Percent(Unit::from(100)), Value::Auto, Value::Auto))
+                        .style(Padding::new(10))
+                        .style(Border::new(2, BorderStyle::Solid, Some("#88aa88ff".into())))
+                        .style(ScaffoldBackgroundColor::from("#333344ff"))
+                        .style(ContentColor::from("#eeeeeeff"))
+                        .content(Some("Main content area — redraws every 2 seconds."))
                 })
         })
-        .with_slot::<Footer>(|footer| {
+        .slot::<Footer>(|footer| {
             footer
-                .with_style(ScaffoldFlexDirection::Row)
-                .with_style(Size::height(40))
-                .with_style(Padding::new(10))
-                .with_style(ScaffoldBackgroundColor::from("#886666ff"))
-                .with_style(ContentColor::from("#eeeeeeff"))
-                .with_content(Some("Footer"))
+                .style(ScaffoldFlexDirection::Row)
+                .style(Size::height(40))
+                .style(Padding::new(10))
+                .style(ScaffoldBackgroundColor::from("#886666ff"))
+                .style(ContentColor::from("#eeeeeeff"))
+                .content(Some("Footer"))
         })
 }

@@ -29,4 +29,6 @@ bevy = { workspace = true, features = ["bevy_window", "bevy_winit"], optional = 
 objc2 = { workspace = true }
 objc2-foundation = { workspace = true }
 objc2-app-kit = { workspace = true }
+objc2-quartz-core = { workspace = true }
+objc2-core-graphics = { workspace = true }
 block2 = { workspace = true }

@@ -19,10 +19,6 @@ use std::process::Stdio;
 
 use clap::Parser;
 
-use deno_core::v8;
-use deno_core::PollEventLoopOptions;
-use deno_runtime::deno_core::resolve_url_or_path;
-
 use ethos_core::Runtime;
 use ethos_deno::stdio::RuntimeStdio;
 
@@ -178,56 +174,16 @@ fn run_command(script: &Path, args: &str) -> Result<String, Box<dyn std::error::
 }
 
 /// Loads `script` as an ES module, evaluates it, calls its exported `run(args)`, and returns
-/// the (stringified) result. `RuntimeStdio::try_new(None, None)` points the worker's own
-/// stdout/stderr straight at this process's real ones (not piped/captured internally), so
-/// anything the script itself `console.log`s reaches the parent process (`escher-terminal`'s
-/// assistant example, which captures this whole process's stdout) too.
+/// the (stringified) result, via `ethos_deno::command::run_module_command` — the same call
+/// `escher-anvil`'s own JS-backed slash commands use, so the V8-scope/module-evaluate dance lives
+/// in exactly one place rather than being copy-pasted per host. `RuntimeStdio::try_new(None,
+/// None)` points the worker's own stdout/stderr straight at this process's real ones (not
+/// piped/captured internally), so anything the script itself `console.log`s reaches the parent
+/// process (`escher-terminal`'s assistant example, which captures this whole process's stdout)
+/// too.
 fn run_js_command(script: &Path, args: &str) -> Result<String, Box<dyn std::error::Error>> {
-    // deno_unsync (used internally by deno_fetch) asserts the runtime is CurrentThread.
-    let tokio_runtime = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
+    let current_dir = std::env::current_dir()?;
+    let stdio = RuntimeStdio::try_new(None, None)?.try_clone_into()?;
 
-    tokio_runtime.block_on(async move {
-        let current_dir = std::env::current_dir()?;
-        let main_module = resolve_url_or_path(&script.to_string_lossy(), &current_dir)?;
-        let stdio = RuntimeStdio::try_new(None, None)?.try_clone_into()?;
-
-        let mut worker = ethos_deno::worker::bootstrap_main_worker(&main_module, stdio, None, vec![], false, None);
-
-        let module_id = worker.preload_main_module(&main_module).await?;
-        worker.evaluate_module(module_id).await?;
-        worker.js_runtime.run_event_loop(PollEventLoopOptions::default()).await?;
-
-        let namespace = worker.js_runtime.get_module_namespace(module_id)?;
-
-        let (run_function, arg_value) = {
-            deno_core::scope!(scope, worker.js_runtime);
-            let namespace_local = v8::Local::new(scope, &namespace);
-
-            let key = v8::String::new(scope, "run").ok_or("failed to allocate \"run\" key")?;
-            let run_value = namespace_local
-                .get(scope, key.into())
-                .ok_or("script does not export \"run\"")?;
-            let run_function = v8::Local::<v8::Function>::try_from(run_value).map_err(|_| "exported \"run\" is not a function")?;
-
-            let arg_string = v8::String::new(scope, args).ok_or("failed to allocate arg string")?;
-            let arg_value: v8::Local<v8::Value> = arg_string.into();
-
-            (v8::Global::new(scope, run_function), v8::Global::new(scope, arg_value))
-        };
-
-        #[allow(deprecated, reason = "call_with_args (the replacement) needs the caller to drive the event loop manually; this one already does it, and that's exactly what's needed here")]
-        let result = worker.js_runtime.call_with_args_and_await(&run_function, &[arg_value]).await?;
-
-        let result_string = {
-            deno_core::scope!(scope, worker.js_runtime);
-            let result_local = v8::Local::new(scope, &result);
-            if result_local.is_undefined() || result_local.is_null() {
-                String::new()
-            } else {
-                result_local.to_rust_string_lossy(scope)
-            }
-        };
-
-        Ok::<_, Box<dyn std::error::Error>>(result_string)
-    })
+    ethos_deno::command::run_module_command(script, &current_dir, args, stdio).map_err(Into::into)
 }

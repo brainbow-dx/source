@@ -67,7 +67,7 @@ impl<T: AsRef<str>> Element for Text<T> {
         move |text| {
             text
                 // TODO: Allocate content in the DrawContext ..
-                .with_content(Some(self.0.as_ref().to_string()))
+                .content(Some(self.0.as_ref().to_string()))
         }
     }
 }
@@ -119,44 +119,57 @@ impl<V: AsRef<str> + Default> Element for Input<V> {
             // let some_bump_string = crate::draw::format!(in ctx.arena(), "TODO: {}", "");
 
             input
-                .with_style(FlexDirection::Row)
-                .with_style(Gap(Value::from(1)))
-                .with_handler::<KeyboardEvent>({
+                .style(FlexDirection::Row)
+                .style(Gap(Value::from(1)))
+                .handle::<KeyboardEvent>({
                     move |event| match event.key {
                         _ => {} // tracing::debug!("TODO: Handle keyboard events!"),
                     }
                 })
-                .with_slot::<InputIcon>(|prefix| {
+                .slot::<InputIcon>(|prefix| {
                     prefix
-                        .with_style(FlexDirection::Row)
-                        .with_style(Size::width(1))
-                        .with_content(Some("$"))
+                        .style(FlexDirection::Row)
+                        .style(Size::width(1))
+                        .content(Some("$"))
                 })
-                .with_slot::<InputValue>(move |text| {
+                .slot::<InputValue>(move |text| {
                     // The cursor slot is always present (not just once there's typed text) —
                     // it's the "ready to take input" indicator, so an empty input still needs
                     // to show it blinking next to the placeholder.
                     if current_value.is_empty() {
+                        // Explicit width here too, not just the non-empty branch below — without
+                        // it, this slot has nothing but flex-layout defaults to size itself by,
+                        // which leaves the `InputCursor` slot right after it with no reliable
+                        // column to land in, which can make the blink cursor fail to visibly show
+                        // on an empty/whitespace-only input (an empty box also has nothing else
+                        // on screen to anchor the eye during the cursor's normal "off" blink
+                        // half, which alone could produce the same symptom, so this may not be
+                        // the full explanation).
+                        let placeholder_width = match &placeholder {
+                            Some(text) => display_width(text.as_ref()),
+                            None => 0,
+                        };
                         text
-                            .with_style(FlexDirection::Row)
-                            .with_style(FontStyle::Italic)
-                            .with_style(ContentColor::from("#555555ff"))
-                            .with_content(placeholder)
+                            .style(FlexDirection::Row)
+                            .style(FontStyle::Italic)
+                            .style(ContentColor::from("#555555ff"))
+                            .style(Size::width(placeholder_width + 1))
+                            .content(placeholder)
                     } else {
                         // Display width, not byte length — `current_value` may carry embedded
                         // ANSI styling (e.g. a highlighted `/command` prefix, see `assistant.rs`)
                         // whose escape bytes take up no actual columns.
                         text
-                            .with_style(FlexDirection::Row)
-                            .with_style(Size::width(display_width(&current_value) + 1))
-                            .with_content(Some(current_value))
+                            .style(FlexDirection::Row)
+                            .style(Size::width(display_width(&current_value) + 1))
+                            .content(Some(current_value))
                     }
-                    .with_slot::<InputCursor>(move |cursor| {
+                    .slot::<InputCursor>(move |cursor| {
                         cursor
-                            .with_style(FlexDirection::Row)
-                            .with_style(Size::width(1))
-                            // .with_style(BackgroundColor::from("#aaaaaaff"))
-                            .with_content(Some(cursor_glyph))
+                            .style(FlexDirection::Row)
+                            .style(Size::width(1))
+                            // .style(BackgroundColor::from("#aaaaaaff"))
+                            .content(Some(cursor_glyph))
                     })
                 })
         }
@@ -170,21 +183,42 @@ impl<V: AsRef<str> + Default> Element for Input<V> {
 /// knowing the exact concrete type at the call site — a generic `Button<T>` would make that
 /// impossible for a surface that doesn't know what `T` the app composing the tree chose. Carries
 /// no handler of its own; the caller registers behavior directly on the composed `Scaffold` via
-/// `.with_handler::<escher_core::event::ClickEvent>(..)`, the same way `runtimes/terminal/
+/// `.handle::<escher_core::event::ClickEvent>(..)`, the same way `runtimes/terminal/
 /// examples/mouse.rs` already does for its own `ClickEvent`.
 #[derive(Default, Debug, Clone)]
 pub struct Button {
     pub label: String,
     pub disabled: bool,
+    /// A portable, symbolic icon name (e.g. `"chevron-left"`) rather than any actual image data —
+    /// a surface that knows how to render icons (today: `escher-appkit`, via its own bundled SVG
+    /// asset table) looks this up and renders it instead of `label`; a surface that doesn't (the
+    /// terminal, say) just uses `label` as plain text, so this is always a real, working fallback,
+    /// never a silent gap. `None` means "text-only," the same as before this existed.
+    pub icon: Option<&'static str>,
+    /// A persistent "on" state distinct from hovering — a toolbar's pin button, say, reading as
+    /// visually toggled on while pinned even when the pointer isn't over it at all. `false`
+    /// (the default) renders identically to before this existed; a surface that doesn't
+    /// distinguish it just ignores this field, same fallback contract `icon`/`disabled` follow.
+    pub active: bool,
 }
 
 impl Button {
     pub fn new(label: impl Into<String>) -> Self {
-        Button { label: label.into(), disabled: false }
+        Button { label: label.into(), disabled: false, icon: None, active: false }
     }
 
     pub fn with_label(mut self, label: impl Into<String>) -> Self {
         self.label = label.into();
+        self // etc..
+    }
+
+    pub fn with_icon(mut self, icon: &'static str) -> Self {
+        self.icon = Some(icon);
+        self // etc..
+    }
+
+    pub fn with_active(mut self, active: bool) -> Self {
+        self.active = active;
         self // etc..
     }
 
@@ -203,8 +237,8 @@ impl Element for Button {
     fn draw(&self, _: DrawContext) -> impl FnOnce(Scaffold) -> Scaffold {
         move |button| {
             button
-                .with_style(FlexDirection::Row)
-                .with_content(Some(self.label.clone()))
+                .style(FlexDirection::Row)
+                .content(Some(self.label.clone()))
         }
     }
 }

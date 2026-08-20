@@ -13,97 +13,18 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use bevy::app::{App, Plugin, Update};
-use bevy::ecs::component::Component;
 use bevy::ecs::entity::Entity;
-use bevy::ecs::message::Message;
 use bevy::ecs::schedule::{IntoScheduleConfigs, SystemSet};
 use bevy::ecs::system::{Commands, NonSendMut, Res};
-use bevy::prelude::{MessageWriter, Query, Resource, With};
+use bevy::prelude::{MessageWriter, Query, With};
 use bevy::window::RawHandleWrapper;
 
 use crate::surface::AppKitSurface;
 
-pub use crate::TOOLBAR_HEIGHT;
-pub use crate::surface::Theme as ToolbarTheme;
-pub use escher_chalk::tabs::TabInfo;
-
-/// Marks a window entity that should get a toolbar attached once its native handle is ready —
-/// removed once attached (successfully or not) so it's never retried.
-#[derive(Component)]
-pub struct WantsToolbar;
-
-/// Marks a window entity that should get a tab strip attached alongside its toolbar, once its
-/// native handle is ready — same lifetime/removal contract as `WantsToolbar`. Reads
-/// `TabStripState::width` (must already be inserted) for the sidebar's starting width.
-#[derive(Component)]
-pub struct WantsTabStrip;
-
-/// What the toolbar's address field shows — the app writes this every tick from its own notion of
-/// "current page" (e.g. the active tab's URL); the plugin only ever reads it.
-#[derive(Resource, Default, Clone)]
-pub struct ToolbarState {
-    pub address: String,
-    /// Drives the refresh button's glyph swap — see `escher_chalk::toolbar::toolbar`'s own doc
-    /// comment on its `loading` parameter, which this is passed straight through to. The app sets
-    /// this from whatever it actually knows is loading (a webview's own `is_loading()`, typically)
-    /// every tick, same as `address`.
-    pub loading: bool,
-}
-
-/// What the tab strip shows — the app owns `tabs`/`active`/`collapsed`; `width` is the strip's
-/// full (uncollapsed) width, set once and left alone unless the app wants to resize it. Call
-/// `effective_width()` for what to actually reserve elsewhere (a webview's left inset, say) —
-/// `0.0` while `collapsed`, `width` otherwise.
-#[derive(Resource, Clone)]
-pub struct TabStripState {
-    pub tabs: Vec<TabInfo>,
-    pub active: Option<u64>,
-    pub collapsed: bool,
-    pub width: f64,
-}
-
-impl TabStripState {
-    pub fn effective_width(&self) -> f64 {
-        if self.collapsed { 0.0 } else { self.width }
-    }
-}
-
-/// The theme newly-attached toolbar/tab-strip surfaces are created with — set this (from a
-/// styleguide, typically) before spawning `WantsToolbar`/`WantsTabStrip` entities if you want
-/// anything other than plain system-default AppKit chrome; the default here matches the look
-/// this crate had before theming existed (nothing painted, system colors throughout).
-#[derive(Resource, Default, Clone, Copy)]
-pub struct ThemeState(pub Option<ToolbarTheme>);
-
-impl Default for TabStripState {
-    /// `220.0` is a reasonable starting sidebar width, not a load-bearing constant — override
-    /// `width` after inserting if a consumer wants something else.
-    fn default() -> Self {
-        TabStripState { tabs: Vec::new(), active: None, collapsed: false, width: 220.0 }
-    }
-}
-
-/// Fired when the toolbar's back/forward/refresh/sidebar-toggle buttons are clicked, its address
-/// field is submitted, *or* the global mouse/keyboard shortcuts fire (see
-/// `crate::shortcuts::GlobalShortcuts` — both routes land here identically, since a consumer
-/// reacting to "go back" shouldn't care which one triggered it).
-#[derive(Message, Debug, Clone)]
-pub enum ToolbarEvent {
-    Back,
-    Forward,
-    Refresh,
-    Navigate(String),
-    ToggleSidebar,
-}
-
-/// Fired by tab-strip interactions — select/close/reorder an existing row, or open a new one.
-#[derive(Message, Debug, Clone)]
-pub enum TabStripEvent {
-    Select(u64),
-    Close(u64),
-    Reorder(u64, i32),
-    New,
-}
+pub use crate::bevy_state::{
+    ICON_ONLY_WIDTH, MAX_WIDTH, MIN_WIDTH, TabInfo, TabStripEvent, TabStripState, ThemeState, ToolbarEvent, ToolbarState, ToolbarTheme, WantsTabStrip,
+    WantsToolbar, RESIZE_HANDLE_WIDTH, TOOLBAR_HEIGHT,
+};
 
 /// Attaches a toolbar (and, on windows that also asked for one, a tab strip) once a window's
 /// native handle is ready, redraws both every tick, and translates native interactions plus global
@@ -231,6 +152,7 @@ struct PendingEvents {
 fn redraw_toolbar(mut surfaces: NonSendMut<ToolbarSurfaces>, state: Res<ToolbarState>, pending: NonSendMut<PendingEvents>) {
     let address = state.address.clone();
     let loading = state.loading;
+    let pinned = state.pinned;
 
     for surface in surfaces.0.values_mut() {
         let address = address.clone();
@@ -239,17 +161,20 @@ fn redraw_toolbar(mut surfaces: NonSendMut<ToolbarSurfaces>, state: Res<ToolbarS
         let forward_queue = pending.toolbar.clone();
         let refresh_queue = pending.toolbar.clone();
         let load_queue = pending.toolbar.clone();
+        let pin_queue = pending.toolbar.clone();
 
         surface.draw(move |root| {
             escher_chalk::toolbar::toolbar(
                 root,
                 &address,
                 loading,
+                pinned,
                 move || toggle_queue.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).push(ToolbarEvent::ToggleSidebar),
                 move || back_queue.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).push(ToolbarEvent::Back),
                 move || forward_queue.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).push(ToolbarEvent::Forward),
                 move || refresh_queue.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).push(ToolbarEvent::Refresh),
                 move |text| load_queue.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).push(ToolbarEvent::Navigate(text)),
+                move || pin_queue.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).push(ToolbarEvent::TogglePinned),
             )
         });
     }
@@ -261,8 +186,15 @@ fn redraw_tab_strip(mut surfaces: NonSendMut<TabStripSurfaces>, state: Res<TabSt
 
     for surface in surfaces.0.values_mut() {
         surface.set_width(width);
+        surface.set_resize_handle_hidden(state.icon_only());
+
+        let resize_queue = pending.tabs.clone();
+        surface.set_resize_callback(move |delta| {
+            resize_queue.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).push(TabStripEvent::Resize(delta));
+        });
 
         let tabs = state.tabs.clone();
+        let icon_only = state.icon_only();
         let select_queue = pending.tabs.clone();
         let close_queue = pending.tabs.clone();
         let reorder_queue = pending.tabs.clone();
@@ -273,6 +205,7 @@ fn redraw_tab_strip(mut surfaces: NonSendMut<TabStripSurfaces>, state: Res<TabSt
                 root,
                 &tabs,
                 active,
+                icon_only,
                 move |id| select_queue.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).push(TabStripEvent::Select(id)),
                 move |id| close_queue.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).push(TabStripEvent::Close(id)),
                 move |id, positions| reorder_queue.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).push(TabStripEvent::Reorder(id, positions)),
@@ -315,16 +248,23 @@ fn install_global_shortcuts(mut installed: NonSendMut<InstalledShortcuts>, pendi
 
     let Some(mtm) = objc2::MainThreadMarker::new() else { return };
 
-    let back_queue = pending.toolbar.clone();
-    let forward_queue = pending.toolbar.clone();
-    let refresh_queue = pending.toolbar.clone();
+    // Today's defaults, expressed as data (`Shortcut::install` no longer forces exactly these
+    // three) — a mouse side-button and its Cmd+key equivalent both push the same `ToolbarEvent`,
+    // so they're two separate bindings sharing one action each rather than one binding per event.
+    use crate::shortcuts::Shortcut;
+    fn binding(shortcut: Shortcut, queue: Arc<Mutex<Vec<ToolbarEvent>>>, event: ToolbarEvent) -> (Shortcut, Box<dyn Fn()>) {
+        (shortcut, Box::new(move || queue.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).push(event.clone())))
+    }
 
-    installed.0 = Some(crate::shortcuts::GlobalShortcuts::install(
-        mtm,
-        move || back_queue.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).push(ToolbarEvent::Back),
-        move || forward_queue.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).push(ToolbarEvent::Forward),
-        move || refresh_queue.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).push(ToolbarEvent::Refresh),
-    ));
+    let bindings = vec![
+        binding(Shortcut::MouseBack, pending.toolbar.clone(), ToolbarEvent::Back),
+        binding(Shortcut::CommandKey('['), pending.toolbar.clone(), ToolbarEvent::Back),
+        binding(Shortcut::MouseForward, pending.toolbar.clone(), ToolbarEvent::Forward),
+        binding(Shortcut::CommandKey(']'), pending.toolbar.clone(), ToolbarEvent::Forward),
+        binding(Shortcut::CommandKey('r'), pending.toolbar.clone(), ToolbarEvent::Refresh),
+    ];
+
+    installed.0 = Some(crate::shortcuts::GlobalShortcuts::install(mtm, bindings));
 
     tracing::info!("Installed global back/forward/refresh shortcuts");
 }

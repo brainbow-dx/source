@@ -12,8 +12,11 @@ use wasm_bindgen::JsCast;
 use web_sys::Document;
 use web_sys::Element;
 use web_sys::HtmlElement;
+use web_sys::HtmlInputElement;
 
 use escher_core::draw::Bump;
+use escher_core::element::Button;
+use escher_core::element::Input;
 use escher_core::scaffold::Scaffold;
 use escher_core::style::Color as EscherColor;
 use escher_core::style::Edge;
@@ -57,7 +60,39 @@ pub(crate) fn mount(root: &Element, scaffold: &Scaffold) -> Result<(), JsValue> 
     Ok(())
 }
 
+/// Real, semantic tags where a scaffold node carries an element that maps to one — `<button>`,
+/// `<input>` — same `get_element::<E>()` dispatch `runtimes/appkit/src/surface.rs`'s `classify`
+/// already uses to pick a real `NSButton`/`NSTextField` instead of a generic view. A plain `<div>`
+/// is reserved for nodes with no specific element (a `Container`, or bare text) — the *correct*
+/// tag there, not a fallback papering over missing semantics: `<div>` is HTML's own real element
+/// for "no inherent semantics, just grouping." A custom element is never created here at all —
+/// that's reserved for content with no HTML equivalent whatsoever (e.g. a map widget), not the
+/// default rendering strategy for ordinary composed UI.
 fn render_node(document: &Document, scaffold: &Scaffold) -> Result<Element, JsValue> {
+    if let Some(button) = scaffold.get_element::<Button>() {
+        let element = document.create_element("button")?;
+        apply_styles(&element, scaffold);
+        let text = scaffold.get_content().map(|content| content.as_str()).unwrap_or(button.label.as_str());
+        element.set_text_content(Some(text));
+        if button.disabled {
+            let _ = element.set_attribute("disabled", "");
+        }
+        return Ok(element);
+    }
+
+    if let Some(input) = scaffold.get_element::<Input<String>>() {
+        let element = document.create_element("input")?;
+        apply_styles(&element, scaffold);
+        if let Some(html_input) = element.dyn_ref::<HtmlInputElement>() {
+            html_input.set_value(&input.value);
+            if let Some(placeholder) = &input.placeholder {
+                html_input.set_placeholder(placeholder);
+            }
+        }
+        // `<input>` is a void element — no children to append, unlike every other case below.
+        return Ok(element);
+    }
+
     let element = document.create_element("div")?;
     apply_styles(&element, scaffold);
 

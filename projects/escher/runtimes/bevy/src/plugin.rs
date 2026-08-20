@@ -13,12 +13,11 @@ use bevy::app::Plugin;
 use bevy::app::PluginGroup;
 use bevy::asset::AssetPlugin;
 use bevy::camera::ClearColor;
-use bevy::window::Window;
 use bevy::window::WindowLevel;
-use bevy::window::WindowMode;
 use bevy::winit::WinitSettings;
 
 use crate::config::EscherBevyConfig;
+use crate::window::create_window;
 
 #[derive(Default)]
 pub struct EscherBevyPlugin {
@@ -42,7 +41,9 @@ impl Plugin for EscherBevyPlugin {
         }
 
         #[cfg(feature = "terminal")]
-        app.add_plugins(crate::terminal::TerminalPlugin::new());
+        if self.config.spawn_terminal_plugin {
+            app.add_plugins(crate::terminal::TerminalPlugin::new());
+        }
 
         app.add_plugins(crate::reticle::ReticlePlugin::new());
     }
@@ -74,25 +75,5 @@ impl EscherBevyPlugin {
                 // Prefer Escher's own logging setup over Bevy's default.
                 .disable::<bevy::log::LogPlugin>(),
         );
-    }
-}
-
-/// Builds the primary window from `EscherBevyConfig`'s own title/size/visibility fields — pulled
-/// out to a plain function, not a method on `EscherBevyPlugin`, so nothing about window shape is
-/// hidden inside the plugin: the config a caller already builds is the one place all of this
-/// lives.
-pub fn create_window(title: &str, width: f32, height: f32, visible: bool, window_level: WindowLevel) -> Window {
-    Window {
-        title: String::from(title),
-        mode: WindowMode::Windowed,
-        resolution: bevy::window::WindowResolution::new(width as u32, height as u32),
-        transparent: false,
-        decorations: true,
-        resizable: true,
-        visible,
-        position: bevy::window::WindowPosition::Centered(bevy::window::MonitorSelection::Current),
-        composite_alpha_mode: bevy::window::CompositeAlphaMode::Opaque,
-        window_level,
-        ..Default::default()
     }
 }

@@ -13,7 +13,9 @@ debug = []
 verbose = []
 
 [dependencies]
-bevy = { workspace = true, features = ["default"] }
+# See `apps/anvil/Cargo.toml`'s identical line for why `3d` is dropped from `bevy`'s own
+# `default` (2d + 3d + ui) — nothing anywhere in this workspace renders 3D content.
+bevy = { workspace = true, features = ["2d", "ui"] }
 futures = { workspace = true }
 winit = { workspace = true }
 tracing = { workspace = true }
@@ -32,12 +34,27 @@ parking_lot = { workspace = true, optional = true }
 [target.'cfg(not(target_arch="wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
 
-[target.'cfg(unix)'.dependencies]
-signal-hook = { workspace = true }
-
 [target.'cfg(target_arch="wasm32")'.dependencies]
 uuid = { workspace = true, features = ["v4", "js"] }
 
 [dev-dependencies]
 clap = { workspace = true, features = ["std", "derive", "color", "help", "usage"] }
 tracing-subscriber = { workspace = true, features = ["std", "env-filter", "fmt"] }
+color-eyre = { workspace = true }
+unicode-width = { workspace = true }
+
+# `examples/mario` only, below this point.
+
+tokio = { workspace = true, features = ["full"] }
+libsql = { workspace = true }
+uuid = { workspace = true, features = ["v5"] }
+
+atlas = { workspace = true }
+atlas-relay = { workspace = true }
+webrtc = { workspace = true }
+tokio-tungstenite = { workspace = true }
+async-trait = { workspace = true }
+futures-util = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true, features = ["std"] }
+hostname = { workspace = true }

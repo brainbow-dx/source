@@ -3,6 +3,7 @@ pub mod plugin;
 pub mod reticle;
 pub mod surface;
 pub mod time;
+pub mod window;
 
 #[cfg(feature = "terminal")]
 pub mod terminal;

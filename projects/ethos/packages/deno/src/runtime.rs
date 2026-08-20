@@ -376,9 +376,9 @@ pub mod ffi {
         #[allow(unused)] // TODO
         unsafe fn create_stdio<P: AsRef<Path>>(&self, dir: P) -> Result<Stdio, std::io::Error> {
             Ok(Stdio {
-                stdin: StdioPipe::file(deno_runtime::deno_io::STDIN_HANDLE.try_clone()?),
-                stdout: StdioPipe::file(deno_runtime::deno_io::STDOUT_HANDLE.try_clone()?),
-                stderr: StdioPipe::file(deno_runtime::deno_io::STDERR_HANDLE.try_clone()?),
+                stdin: StdioPipe::inherit(),
+                stdout: StdioPipe::inherit(),
+                stderr: StdioPipe::inherit(),
             })
         }
     }

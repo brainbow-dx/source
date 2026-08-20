@@ -30,15 +30,22 @@ define_class!(
     impl HoverTarget {
         // SAFETY: matches `NSResponder`'s real `mouseEntered:`/`mouseExited:` signatures —
         // `event` is never read, only used to know *that* the pointer crossed the tracking area.
+        // `.set()`, not `.push()`/`.pop()`: a push/pop stack only stays correct if every push is
+        // matched by exactly one pop, which `NSTrackingArea`'s `.activeInKeyWindow` option can't
+        // guarantee — the window losing key status (Cmd+Tab away, a click outside it) while
+        // hovered skips `mouseExited:` entirely, leaving an unpaired push on the stack and the
+        // pointing-hand cursor stuck until *something else* happens to pop it back off. `.set()`
+        // instead assigns the cursor outright on every transition, so there's no accumulated state
+        // for a missed event to desync into a stuck "cursor stays a pointer" state.
         #[unsafe(method(mouseEntered:))]
         fn mouse_entered(&self, _event: &AnyObject) {
-            NSCursor::pointingHandCursor().push();
+            NSCursor::pointingHandCursor().set();
             (self.ivars().on_change.borrow_mut())(true);
         }
 
         #[unsafe(method(mouseExited:))]
         fn mouse_exited(&self, _event: &AnyObject) {
-            NSCursor::pointingHandCursor().pop();
+            NSCursor::arrowCursor().set();
             (self.ivars().on_change.borrow_mut())(false);
         }
     }

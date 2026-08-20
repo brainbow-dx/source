@@ -1,0 +1,14 @@
+[package]
+name = "ethos-workspace"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+# Real `std::fs`-backed discovery, for a native embedder (Anvil's CLI, an LSP) that actually has
+# a filesystem to read. Not default: a wasm/web-worker embedder (see
+# `spec/agents/proposals/workspace-core.md`'s "embed anywhere" requirement) has no filesystem of
+# its own and should be able to depend on this crate — the `WorkspaceFs` trait plus `Workspace`
+# itself — without pulling in code that assumes one exists.
+native-fs = []
+
+[dependencies]

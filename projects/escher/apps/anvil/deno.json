@@ -1,0 +1,12 @@
+{
+    "name": "@escher/anvil",
+    "version": "0.0.0-preview",
+    "license": "MIT",
+    "compilerOptions": {
+        "jsx": "react-jsx",
+        "jsxImportSource": "@escher/jsx"
+    },
+    "exports": {
+        ".": "./commands/shape.tsx"
+    }
+}

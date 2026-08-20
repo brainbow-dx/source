@@ -17,8 +17,11 @@ macros = []
 [dependencies]
 escher-macros = { workspace = true }
 
-# TODO: Remove this dependency.
-atlas = { workspace = true }
+# Only ever for `atlas::collections::OrderedMap` (see `scaffold.rs`) — depending on
+# `atlas-core` directly instead of the full `atlas` facade crate, which unconditionally pulls in
+# `atlas-relay`'s native-only `tokio`("net")/`mio` stack with no `wasm32` gating, breaking
+# every wasm32 consumer of this crate (`escher-web`'s own build) despite never needing any of it.
+atlas-core = { workspace = true }
 
 uuid = { workspace = true, features = ["v4"] }
 once_cell = { workspace = true }

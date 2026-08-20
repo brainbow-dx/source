@@ -189,7 +189,7 @@ impl TerminalProvider {
             let pending_scenes = pending_scenes.clone();
 
             move |root| {
-                root.with_handler::<BackendEvent>(move |event| {
+                root.handle::<BackendEvent>(move |event| {
                     let input = &handler_input;
                     let BackendEvent::Key(key) = event else { return };
 
@@ -214,13 +214,13 @@ impl TerminalProvider {
                         _ => {}
                     }
                 })
-                .with_slot::<Header>(|header| {
+                .slot::<Header>(|header| {
                     header
-                        .with_style(Size::height(1))
-                        .with_style(TextAlign::Center)
-                        .with_content(Some("Escher + Bevy, one process — /scene <url> to open a webview"))
+                        .style(Size::height(1))
+                        .style(TextAlign::Center)
+                        .content(Some("Escher + Bevy, one process — /scene <url> to open a webview"))
                 })
-                .with_slot::<Footer>(|footer| footer.with_style(Size::height(1)).with_content(Some(format!("> {}", input.read()))))
+                .slot::<Footer>(|footer| footer.style(Size::height(1)).content(Some(format!("> {}", input.read()))))
             }
         }, Duration::ZERO);
 
@@ -266,39 +266,32 @@ impl TerminalProvider {
 /// races `draw_ui`'s own `poll`+`read` for the same event, it only tells winit there's real work
 /// waiting.
 ///
-/// After a successful peek, waits for the pending input to actually drain (re-peeking on a short
-/// interval) before going back to the long idle poll, rather than a single fixed guess-sleep —
-/// found this mattered for real: a flat 50ms post-wake sleep caps this thread's own re-check rate
-/// at ~20Hz, which is also, in effect, an upper bound on how fast a fast typing burst can drain,
-/// since each `WakeUp` here only guarantees one Bevy tick and each tick only dispatches whatever's
-/// pending at that moment (see `assistant_terminal_draw`'s own drain-loop in `apps/anvil` for the
-/// other half of this — this thread getting keystrokes noticed quickly doesn't help if the tick
-/// it wakes doesn't also drain more than a couple of them). A still-short 2ms re-check interval
-/// (not zero) keeps this from becoming a genuine tight busy-spin while still re-checking ~25x
-/// faster than the old fixed sleep.
+/// After a successful peek, waits for the pending input to actually drain (re-peeking every 2ms,
+/// short enough to notice drain-completion promptly without being a tight busy-spin) before going
+/// back to the long idle poll — but re-sends `WakeUp` roughly every 16ms for as long as the queue
+/// stays nonempty, rather than a single wake and then silence. That periodic re-wake is load-
+/// bearing, not a nicety: `assistant_terminal_draw`'s own drain loop (`apps/anvil`) deliberately
+/// caps how many times it renders per tick now (see its own comment for why — rendering as fast as
+/// raw input arrives during a sustained fast drag measured well over 100fps of real, wasted
+/// terminal repaints), so a single tick is no longer expected to fully drain a long burst by
+/// itself. Without this thread keeping Bevy ticked at a steady cadence throughout, a burst longer
+/// than one tick's small cap would stall instead of finishing — this re-wake is what keeps a
+/// sustained drag's *latest* position dispatched promptly every tick while its actual repaint rate
+/// stays capped, rather than either stalling or spiking.
+///
+/// The 1s `poll` timeout below also doubles as a once-a-second heartbeat wake, even when it times
+/// out with nothing pending: without it, anything that only refreshes as a side effect of a real
+/// draw — Anvil's fps readout is what surfaced this — silently goes stale the moment input stops,
+/// frozen at whatever it last measured, since nothing else prompts another tick until nearly a
+/// minute of true idle passes (`WinitSettings::desktop_app()`'s own fallback, per this comment's
+/// own opening paragraph). One extra `WakeUp`/tick a second is negligible next to that.
+/// The actual watching logic (peek stdin, decide when to re-wake) is Bevy/winit-agnostic and
+/// lives in `escher_terminal::watch` — this is a thin wrapper supplying the one winit-specific
+/// piece, waking this app's own event loop. `EventLoopProxy::send_event` returning `Err` means
+/// the event loop itself is already gone, mapped to `false` (stop watching) for `watch`'s own
+/// generic `on_wake: impl Fn() -> bool` contract.
 pub fn spawn_input_watcher(event_loop_proxy: winit::event_loop::EventLoopProxy<bevy::winit::WinitUserEvent>) {
-    std::thread::spawn(move || {
-        loop {
-            match crossterm::event::poll(std::time::Duration::from_secs(1)) {
-                Ok(true) => {
-                    if event_loop_proxy.send_event(bevy::winit::WinitUserEvent::WakeUp).is_err() {
-                        return;
-                    }
-
-                    loop {
-                        std::thread::sleep(std::time::Duration::from_millis(2));
-                        match crossterm::event::poll(std::time::Duration::ZERO) {
-                            Ok(true) => continue,
-                            Ok(false) => break,
-                            Err(_) => return,
-                        }
-                    }
-                }
-                Ok(false) => {}
-                Err(_) => return,
-            }
-        }
-    });
+    escher_terminal::watch::spawn_input_watcher(move || event_loop_proxy.send_event(bevy::winit::WinitUserEvent::WakeUp).is_ok());
 }
 
 /// Watches for `SIGTERM`/`SIGHUP`/`SIGINT` and wakes the event loop the moment one arrives,
@@ -312,34 +305,22 @@ pub fn spawn_input_watcher(event_loop_proxy: winit::event_loop::EventLoopProxy<b
 /// background thread via `Signals::forever()` instead means it can call `EventLoopProxy::
 /// send_event` directly, forcing an immediate tick; re-measured after this fix, ~125ms.
 ///
-/// Call `reraise_signal` with the returned flag after cleanup, so the process actually terminates
-/// with the signal's conventional exit status instead of returning as if this were a normal exit.
+/// Thin winit-specific wrapper — see `escher_terminal::watch::spawn_signal_watcher`'s own doc
+/// comment for the actual (Bevy/winit-agnostic) watching, origin-logging, and flag contract; this
+/// only supplies the "wake this app's own event loop" callback.
 #[cfg(unix)]
 pub fn spawn_signal_watcher(event_loop_proxy: winit::event_loop::EventLoopProxy<bevy::winit::WinitUserEvent>) -> Arc<std::sync::atomic::AtomicUsize> {
-    let flag = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-    let mut signals = signal_hook::iterator::Signals::new([signal_hook::consts::SIGTERM, signal_hook::consts::SIGHUP, signal_hook::consts::SIGINT])
-        .expect("failed to register signal handler");
-
-    let watcher_flag = flag.clone();
-    std::thread::spawn(move || {
-        for sig in signals.forever() {
-            watcher_flag.store(sig as usize, std::sync::atomic::Ordering::Relaxed);
-            let _ = event_loop_proxy.send_event(bevy::winit::WinitUserEvent::WakeUp);
-        }
-    });
-
-    flag
+    escher_terminal::watch::spawn_signal_watcher(move || {
+        let _ = event_loop_proxy.send_event(bevy::winit::WinitUserEvent::WakeUp);
+    })
 }
 
-/// Restores the default handler for whatever signal `flag` recorded (if any) and re-raises it —
-/// call once, after terminal cleanup, at the very end of handling an `AppExit` a signal caused.
-/// A no-op if `flag` is still `0` (a normal, non-signal exit).
+/// Re-exported unchanged — call after terminal cleanup, at the very end of handling an `AppExit`
+/// a signal caused, so the process actually terminates with that signal's conventional exit
+/// status instead of returning as if this were a normal exit.
 #[cfg(unix)]
 pub fn reraise_signal(flag: &std::sync::atomic::AtomicUsize) {
-    let sig = flag.load(std::sync::atomic::Ordering::Relaxed);
-    if sig != 0 {
-        let _ = signal_hook::low_level::emulate_default_handler(sig as i32);
-    }
+    escher_terminal::watch::reraise_signal(flag);
 }
 
 #[derive(Message, Debug)]

@@ -41,6 +41,17 @@ pub struct EscherBevyConfig {
     /// (e.g. `apps/anvil`: every scene window is spawned fresh in response to `/scene`, there's
     /// no single window to pre-create at startup anymore) sets this `false` and starts headless.
     pub spawn_primary_window: bool,
+    /// Whether `EscherBevyPlugin` registers its own `terminal::TerminalPlugin` (behind the
+    /// `terminal` Cargo feature). Most examples that enable the feature want this crate's generic
+    /// `Scaffold`-drawn terminal UI too, so the default is `true`; a caller that only needs the
+    /// feature's plain helper functions (`spawn_input_watcher`/`spawn_signal_watcher`/
+    /// `reraise_signal`) because it draws its *own* terminal UI (e.g. `apps/anvil`'s
+    /// `AssistantTerminalPlugin`) must set this `false` — running both at once means two
+    /// independent pollers/drawers racing for the same OS terminal, exactly the hazard
+    /// `TerminalSurface::draw`'s own doc comment warns about: the two plugins' competing
+    /// `Scaffold` draws interleave character-by-character into the same alternate-screen buffer,
+    /// corrupting the header and doubling per-frame input polling/redraw work.
+    pub spawn_terminal_plugin: bool,
 }
 
 impl Default for EscherBevyConfig {
@@ -57,6 +68,7 @@ impl Default for EscherBevyConfig {
             window_width: 800.0,
             window_height: 600.0,
             spawn_primary_window: true,
+            spawn_terminal_plugin: true,
         }
     }
 }
@@ -110,6 +122,11 @@ impl EscherBevyConfig {
 
     pub fn with_spawn_primary_window(mut self, spawn_primary_window: bool) -> Self {
         self.spawn_primary_window = spawn_primary_window;
+        self
+    }
+
+    pub fn with_spawn_terminal_plugin(mut self, spawn_terminal_plugin: bool) -> Self {
+        self.spawn_terminal_plugin = spawn_terminal_plugin;
         self
     }
 }

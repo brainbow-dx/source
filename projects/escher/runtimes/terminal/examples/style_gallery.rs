@@ -31,117 +31,117 @@ fn main() -> Result<ExitCode> {
 fn draw_gallery(surface: &mut TerminalSurface<CrosstermBackend<Stdout>>) -> Result<TerminalAction> {
     surface.draw(|root| {
         root
-            .with_slot::<Title>(|title| {
+            .slot::<Title>(|title| {
                 title
-                    .with_style(Size::height(1))
-                    .with_style(TextAlign::Center)
-                    .with_style(FontWeight::Bold)
-                    .with_content(Some("Escher Style Gallery"))
+                    .style(Size::height(1))
+                    .style(TextAlign::Center)
+                    .style(FontWeight::Bold)
+                    .content(Some("Escher Style Gallery"))
             })
-            .with_slot::<PaddingDemo>(|demo| {
+            .slot::<PaddingDemo>(|demo| {
                 demo
-                    .with_style(Size::height(8))
-                    .with_style(Border::new(1, BorderStyle::Solid, None))
-                    .with_style(Padding::all(2))
-                    .with_content(Some(
+                    .style(Size::height(8))
+                    .style(Border::new(1, BorderStyle::Solid, None))
+                    .style(Padding::all(2))
+                    .content(Some(
                         "Padding::all(2) — this text should sit 2 cells in from every border edge."
                     ))
             })
-            .with_slot::<PaddingBgDemo>(|demo| {
+            .slot::<PaddingBgDemo>(|demo| {
                 demo
-                    .with_style(Size::height(6))
-                    .with_style(Border::new(1, BorderStyle::Solid, None))
-                    .with_style(Padding::all(1))
-                    .with_style(BackgroundColor::from("#223355"))
-                    .with_content(Some(
+                    .style(Size::height(6))
+                    .style(Border::new(1, BorderStyle::Solid, None))
+                    .style(Padding::all(1))
+                    .style(BackgroundColor::from("#223355"))
+                    .content(Some(
                         "Padding::all(1) + Border + BackgroundColor together — regression coverage for a real fixed bug (see spec/.agents/changelog.md). Every row inside the border should show the same blue background."
                     ))
             })
-            .with_slot::<MarginDemo>(|demo| {
+            .slot::<MarginDemo>(|demo| {
                 demo
-                    .with_style(FlexDirection::Row)
-                    .with_style(Size::height(5))
-                    .with_slot::<MarginBox>(|b| {
-                        b.with_style(Border::new(1, BorderStyle::Solid, None))
-                            .with_style(Margin::top(2))
-                            .with_content(Some("Margin::top(2)"))
+                    .style(FlexDirection::Row)
+                    .style(Size::height(5))
+                    .slot::<MarginBox>(|b| {
+                        b.style(Border::new(1, BorderStyle::Solid, None))
+                            .style(Margin::top(2))
+                            .content(Some("Margin::top(2)"))
                     })
-                    .with_slot::<MarginBox>(|b| {
-                        b.with_style(Border::new(1, BorderStyle::Solid, None))
-                            .with_style(Margin::left(4))
-                            .with_content(Some("Margin::left(4)"))
+                    .slot::<MarginBox>(|b| {
+                        b.style(Border::new(1, BorderStyle::Solid, None))
+                            .style(Margin::left(4))
+                            .content(Some("Margin::left(4)"))
                     })
-                    .with_slot::<MarginBox>(|b| {
-                        b.with_style(Border::new(1, BorderStyle::Solid, None))
-                            .with_style(Margin::all(1))
-                            .with_content(Some("Margin::all(1)"))
+                    .slot::<MarginBox>(|b| {
+                        b.style(Border::new(1, BorderStyle::Solid, None))
+                            .style(Margin::all(1))
+                            .content(Some("Margin::all(1)"))
                     })
             })
-            .with_slot::<FlexDemo>(|demo| {
+            .slot::<FlexDemo>(|demo| {
                 demo
-                    .with_style(FlexDirection::Row)
-                    .with_style(Size::height(3))
-                    .with_slot::<FlexBox>(|b| {
-                        b.with_style(Border::new(1, BorderStyle::Solid, None))
-                            .with_style(Flex::new(1))
-                            .with_content(Some("flex: 1"))
+                    .style(FlexDirection::Row)
+                    .style(Size::height(3))
+                    .slot::<FlexBox>(|b| {
+                        b.style(Border::new(1, BorderStyle::Solid, None))
+                            .style(Flex::new(1))
+                            .content(Some("flex: 1"))
                     })
-                    .with_slot::<FlexBox>(|b| {
-                        b.with_style(Border::new(1, BorderStyle::Solid, None))
-                            .with_style(Flex::new(2))
-                            .with_content(Some("flex: 2 (should be ~2x as wide)"))
+                    .slot::<FlexBox>(|b| {
+                        b.style(Border::new(1, BorderStyle::Solid, None))
+                            .style(Flex::new(2))
+                            .content(Some("flex: 2 (should be ~2x as wide)"))
                     })
-                    .with_slot::<FlexBox>(|b| {
-                        b.with_style(Border::new(1, BorderStyle::Solid, None))
-                            .with_style(Flex::new(1))
-                            .with_content(Some("flex: 1"))
-                    })
-            })
-            .with_slot::<TypographyDemo>(|demo| {
-                demo
-                    .with_style(Size::height(4))
-                    .with_slot::<TypeLine>(|l| l.with_style(FontWeight::Bold).with_content(Some("Bold (FontWeight::Bold)")))
-                    .with_slot::<TypeLine>(|l| l.with_style(TextDecorationLine::Underline).with_content(Some("Underline (TextDecorationLine::Underline)")))
-                    .with_slot::<TypeLine>(|l| l.with_style(TextDecorationLine::LineThrough).with_content(Some("Strikethrough (TextDecorationLine::LineThrough)")))
-                    .with_slot::<TypeLine>(|l| {
-                        l.with_style(FontWeight::Bold)
-                            .with_style(TextDecorationLine::Underline)
-                            .with_content(Some("Bold + Underline together"))
+                    .slot::<FlexBox>(|b| {
+                        b.style(Border::new(1, BorderStyle::Solid, None))
+                            .style(Flex::new(1))
+                            .content(Some("flex: 1"))
                     })
             })
-            .with_slot::<AlignDemo>(|demo| {
+            .slot::<TypographyDemo>(|demo| {
                 demo
-                    .with_style(Size::height(3))
-                    .with_slot::<AlignLine>(|l| l.with_style(TextAlign::Left).with_content(Some("TextAlign::Left")))
-                    .with_slot::<AlignLine>(|l| l.with_style(TextAlign::Center).with_content(Some("TextAlign::Center")))
-                    .with_slot::<AlignLine>(|l| l.with_style(TextAlign::Right).with_content(Some("TextAlign::Right")))
+                    .style(Size::height(4))
+                    .slot::<TypeLine>(|l| l.style(FontWeight::Bold).content(Some("Bold (FontWeight::Bold)")))
+                    .slot::<TypeLine>(|l| l.style(TextDecorationLine::Underline).content(Some("Underline (TextDecorationLine::Underline)")))
+                    .slot::<TypeLine>(|l| l.style(TextDecorationLine::LineThrough).content(Some("Strikethrough (TextDecorationLine::LineThrough)")))
+                    .slot::<TypeLine>(|l| {
+                        l.style(FontWeight::Bold)
+                            .style(TextDecorationLine::Underline)
+                            .content(Some("Bold + Underline together"))
+                    })
             })
-            .with_slot::<HeadingDemo>(|demo| {
+            .slot::<AlignDemo>(|demo| {
                 demo
-                    .with_style(Size::height(2))
-                    .with_style(Heading::H1)
-                    .with_content(Some("This Is A Heading (Heading::H1 — renders bold; terminals have no font-size scale)"))
+                    .style(Size::height(3))
+                    .slot::<AlignLine>(|l| l.style(TextAlign::Left).content(Some("TextAlign::Left")))
+                    .slot::<AlignLine>(|l| l.style(TextAlign::Center).content(Some("TextAlign::Center")))
+                    .slot::<AlignLine>(|l| l.style(TextAlign::Right).content(Some("TextAlign::Right")))
             })
-            .with_slot::<ScrollDemo>(|demo| {
+            .slot::<HeadingDemo>(|demo| {
                 demo
-                    .with_style(Size::height(4))
-                    .with_style(Border::new(1, BorderStyle::Solid, None))
-                    .with_style(Overflow::Scroll)
-                    .with_style(ScrollPosition::new(2))
-                    .with_content(Some(
+                    .style(Size::height(2))
+                    .style(Heading::H1)
+                    .content(Some("This Is A Heading (Heading::H1 — renders bold; terminals have no font-size scale)"))
+            })
+            .slot::<ScrollDemo>(|demo| {
+                demo
+                    .style(Size::height(4))
+                    .style(Border::new(1, BorderStyle::Solid, None))
+                    .style(Overflow::Scroll)
+                    .style(ScrollPosition::new(2))
+                    .content(Some(
                         "Line 1 (scrolled past)\nLine 2 (scrolled past)\nLine 3 (should be the first visible line)\nLine 4\nLine 5\nLine 6"
                     ))
             })
             // Overlay regression coverage: unlike the slots above, this sits *on top of*
             // already-drawn content (the whole gallery behind it) — matches the shape the real
             // bug (assistant.rs's tasks/autocomplete overlay) actually showed up in.
-            .with_overlay(|overlay| {
+            .overlay(|overlay| {
                 overlay
-                    .with_style(Size(30.into(), 6.into(), Value::Auto))
-                    .with_style(Border::new(1, BorderStyle::Solid, None))
-                    .with_style(Padding::all(1))
-                    .with_style(BackgroundColor::from("#223355"))
-                    .with_content(Some(
+                    .style(Size(30.into(), 6.into(), Value::Auto))
+                    .style(Border::new(1, BorderStyle::Solid, None))
+                    .style(Padding::all(1))
+                    .style(BackgroundColor::from("#223355"))
+                    .content(Some(
                         "Overlay + Padding::all(1) + Border + BackgroundColor — every row should be the same blue."
                     ))
             })

@@ -24,7 +24,7 @@ macro DSL and a component library (`Div`/`Container`/`Header`/`Footer`/`Sidebar`
 `Label`/`TextInput`/`Button`) that lived in the old `slate` core. Neither the macro DSL
 (`escher-macros`' `uix!` is parsed but not acted on) nor that component library exist in current
 `escher-core` — but it turns out neither is actually required: `escher-core`'s `Scaffold` builder
-API (`with_style`/`with_slot`/`with_content`) plus its existing `Container`/`Text`/`Input`
+API (`style`/`slot`/`content`) plus its existing `Container`/`Text`/`Input`
 elements and `Header`/`Body`/`Footer`/`Legend`/`Content` slot markers are enough to build an
 equivalent scene directly, no macro or extra component types needed — see
 `../../examples/scene.rs` and `../surface.rs` (`BevySurface`), which render a real, working,

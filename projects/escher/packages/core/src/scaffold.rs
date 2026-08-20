@@ -17,9 +17,9 @@ use derive_more::*;
 use hashbrown::HashMap;
 use hashbrown::DefaultHashBuilder;
 
-// TODO: Remove the atlas dependency in favor of a specialized
+// TODO: Remove the atlas-core dependency in favor of a specialized
 // implementation for collections of Slot types.
-use atlas::collections::OrderedMap;
+use atlas_core::collections::OrderedMap;
 
 use crate::event::EventStack;
 use crate::style::Style;
@@ -42,17 +42,17 @@ pub mod prelude {
 }
 
 /// A stable path to one node in a `Scaffold` tree, as the sequence of `(TypeId, usize)` slot
-/// keys from the root — the same keys `with_slot::<S>()` already assigns (marker type + insertion
+/// keys from the root — the same keys `slot::<S>()` already assigns (marker type + insertion
 /// index). Exists so a surface with genuinely long-lived native objects (an `NSButton`, an ECS
 /// `Entity`) can identify "the same logical node" across separate draw calls, each of which builds
 /// an entirely new, differently-arena-allocated `Scaffold` tree — a plain `&Scaffold` reference
 /// can't survive past the draw call that produced it, but this can, since it holds no borrow into
 /// the arena at all (`TypeId` is `'static`, `usize` is `Copy`).
 ///
-/// Only as stable as the caller's own composition: conditionally *omitting* a `with_slot` call
+/// Only as stable as the caller's own composition: conditionally *omitting* a `slot` call
 /// between draws shifts every later sibling's index and silently breaks identity for them (the
 /// classic missing-key bug any keyed-reconciliation scheme has) — prefer `Scaffold::condition
-/// (false)` to keep a node present-but-disabled instead of skipping its `with_slot` call.
+/// (false)` to keep a node present-but-disabled instead of skipping its `slot` call.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct NodePath(Vec<(TypeId, usize)>);
 
@@ -118,46 +118,46 @@ impl<'ctx> Scaffold<'ctx> {
         self // etc..
     }
     
-    pub fn with_debug(mut self, xray: bool) -> Self {
+    pub fn debug(mut self, xray: bool) -> Self {
         self.debug = xray;
         self // etc..
     }
-    
-    pub fn with_element<E: Element + Any + 'ctx>(mut self, element: E) -> Self {
+
+    pub fn element<E: Element + Any + 'ctx>(mut self, element: E) -> Self {
         // TODO: Wait to draw until we have all slots ..
         // let draw_fn = self.context.arena().alloc(draw_fn);
         let draw_fn = element.draw(self.context);
 
-        self = self.with_slot::<E>(draw_fn);
+        self = self.slot::<E>(draw_fn);
         self.element = Some(self.alloc(element));
         self
     }
 
-    pub fn with_content<C: AsRef<str> + 'ctx>(mut self, content: Option<C>) -> Self {
+    pub fn content<C: AsRef<str> + 'ctx>(mut self, content: Option<C>) -> Self {
         let arena = self.context.arena();
         self.content = content.map(|content| BString::from_str_in(content.as_ref(), arena));
         self // etc..
     }
     // TODO: Move the "Any" requirement to a method on a "State" type.
-    pub fn with_state<K: Hash + Any, V: Any>(mut self, key: K, value: V) -> Self {
+    pub fn state<K: Hash + Any, V: Any>(mut self, key: K, value: V) -> Self {
         let mut hasher = RandomState::default().build_hasher();
         let hash = key.hash(&mut hasher);
         self.state.insert((TypeId::of::<K>(), hasher.finish() as usize), self.alloc(value));
         self // etc..
     }
-    
-    pub fn with_style<S: Into<Property> + Any>(mut self, style: S) -> Self {
+
+    pub fn style<S: Into<Property> + Any>(mut self, style: S) -> Self {
         self.styles.insert(style);
         self // etc..
     }
 
-    pub fn with_handler<E: Any>(mut self, handler: impl Fn(&E) + 'static) -> Self {
+    pub fn handle<E: Any>(mut self, handler: impl Fn(&E) + 'static) -> Self {
         // TODO: Do this inside EventStack ..
         self.events.push(handler);
         self // etc..
     }
 
-    pub fn with_slot<S: Any + 'ctx>(mut self, draw_fn: impl FnOnce(Scaffold<'ctx>) -> Scaffold<'ctx>) -> Self {
+    pub fn slot<S: Any + 'ctx>(mut self, draw_fn: impl FnOnce(Scaffold<'ctx>) -> Scaffold<'ctx>) -> Self {
         // Per-`S` insertion index, not a global count of every slot on this node regardless of
         // type — a slot's key is "the Nth child of marker type `S`," matching what `NodePath`'s
         // own doc comment already promises ("marker type + insertion index"). Using a global
@@ -172,7 +172,7 @@ impl<'ctx> Scaffold<'ctx> {
     }
 
     /// A detached child rendered outside the normal slot layout — see the `overlay` field.
-    pub fn with_overlay(mut self, draw_fn: impl FnOnce(Scaffold<'ctx>) -> Scaffold<'ctx>) -> Self {
+    pub fn overlay(mut self, draw_fn: impl FnOnce(Scaffold<'ctx>) -> Scaffold<'ctx>) -> Self {
         let overlay = Scaffold::new_in(self.context.arena());
         self.overlay = Some(self.alloc(draw_fn(overlay)));
         self // etc..

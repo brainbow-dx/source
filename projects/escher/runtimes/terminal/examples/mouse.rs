@@ -39,19 +39,19 @@ fn draw_mouse_demo(surface: &mut TerminalSurface<CrosstermBackend<Stdout>>) -> R
     surface.draw(move |root| {
         let clicked = CLICKED.load(Ordering::Relaxed);
 
-        root.with_style(FlexDirection::Column)
-            .with_slot::<Header>(move |header| {
+        root.style(FlexDirection::Column)
+            .slot::<Header>(move |header| {
                 header
-                    .with_style(Size::height(3))
-                    .with_style(FlexDirection::Row)
-                    .with_style(BackgroundColor::from(if clicked { "#668866ff" } else { "#886666ff" }))
-                    .with_handler::<ClickEvent>(move |_event: &ClickEvent| {
+                    .style(Size::height(3))
+                    .style(FlexDirection::Row)
+                    .style(BackgroundColor::from(if clicked { "#668866ff" } else { "#886666ff" }))
+                    .handle::<ClickEvent>(move |_event: &ClickEvent| {
                         CLICKED.store(!clicked, Ordering::Relaxed);
                     })
-                    .with_content(Some(if clicked { "Clicked! Click again to toggle." } else { "Click me!" }))
+                    .content(Some(if clicked { "Clicked! Click again to toggle." } else { "Click me!" }))
             })
-            .with_slot::<Body>(|body| {
-                body.with_style(FlexDirection::Column).with_content(Some(
+            .slot::<Body>(|body| {
+                body.style(FlexDirection::Column).content(Some(
                     "Click-drag across this text to select it, then release to copy it to the \
                      system clipboard. Selected text renders in reverse video.",
                 ))

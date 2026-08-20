@@ -82,9 +82,9 @@ fn draw_dashboard(
     surface.draw(move |terminal_root| {
         terminal_root
             // Keys can be variant between state entries ..
-            .with_state("some-key-value", state.tracing_stream.clone())
-            .with_state(0, state.tracing_stream.clone())
-            .with_handler::<CrosstermEvent>({
+            .state("some-key-value", state.tracing_stream.clone())
+            .state(0, state.tracing_stream.clone())
+            .handle::<CrosstermEvent>({
                 let user_input = state.user_input.clone();
                 move |event| match event {
                     CrosstermEvent::Key(key) => match key.code {
@@ -119,89 +119,89 @@ fn draw_dashboard(
                     }
                 }
             })
-            .with_slot::<Header>(|header| {
+            .slot::<Header>(|header| {
                 header
-                    .with_debug(false)
-                    .with_style(FlexDirection::Row)
-                    // .with_style(Margin::all(1))
-                    .with_style(Size::height(4))
-                    .with_style(Border::new(1, BorderStyle::Solid, None))
-                    .with_slot::<String>(|metadata| {
+                    .debug(false)
+                    .style(FlexDirection::Row)
+                    // .style(Margin::all(1))
+                    .style(Size::height(4))
+                    .style(Border::new(1, BorderStyle::Solid, None))
+                    .slot::<String>(|metadata| {
                         metadata
-                            .with_slot::<Legend>(|legend| {
+                            .slot::<Legend>(|legend| {
                                 legend
-                                    .with_content(Some("Escher Terminal Example"))
+                                    .content(Some("Escher Terminal Example"))
                             })
-                            .with_content(Some("Tracing Stream++"))
-                            .with_slot::<String>(|content| {
+                            .content(Some("Tracing Stream++"))
+                            .slot::<String>(|content| {
                                 content
-                                    .with_element(Text::<&str>::new("[Some Status Text]"))
+                                    .element(Text::<&str>::new("[Some Status Text]"))
                             })
                     })
-                    .with_slot::<String>(|users| {
+                    .slot::<String>(|users| {
                         users
-                            .with_style(escher_core::style::Size::width(16))
-                            .with_content(Some("Tracing:"))
-                            .with_slot::<Legend>(|names| {
+                            .style(escher_core::style::Size::width(16))
+                            .content(Some("Tracing:"))
+                            .slot::<Legend>(|names| {
                                 names
-                                    .with_style(Gap(1.into()))
-                                    .with_style(FlexDirection::Row)
-                                    .with_slot::<u8>(|active| {
+                                    .style(Gap(1.into()))
+                                    .style(FlexDirection::Row)
+                                    .slot::<u8>(|active| {
                                         active
-                                            .with_style(Size::width(1))
-                                            .with_content(Some("1"))
+                                            .style(Size::width(1))
+                                            .content(Some("1"))
                                     })
-                                    .with_slot::<u16>(|available| {
+                                    .slot::<u16>(|available| {
                                         available
-                                            .with_style(FontStyle::Italic)
-                                            .with_style(ContentColor::from("#555"))
-                                            .with_content(Some("of 8"))
+                                            .style(FontStyle::Italic)
+                                            .style(ContentColor::from("#555"))
+                                            .content(Some("of 8"))
                                     })
                             })
                     })
-                    .with_slot::<String>(|bots| {
+                    .slot::<String>(|bots| {
                         bots
-                            .with_style(Size::width(16))
-                            .with_content(Some("Perf:"))
-                            .with_slot::<Legend>(|names| {
+                            .style(Size::width(16))
+                            .content(Some("Perf:"))
+                            .slot::<Legend>(|names| {
                                 names
-                                    .with_style(Gap(1.into()))
-                                    .with_style(FlexDirection::Row)
-                                    .with_slot::<u8>(|active| {
+                                    .style(Gap(1.into()))
+                                    .style(FlexDirection::Row)
+                                    .slot::<u8>(|active| {
                                         active
                                             // TODO: Get width 
-                                            .with_style(Size::width(4))
-                                            .with_content(Some("59.4"))
+                                            .style(Size::width(4))
+                                            .content(Some("59.4"))
                                     })
-                                    .with_slot::<u16>(|available| {
+                                    .slot::<u16>(|available| {
                                         available
                                             // TODO: Use gap on the parent instead ..
-                                            .with_style(FontStyle::Italic)
-                                            .with_style(ContentColor::from("#555"))
-                                            .with_content(Some("fps"))
+                                            .style(FontStyle::Italic)
+                                            .style(ContentColor::from("#555"))
+                                            .content(Some("fps"))
                                     })
                             })
                     })
             })
-            .with_slot::<Body>(|console| {
+            .slot::<Body>(|console| {
                 // The tracing stream should be modified to take and hold 
                 // tracing spans + debug information. When that happens,
                 // we'll have to unpack this stream more deliberately.
                 console
                     // TODO: Move to a dedicated tracing-stream crate 
                     //  with a "ui" feature for Escher types.
-                    .with_style(ScrollPosition::new(0))
-                    // .with_element(TracingStreamDisplay::from(&tracing_stream)).
-                    .with_content(Some(state.tracing_stream_content(100, 100)))
+                    .style(ScrollPosition::new(0))
+                    // .element(TracingStreamDisplay::from(&tracing_stream)).
+                    .content(Some(state.tracing_stream_content(100, 100)))
             })
-            .with_slot::<Footer>(|footer| {
+            .slot::<Footer>(|footer| {
                 footer
-                    // .with_debug(true)
-                    .with_style(FlexDirection::Row)
-                    .with_style(Size::height(1))
-                    // .with_style(Border(Unit::from(1), None, Color(None)))
+                    // .debug(true)
+                    .style(FlexDirection::Row)
+                    .style(Size::height(1))
+                    // .style(Border(Unit::from(1), None, Color(None)))
                     // TODO: Implement `From<Option<Arc<RwLock<String>>> for Input` ..
-                    .with_element(Input::<String>::new(state.user_input.read().to_owned()))
+                    .element(Input::<String>::new(state.user_input.read().to_owned()))
             })
     })
 }

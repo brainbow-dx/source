@@ -14,34 +14,46 @@
 //! properly — removed. `underPageBackgroundColor` is still set dark, so the brief blank moment
 //! before a page paints anything is dark instead of a bright white flash.
 
+use std::cell::RefCell;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use objc2::rc::Retained;
+use objc2::runtime::AnyObject;
 use objc2::runtime::ProtocolObject;
-use objc2::{define_class, msg_send, DefinedClass, MainThreadMarker, MainThreadOnly, Message};
+use objc2::{define_class, msg_send, sel, AnyThread, DefinedClass, MainThreadMarker, MainThreadOnly, Message};
 
 use objc2_app_kit::NSAppearance;
 use objc2_app_kit::NSAppearanceCustomization;
 use objc2_app_kit::NSAppearanceNameDarkAqua;
 use objc2_app_kit::NSAutoresizingMaskOptions;
 use objc2_app_kit::NSColor;
+use objc2_app_kit::NSMenu;
+use objc2_app_kit::NSMenuItem;
 use objc2_app_kit::NSView;
+use objc2_app_kit::NSWindowOrderingMode;
 
+use objc2_foundation::NSData;
 use objc2_foundation::NSError;
 use objc2_foundation::NSObject;
 use objc2_foundation::NSObjectProtocol;
 use objc2_foundation::NSString;
 use objc2_foundation::NSURL;
 use objc2_foundation::NSURLRequest;
+use objc2_foundation::NSURLResponse;
 
 use objc2_web_kit::WKNavigation;
 use objc2_web_kit::WKNavigationDelegate;
+use objc2_web_kit::WKUIDelegate;
+use objc2_web_kit::WKURLSchemeHandler;
+use objc2_web_kit::WKURLSchemeTask;
 use objc2_web_kit::WKWebView;
 use objc2_web_kit::WKWebViewConfiguration;
 
 use raw_window_handle::RawWindowHandle;
 
+use crate::ContextMenuItem;
+use crate::CustomSchemeHandler;
 use crate::WebViewError;
 
 /// Flips `flag` on `didStartProvisionalNavigation:`/off on any of the three ways a main-frame
@@ -115,6 +127,226 @@ fn force_dark_appearance(webview: &WKWebView) {
     }
 }
 
+/// Bridges one `ContextMenuItem::action` into AppKit's target-action mechanism — same shape as
+/// `escher_appkit::action::ActionTarget`/`escher_os::macos::menu::MenuActionTarget`, duplicated
+/// again rather than depended on (this crate has no dependency on either of those, and shouldn't
+/// gain one just for this).
+struct ContextMenuActionTargetIvars {
+    action: Arc<dyn Fn() + Send + Sync>,
+}
+
+define_class!(
+    // SAFETY: `NSObject` has no subclassing requirements; `ContextMenuActionTarget` doesn't
+    // implement `Drop`.
+    #[unsafe(super = NSObject)]
+    #[thread_kind = MainThreadOnly]
+    #[ivars = ContextMenuActionTargetIvars]
+    struct ContextMenuActionTarget;
+
+    // SAFETY: `NSObjectProtocol` has no safety requirements.
+    unsafe impl NSObjectProtocol for ContextMenuActionTarget {}
+
+    impl ContextMenuActionTarget {
+        // SAFETY: matches the `(id)sender` signature every `NSMenuItem` action selector is
+        // invoked with — `sender` is never read, so its exact type doesn't matter here.
+        #[unsafe(method(fire:))]
+        fn fire(&self, _sender: &AnyObject) {
+            (self.ivars().action)();
+        }
+    }
+);
+
+impl ContextMenuActionTarget {
+    fn new(mtm: MainThreadMarker, action: Arc<dyn Fn() + Send + Sync>) -> Retained<Self> {
+        let this = Self::alloc(mtm).set_ivars(ContextMenuActionTargetIvars { action });
+        // SAFETY: `NSObject`'s `init` has this exact signature.
+        unsafe { msg_send![super(this), init] }
+    }
+}
+
+/// Detects a right-click on a link and lets the caller (`on_link_context_menu`) append real,
+/// working items to WebKit's own default menu (Open Link, Copy Link, ...) — see
+/// `WebView::attach`'s own doc comment for the contract.
+///
+/// Implements `webView:getContextMenuFromProposedMenu:forElement:completionHandler:` — the real,
+/// macOS-only `WKUIDelegate` method for this (distinct from the iOS-only, UIKit-based
+/// `contextMenuConfigurationForElement:`) — as a plain selector, not through `WKUIDelegate`'s own
+/// Rust trait: `objc2-web-kit` 0.3's generated binding for that trait doesn't declare this method
+/// at all (confirmed by reading its generated source directly), and `WKContextMenuElementInfo`
+/// itself has no bound properties either — its `linkURL` is read via a raw, unbound `msg_send!`
+/// below. `define_class!` doesn't require a selector to be trait-declared to implement it (see
+/// `ContextMenuActionTarget::fire:`/`escher_appkit::action::ActionTarget` for the same pattern) —
+/// WebKit calls optional delegate methods by checking `respondsToSelector:` at runtime, not
+/// through any Rust-visible protocol conformance.
+struct ContextMenuDelegateIvars {
+    on_link_context_menu: Box<dyn Fn(&str) -> Vec<ContextMenuItem>>,
+    /// Kept alive for exactly as long as the most recently shown menu might still need its
+    /// targets — replaced (dropping the previous menu's) each time a new context menu is
+    /// requested, rather than accumulating forever.
+    live_targets: RefCell<Vec<Retained<ContextMenuActionTarget>>>,
+}
+
+define_class!(
+    // SAFETY: `NSObject` has no subclassing requirements; `ContextMenuDelegate` doesn't implement
+    // `Drop`.
+    #[unsafe(super = NSObject)]
+    #[thread_kind = MainThreadOnly]
+    #[ivars = ContextMenuDelegateIvars]
+    struct ContextMenuDelegate;
+
+    // SAFETY: `NSObjectProtocol` has no safety requirements.
+    unsafe impl NSObjectProtocol for ContextMenuDelegate {}
+
+    // SAFETY: every `WKUIDelegate` method is `#[optional]` — implementing none of them (the real
+    // logic lives in the plain, non-trait `impl` block below) is a valid, empty conformance.
+    unsafe impl WKUIDelegate for ContextMenuDelegate {}
+
+    impl ContextMenuDelegate {
+        // SAFETY: matches `webView:getContextMenuFromProposedMenu:forElement:completionHandler:`'s
+        // real signature — `element`'s exact type is `WKContextMenuElementInfo`, guaranteed by
+        // this delegate method's own contract (untyped here only because that class has no Rust
+        // binding to type it as); `completion_handler` matches the `*mut NSMenu`-nullable-pointer
+        // block convention `objc2-web-kit`'s other generated completion-handler methods already
+        // use (e.g. `runOpenPanelWithParameters:...:completionHandler:`, which passes a nullable
+        // `*mut NSArray<NSURL>` the same way).
+        #[unsafe(method(webView:getContextMenuFromProposedMenu:forElement:completionHandler:))]
+        fn get_context_menu(
+            &self,
+            _web_view: &WKWebView,
+            proposed_menu: &NSMenu,
+            element: &AnyObject,
+            completion_handler: &block2::DynBlock<dyn Fn(*mut NSMenu)>,
+        ) {
+            // SAFETY: `linkURL` is a real `WKContextMenuElementInfo` property (`NSURL *`,
+            // nullable) — not bound in this crate version's generated stub for that class (it has
+            // no bound properties at all), so read directly. `element` is guaranteed to actually
+            // be a `WKContextMenuElementInfo` by this delegate method's own contract.
+            let link_url: Option<Retained<NSURL>> = unsafe { msg_send![element, linkURL] };
+            let link_url = link_url.and_then(|url| url.absoluteString()).map(|s| s.to_string());
+
+            let Some(link_url) = link_url else {
+                // Not a link — leave WebKit's own proposed menu untouched.
+                completion_handler.call((proposed_menu as *const NSMenu as *mut NSMenu,));
+                return;
+            };
+
+            let extra_items = (self.ivars().on_link_context_menu)(&link_url);
+            if extra_items.is_empty() {
+                completion_handler.call((proposed_menu as *const NSMenu as *mut NSMenu,));
+                return;
+            }
+
+            let mtm = MainThreadMarker::new().expect("WKUIDelegate callbacks run on the main thread");
+            let mut targets = Vec::with_capacity(extra_items.len());
+
+            proposed_menu.addItem(&NSMenuItem::separatorItem(mtm));
+            for item in extra_items {
+                let menu_item = unsafe {
+                    NSMenuItem::initWithTitle_action_keyEquivalent(mtm.alloc(), &NSString::from_str(&item.label), Some(sel!(fire:)), &NSString::from_str(""))
+                };
+                let target = ContextMenuActionTarget::new(mtm, item.action);
+                // SAFETY: `target` is a real `ContextMenuActionTarget` responding to `fire:`
+                // exactly as set above; kept alive in `live_targets` below for at least as long
+                // as this menu is shown.
+                unsafe { menu_item.setTarget(Some(&target)) };
+                targets.push(target);
+                proposed_menu.addItem(&menu_item);
+            }
+
+            *self.ivars().live_targets.borrow_mut() = targets;
+
+            completion_handler.call((proposed_menu as *const NSMenu as *mut NSMenu,));
+        }
+    }
+);
+
+impl ContextMenuDelegate {
+    fn new(mtm: MainThreadMarker, on_link_context_menu: impl Fn(&str) -> Vec<ContextMenuItem> + 'static) -> Retained<Self> {
+        let this = Self::alloc(mtm).set_ivars(ContextMenuDelegateIvars { on_link_context_menu: Box::new(on_link_context_menu), live_targets: RefCell::new(Vec::new()) });
+        // SAFETY: `NSObject`'s `init` has this exact signature.
+        unsafe { msg_send![super(this), init] }
+    }
+}
+
+/// Serves `CustomSchemeHandler::handler`'s answer for every request on its registered scheme —
+/// fully, cleanly bound as a real `extern_protocol!` in `objc2-web-kit` (unlike the context-menu
+/// delegate above, nothing here needed a raw `msg_send!` workaround). Synchronous: the handler
+/// closure returns its whole HTML string in one call, so `webView:startURLSchemeTask:` answers
+/// immediately (`didReceiveResponse:`/`didReceiveData:`/`didFinish` all called before returning) —
+/// no in-flight state for `webView:stopURLSchemeTask:` to actually cancel, so that method is a
+/// no-op. Good enough for a static/computed-on-the-spot page (a settings page, say); a handler
+/// that needs real async work (a network fetch) would need this reworked to hold the task and
+/// answer later instead.
+struct SchemeTaskHandlerIvars {
+    handler: Arc<dyn Fn(&str) -> Option<String> + Send + Sync>,
+}
+
+define_class!(
+    // SAFETY: `NSObject` has no subclassing requirements; `SchemeTaskHandler` doesn't implement
+    // `Drop`.
+    #[unsafe(super = NSObject)]
+    #[thread_kind = MainThreadOnly]
+    #[ivars = SchemeTaskHandlerIvars]
+    struct SchemeTaskHandler;
+
+    // SAFETY: `NSObjectProtocol` has no safety requirements.
+    unsafe impl NSObjectProtocol for SchemeTaskHandler {}
+
+    // SAFETY: both methods match `WKURLSchemeHandler`'s real signatures exactly.
+    unsafe impl WKURLSchemeHandler for SchemeTaskHandler {
+        #[unsafe(method(webView:startURLSchemeTask:))]
+        fn start_task(&self, _web_view: &WKWebView, url_scheme_task: &ProtocolObject<dyn WKURLSchemeTask>) {
+            let request = unsafe { url_scheme_task.request() };
+            let url = request.URL();
+            let url_string = url.as_deref().and_then(|url| url.absoluteString()).map(|s| s.to_string()).unwrap_or_default();
+
+            let Some(html) = (self.ivars().handler)(&url_string) else {
+                let error = unsafe {
+                    NSError::errorWithDomain_code_userInfo(&NSString::from_str("EscherWebViewCustomScheme"), 404, None)
+                };
+                unsafe { url_scheme_task.didFailWithError(&error) };
+                return;
+            };
+
+            let Some(url) = url else {
+                let error = unsafe { NSError::errorWithDomain_code_userInfo(&NSString::from_str("EscherWebViewCustomScheme"), 400, None) };
+                unsafe { url_scheme_task.didFailWithError(&error) };
+                return;
+            };
+
+            let bytes = html.into_bytes();
+            let data = unsafe { NSData::dataWithBytes_length(bytes.as_ptr().cast(), bytes.len()) };
+            let response = NSURLResponse::initWithURL_MIMEType_expectedContentLength_textEncodingName(
+                NSURLResponse::alloc(),
+                &url,
+                Some(&NSString::from_str("text/html")),
+                bytes.len() as isize,
+                Some(&NSString::from_str("utf-8")),
+            );
+
+            unsafe {
+                url_scheme_task.didReceiveResponse(&response);
+                url_scheme_task.didReceiveData(&data);
+                url_scheme_task.didFinish();
+            }
+        }
+
+        #[unsafe(method(webView:stopURLSchemeTask:))]
+        fn stop_task(&self, _web_view: &WKWebView, _url_scheme_task: &ProtocolObject<dyn WKURLSchemeTask>) {
+            // No-op — see this struct's own doc comment: every task is already fully answered,
+            // synchronously, before `webView:startURLSchemeTask:` even returns.
+        }
+    }
+);
+
+impl SchemeTaskHandler {
+    fn new(mtm: MainThreadMarker, handler: Arc<dyn Fn(&str) -> Option<String> + Send + Sync>) -> Retained<Self> {
+        let this = Self::alloc(mtm).set_ivars(SchemeTaskHandlerIvars { handler });
+        // SAFETY: `NSObject`'s `init` has this exact signature.
+        unsafe { msg_send![super(this), init] }
+    }
+}
+
 pub struct WebViewInner {
     handle: Retained<WKWebView>,
     /// Kept around (not just borrowed at `attach` time) so `set_left_inset` can re-read its
@@ -127,6 +359,12 @@ pub struct WebViewInner {
     /// — nothing else keeps this alive, so without holding it here it would be deallocated the
     /// instant `attach` returns and no navigation callback would ever fire again.
     _navigation_delegate: Retained<NavigationDelegate>,
+    /// `setUIDelegate` is weak too, same reasoning as `_navigation_delegate` above.
+    _context_menu_delegate: Retained<ContextMenuDelegate>,
+    /// `None` when `attach` wasn't given a `CustomSchemeHandler` — nothing to keep alive.
+    /// `setURLSchemeHandler:forURLScheme:` isn't documented as weak the way the two delegates
+    /// above are, but held here anyway for the same "outlives what references it" safety margin.
+    _scheme_task_handler: Option<Retained<SchemeTaskHandler>>,
 }
 
 impl WebViewInner {
@@ -158,8 +396,33 @@ impl WebViewInner {
         unsafe { self.handle.canGoForward() }
     }
 
+    /// The loaded page's own `<title>`, read fresh each call rather than pushed via a delegate
+    /// callback — `WKWebView::title` is a plain synchronous property (no async round-trip, unlike
+    /// most of this API), so a caller already polling every tick (`is_loading` is read the exact
+    /// same way) can just read this alongside it. `None` before any page has set one yet.
+    pub fn title(&self) -> Option<String> {
+        unsafe { self.handle.title() }.map(|title| title.to_string())
+    }
+
+    /// Despite the name (kept for API stability — every caller already thinks in terms of "show
+    /// this tab's webview, hide the rest"), this no longer touches `NSView.isHidden` at all.
+    /// `isHidden` is a well-documented rough edge on `WKWebView` specifically: toggling it back to
+    /// `false` after being hidden triggers real internal work (re-establishing its compositor/
+    /// backing store) that shows up as a visible stutter on every tab switch. Reordering
+    /// z-position instead (`addSubview:positioned:relativeTo:`, moving the
+    /// shown webview to the front of its superview's subviews and the hidden one to the back) gets
+    /// the same visual result — exactly one webview actually on screen at a time — without ever
+    /// touching the property that triggers that internal cost; macOS's own window-server occlusion
+    /// tracking (separate from `isHidden`) still lets a fully-covered `WKWebView` throttle itself
+    /// correctly, so this shouldn't cost more in the steady state either. `.Below`/`.Above` with no
+    /// specific `relativeTo` view moves to the very back/front of all siblings — safe regardless of
+    /// attach order, unlike relying on default z-order from whenever each tab happened to attach.
     pub fn set_hidden(&self, hidden: bool) {
-        self.handle.setHidden(hidden);
+        // SAFETY: `superview()` only reads the view hierarchy; `handle` is a real, live `NSView`
+        // for as long as `self` exists.
+        let Some(superview) = (unsafe { self.handle.superview() }) else { return };
+        let place = if hidden { NSWindowOrderingMode::Below } else { NSWindowOrderingMode::Above };
+        superview.addSubview_positioned_relativeTo(&self.handle, place, None);
     }
 
     /// Whether the main frame is currently between `didStartProvisionalNavigation:` and
@@ -182,7 +445,28 @@ impl WebViewInner {
     }
 }
 
-pub fn attach(parent: RawWindowHandle, url: &str, top_inset: f64, left_inset: f64, user_agent: Option<&str>) -> Result<WebViewInner, WebViewError> {
+impl Drop for WebViewInner {
+    /// `attach` adds `handle` as a subview of the host window's content view (see `addSubview`
+    /// below); nothing else ever removes it. Without this, closing a tab drops the Rust-side
+    /// wrapper (`TabWebViews`'s `HashMap::remove`) but leaves the actual `WKWebView` still attached
+    /// and visible, showing whatever it last rendered — most visible in the last-tab-closed case,
+    /// where nothing else covers it. This is also just honoring what `WebView`'s own doc
+    /// comment already claims ("dropping it removes the webview from the window") but this
+    /// backend never actually did.
+    fn drop(&mut self) {
+        self.handle.removeFromSuperview();
+    }
+}
+
+pub fn attach(
+    parent: RawWindowHandle,
+    url: &str,
+    top_inset: f64,
+    left_inset: f64,
+    user_agent: Option<&str>,
+    on_link_context_menu: impl Fn(&str) -> Vec<ContextMenuItem> + 'static,
+    custom_scheme: Option<CustomSchemeHandler>,
+) -> Result<WebViewInner, WebViewError> {
     let RawWindowHandle::AppKit(appkit_handle) = parent else {
         return Err(WebViewError::UnsupportedWindowHandle);
     };
@@ -223,9 +507,28 @@ pub fn attach(parent: RawWindowHandle, url: &str, top_inset: f64, left_inset: f6
 
     let configuration = unsafe { WKWebViewConfiguration::new(mtm) };
 
+    // Must happen before `initWithFrame:configuration:` below — `WKWebViewConfiguration` is
+    // snapshotted at webview-init time, so registering a scheme handler on it afterward would
+    // silently do nothing.
+    let scheme_task_handler = custom_scheme.map(|custom_scheme| {
+        let handler = SchemeTaskHandler::new(mtm, custom_scheme.handler);
+        unsafe {
+            configuration.setURLSchemeHandler_forURLScheme(Some(ProtocolObject::from_ref(&*handler)), &NSString::from_str(&custom_scheme.scheme))
+        };
+        handler
+    });
+
     let webview = unsafe { WKWebView::initWithFrame_configuration(mtm.alloc(), inset_frame, &configuration) };
 
     webview.setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewHeightSizable);
+
+    // `WKWebView.isInspectable` (macOS 13.3+) — not yet in `objc2-web-kit` 0.3.2's bindings, same
+    // "no bound property, raw `msg_send!` instead" situation `ContextMenuDelegate`'s own `linkURL`
+    // read is in below. Lets every webview this app creates show up under Safari's own Develop
+    // menu (Develop ▸ <this process> ▸ <page title>) with a real Web Inspector attached — Anvil is
+    // a developer tool for its own users, not something shipped to an audience that shouldn't see
+    // this, so there's no reason to gate it behind a debug-only build.
+    let _: () = unsafe { msg_send![&webview, setInspectable: true] };
 
     // `None` leaves `WKWebView`'s own default UA alone; see `user_agent`'s own doc comment on
     // `WebView::attach` (and `DEFAULT_USER_AGENT`'s, if the caller opted into that one) for why a
@@ -242,7 +545,18 @@ pub fn attach(parent: RawWindowHandle, url: &str, top_inset: f64, left_inset: f6
     let navigation_delegate = NavigationDelegate::new(mtm, loading.clone());
     unsafe { webview.setNavigationDelegate(Some(ProtocolObject::from_ref(&*navigation_delegate))) };
 
-    let inner = WebViewInner { handle: webview, host: ns_view.retain(), top_inset, loading, _navigation_delegate: navigation_delegate };
+    let context_menu_delegate = ContextMenuDelegate::new(mtm, on_link_context_menu);
+    unsafe { webview.setUIDelegate(Some(ProtocolObject::from_ref(&*context_menu_delegate))) };
+
+    let inner = WebViewInner {
+        handle: webview,
+        host: ns_view.retain(),
+        top_inset,
+        loading,
+        _navigation_delegate: navigation_delegate,
+        _context_menu_delegate: context_menu_delegate,
+        _scheme_task_handler: scheme_task_handler,
+    };
     inner.load(url)?;
 
     ns_view.addSubview(&inner.handle);

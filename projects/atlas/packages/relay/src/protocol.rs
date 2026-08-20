@@ -1,5 +1,11 @@
 //! The wire protocol between a peer and the relay. Plain JSON over the WebSocket's text frames,
 //! tagged by `"type"` so both sides can deserialize without knowing which variant to expect.
+//!
+//! Both enums derive both `Serialize` and `Deserialize` (not just the one direction this crate's
+//! own relay server needs) so a real peer — which sends `ClientMessage` and receives
+//! `ServerMessage`, the opposite of the relay — can depend on this crate for the wire types
+//! directly instead of hand-rolling a second copy of the protocol against raw JSON strings, the
+//! way this crate's own `tests/relay.rs` has to today.
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -7,7 +13,7 @@ use serde::Serialize;
 use crate::room::PeerId;
 
 /// What a peer sends to the relay.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum ClientMessage {
     /// Join (or move to) a room by name. The relay assigns this connection a `PeerId` on its
@@ -22,7 +28,7 @@ pub enum ClientMessage {
 }
 
 /// What the relay sends to a peer.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum ServerMessage {
     /// Sent once, right after a successful `Join` — this connection's own ID, plus every peer

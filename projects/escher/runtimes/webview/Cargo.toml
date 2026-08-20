@@ -18,3 +18,16 @@ objc2 = { workspace = true }
 objc2-foundation = { workspace = true }
 objc2-app-kit = { workspace = true }
 objc2-web-kit = { workspace = true }
+block2 = { workspace = true }
+
+[target.'cfg(target_os="windows")'.dependencies]
+# Wraps the real `ICoreWebView2`/`ICoreWebView2Controller` COM interfaces with an ergonomic,
+# callback-based API — the same crate (and the same API shape) `runtimes/bevy/src/legacy/
+# webview.rs` already used against a pre-refactor prototype, ported here against the current
+# `escher-webview` contract instead of hand-rolling raw COM bindings from scratch.
+webview2 = { workspace = true }
+# `winapi::shared::windef::{HWND, RECT}` — the exact types `webview2`'s own API is built against
+# (its `Controller::put_bounds`/`get_parent_window` etc. take/return these directly), so this
+# crate uses the same types at the boundary rather than introducing a second, incompatible Win32
+# binding (`windows-sys`/`windows`) that would need casts to bridge.
+winapi = { workspace = true, features = ["combaseapi", "shellapi", "winerror", "winuser"] }

@@ -1,7 +1,13 @@
-//! Global back/forward/refresh: a mouse side-button press or Cmd+[ / Cmd+] / Cmd+R anywhere in
-//! the app, not just when the chrome bar's own buttons/address field have focus. Uses a local
-//! (this-app-only, no Accessibility permission needed — unlike a *global* monitor) `NSEvent`
-//! monitor, installed once per window.
+//! Configurable global shortcuts: any number of Cmd+<key> combos or mouse side-button presses,
+//! anywhere in the app, not just when some specific control has focus. Uses a local (this-app-
+//! only, no Accessibility permission needed — unlike a *global* monitor) `NSEvent` monitor, one
+//! per window, installed once for the whole binding set rather than once per binding.
+//!
+//! Data-driven (`Vec<(Shortcut, Box<dyn Fn()>)>`) rather than fixed named parameters, specifically
+//! so the binding set can come from somewhere configurable later (Escher's app-state manager,
+//! eventually) instead of being hardcoded per caller forever — today's only caller
+//! (`bevy.rs`'s `install_global_shortcuts`) still hardcodes its own defaults, but the API itself no
+//! longer forces that.
 
 use std::ptr::NonNull;
 
@@ -18,13 +24,27 @@ pub struct GlobalShortcuts {
     monitor: Option<Retained<AnyObject>>,
 }
 
-/// Mouse button numbers 3/4 are the de facto standard "back"/"forward" side buttons on virtually
-/// every multi-button mouse — the same convention every major browser already honors.
+/// One configurable trigger — either a Cmd+<key> combo or one of the two de facto standard mouse
+/// side buttons (button numbers 3/4, the same convention every major browser already honors).
+/// Deliberately minimal (Command-only, no Shift/Option/Control combinations) — extend when a real
+/// binding actually needs more, not speculatively.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Shortcut {
+    /// Matched case-insensitively against `charactersIgnoringModifiers` — register lowercase
+    /// (`CommandKey('r')`), not `CommandKey('R')`.
+    CommandKey(char),
+    MouseBack,
+    MouseForward,
+}
+
 const MOUSE_BACK_BUTTON: isize = 3;
 const MOUSE_FORWARD_BUTTON: isize = 4;
 
 impl GlobalShortcuts {
-    pub fn install(_mtm: MainThreadMarker, on_back: impl Fn() + 'static, on_forward: impl Fn() + 'static, on_refresh: impl Fn() + 'static) -> Self {
+    /// Installs every `(Shortcut, action)` binding as a single monitor — a large binding set costs
+    /// the same as a small one. Multiple bindings may share the same `Shortcut` (not deduplicated);
+    /// all of their actions fire.
+    pub fn install(_mtm: MainThreadMarker, bindings: Vec<(Shortcut, Box<dyn Fn()>)>) -> Self {
         let mask = NSEventMask::KeyDown | NSEventMask::OtherMouseDown;
 
         let handler = block2::RcBlock::new(move |event: NonNull<NSEvent>| -> *mut NSEvent {
@@ -32,26 +52,31 @@ impl GlobalShortcuts {
             // duration of this call.
             let event = unsafe { event.as_ref() };
 
-            match event.r#type() {
+            let triggered = match event.r#type() {
                 NSEventType::OtherMouseDown => match event.buttonNumber() {
-                    MOUSE_BACK_BUTTON => on_back(),
-                    MOUSE_FORWARD_BUTTON => on_forward(),
-                    _ => {}
+                    MOUSE_BACK_BUTTON => Some(Shortcut::MouseBack),
+                    MOUSE_FORWARD_BUTTON => Some(Shortcut::MouseForward),
+                    _ => None,
                 },
-                NSEventType::KeyDown if event.modifierFlags().contains(NSEventModifierFlags::Command) => {
-                    match event.charactersIgnoringModifiers().map(|s| s.to_string()).as_deref() {
-                        Some("[") => on_back(),
-                        Some("]") => on_forward(),
-                        Some("r") | Some("R") => on_refresh(),
-                        _ => {}
+                NSEventType::KeyDown if event.modifierFlags().contains(NSEventModifierFlags::Command) => event
+                    .charactersIgnoringModifiers()
+                    .map(|s| s.to_string())
+                    .and_then(|s| s.chars().next())
+                    .map(|key| Shortcut::CommandKey(key.to_ascii_lowercase())),
+                _ => None,
+            };
+
+            if let Some(triggered) = triggered {
+                for (shortcut, action) in &bindings {
+                    if *shortcut == triggered {
+                        action();
                     }
                 }
-                _ => {}
             }
 
-            // Passing the event through unchanged (not swallowing it) — a global back/forward/
-            // refresh shortcut shouldn't stop the key/click from also doing whatever it would
-            // have anyway (e.g. Cmd+R inside a focused address field editing normally too).
+            // Passing the event through unchanged (not swallowing it) — a global shortcut
+            // shouldn't stop the key/click from also doing whatever it would have anyway (e.g.
+            // Cmd+R inside a focused address field editing normally too).
             event as *const NSEvent as *mut NSEvent
         });
 

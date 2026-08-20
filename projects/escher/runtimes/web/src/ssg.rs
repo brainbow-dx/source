@@ -15,11 +15,44 @@ use escher_core::style::Value;
 use crate::description;
 
 /// Renders `json` to a complete HTML document. Use [`render_fragment`] to embed the markup
-/// inside an existing page instead.
+/// inside an existing page instead. For content authored directly in Rust (not crossing the wire
+/// as JSX-compiled JSON), build a real `Scaffold` and use [`render_scaffold_to_html`] instead of
+/// hand-assembling a `ScaffoldDescription` to feed this — see that type's own doc comment for why.
 pub fn render_page_to_html(json: &str) -> Result<String, String> {
     let fragment = render_fragment(json)?;
+    Ok(wrap_document(&fragment))
+}
 
-    Ok(format!(
+/// Renders `json` to just the scaffold's own markup, with no surrounding document. For
+/// embedding inside another page's `<body>`.
+pub fn render_fragment(json: &str) -> Result<String, String> {
+    let description = description::parse(json)?;
+    let arena = Bump::new();
+    let scaffold = description::apply_description(Scaffold::new_in(&arena), description);
+
+    Ok(render_scaffold_fragment(&scaffold))
+}
+
+/// Renders an already-built `Scaffold` (composed the normal way, `style`/`slot`/$
+/// `content`) to a complete HTML document — the Rust-side equivalent of [`render_page_to_html`]
+/// for content that was never JSON to begin with. Exists specifically so a native Rust caller
+/// never has to construct a `ScaffoldDescription` by hand just to reach this renderer.
+pub fn render_scaffold_to_html(scaffold: &Scaffold) -> String {
+    wrap_document(&render_scaffold_fragment(scaffold))
+}
+
+/// Renders an already-built `Scaffold` to just its own markup, no surrounding document — the
+/// `Scaffold`-accepting equivalent of [`render_fragment`].
+pub fn render_scaffold_fragment(scaffold: &Scaffold) -> String {
+    let mut html = String::new();
+    if scaffold.is_enabled() {
+        render_node(&mut html, scaffold);
+    }
+    html
+}
+
+fn wrap_document(fragment: &str) -> String {
+    format!(
         "<!doctype html>\n\
          <html lang=\"en\">\n\
          <head>\n\
@@ -30,21 +63,7 @@ pub fn render_page_to_html(json: &str) -> Result<String, String> {
          {fragment}\n\
          </body>\n\
          </html>\n"
-    ))
-}
-
-/// Renders `json` to just the scaffold's own markup, with no surrounding document. For
-/// embedding inside another page's `<body>`.
-pub fn render_fragment(json: &str) -> Result<String, String> {
-    let description = description::parse(json)?;
-    let arena = Bump::new();
-    let scaffold = description::apply_description(Scaffold::new_in(&arena), description);
-
-    let mut html = String::new();
-    if scaffold.is_enabled() {
-        render_node(&mut html, &scaffold);
-    }
-    Ok(html)
+    )
 }
 
 /// Renders the placeholder scaffold from `default_page`, for pages with no custom content.
@@ -59,7 +78,24 @@ pub fn render_default_fragment() -> String {
     html
 }
 
+/// Real, semantic tags where a scaffold node carries an element that maps to one — see
+/// `surface.rs`'s own `render_node` (the live-DOM equivalent) for the full reasoning: a plain
+/// `<div>` is HTML's own correct element for "no inherent semantics," not a fallback, and no
+/// custom element is ever created here — this crate has no content that needs one.
 fn render_node(out: &mut String, scaffold: &Scaffold) {
+    if let Some(button) = scaffold.get_element::<escher_core::element::Button>() {
+        let text = scaffold.get_content().map(|content| content.as_str()).unwrap_or(button.label.as_str());
+        let disabled = if button.disabled { " disabled" } else { "" };
+        let _ = write!(out, "<button style=\"{}\"{disabled}>{}</button>", style_attribute(scaffold), escape_html(text));
+        return;
+    }
+
+    if let Some(input) = scaffold.get_element::<escher_core::element::Input<String>>() {
+        let placeholder = input.placeholder.as_deref().map(|p| format!(" placeholder=\"{}\"", escape_html(p))).unwrap_or_default();
+        let _ = write!(out, "<input style=\"{}\" value=\"{}\"{placeholder} />", style_attribute(scaffold), escape_html(&input.value));
+        return; // void element — no children
+    }
+
     let _ = write!(out, "<div style=\"{}\">", style_attribute(scaffold));
 
     if let Some(content) = scaffold.get_content() {
@@ -156,7 +192,23 @@ fn css_color(color: &EscherColor) -> Option<String> {
     color.map(|linear| format!("rgba({}, {}, {}, {})", linear.red, linear.green, linear.blue, linear.alpha as f32 / 255.0))
 }
 
-/// Escapes only the characters that would break out of a text node or attribute value.
+/// Escapes the characters that would break out of a text node or a double-quoted attribute value.
+/// Fixed to actually cover the attribute case (`"` → `&quot;`) now that `render_node` uses this for
+/// `<input value="...">`/`placeholder="..."` too, not just text nodes — this doc comment already
+/// claimed attribute-safety before that was true; now it is.
 fn escape_html(text: &str) -> String {
-    text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+    text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
+
+// No `#[cfg(test)] mod tests` here — adding one to cover the shape-demo description round-trip
+// breaks this crate's own build script. `scripts/build.rs`'s
+// `cbindgen::Builder::with_crate(CARGO_MANIFEST_DIR).generate()` genuinely errors (a real
+// `cbindgen::bindgen::error::Error`, not a flake) specifically when a `#[cfg(test)] mod tests {
+// use super::...; }` block exists in this file; `eyre`'s own "no hook installed" panic on top of
+// that just obscures the real error. Doesn't affect this crate as an ordinary lib dependency
+// (`cargo build -p escher-anvil` links it fine) — only `cargo test -p escher-web`/`cargo run
+// --example` on this crate directly. Logged in `escher/spec/ROADMAP.md`; the actual round-trip
+// this would have tested was verified instead via `escher-unity/src/bin/export_shape.rs` (a real
+// `ethos-cli run-command` → JSON → file-write path) and by tracing `description.rs`'s
+// `StyleDescription`/`apply_style` match arms against this file's own `style_attribute` match
+// arms by hand.

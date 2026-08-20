@@ -17,8 +17,7 @@
         "@escher/sdk": "../escher",
         "@eden/sdk": "../eden",
         "@std/path": "jsr:@std/path",
-        "@std/uuid": "jsr:@std/uuid",
-        "dzx": "https://deno.land/x/dzx@0.4.0/mod.ts"
+        "@std/uuid": "jsr:@std/uuid"
     },
     "workspace": [
         "./apps/mobile",

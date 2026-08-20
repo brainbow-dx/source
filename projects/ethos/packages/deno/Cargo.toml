@@ -24,7 +24,8 @@ required-features = ["ffi"]
 ethos-core = { workspace = true }
 
 deno_core = { workspace = true }
-deno_runtime = { workspace = true, features = ["include_js_files_for_snapshotting"] }
+deno_v8 = { workspace = true }
+deno_runtime = { workspace = true }
 deno_resolver = { workspace = true }
 
 sys_traits = { workspace = true }
@@ -38,4 +39,5 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
 
 [build-dependencies]
-deno_runtime = { workspace = true, features = ["include_js_files_for_snapshotting", "snapshot"] }
+deno_v8 = { workspace = true }
+deno_runtime = { workspace = true, features = ["snapshot"] }

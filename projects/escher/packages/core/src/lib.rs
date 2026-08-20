@@ -5,6 +5,7 @@ extern crate alloc;
 //---
 pub extern crate escher_macros as macros;
 
+pub mod animate;
 pub mod draw;
 pub mod surface;
 pub mod scaffold;

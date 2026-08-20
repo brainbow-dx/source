@@ -33,6 +33,7 @@ members = [
     "packages/log",
     "packages/deno",
     "packages/macros",
+    "packages/workspace",
     "services/dev",
     "services/registry",
     "dialects/ecma",
@@ -47,6 +48,7 @@ ethos-core = { path = "./packages/core" }
 ethos-log = { path = "./packages/log" }
 ethos-deno = { path = "./packages/deno" }
 ethos-macros = { path = "./packages/macros" }
+ethos-workspace = { path = "./packages/workspace" }
 ethos-ecma = { path = "./dialects/ecma" }
 ethos-lua = { path = "./dialects/lua" }
 ethos-dev-service = { path = "./services/dev" }
@@ -103,9 +105,14 @@ syn = { version = "2.0", default-features = false }
 
 mlua = { version = "0.10", default-features = false }
 
-deno_core = { version = "0.397", default-features = false }
-deno_runtime = { version = "0.252", default-features = false }
-deno_resolver = { version = "0.75", default-features = false }
+deno_core = { version = "0.410", default-features = false, features = ["v8"] }
+# `deno_core` depends on `deno_v8` but pins it with `default-features = false` and never forwards
+# its own `v8`/`quickjs` choice down to it — without a direct dependency here to force `deno_v8`'s
+# own `v8` feature back on, the whole graph fails to build at all ("either feature `v8` or
+# `quickjs` must be enabled").
+deno_v8 = { version = "0.2", default-features = false, features = ["v8"] }
+deno_runtime = { version = "0.265", default-features = false }
+deno_resolver = { version = "0.88", default-features = false }
 swc = { version = "60.0", default-features = false }
 swc_core = { version = "62.0", default-features = false }
 # swc_malloc = { version = "1.2", features = ["hashbrown"] }

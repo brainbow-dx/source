@@ -33,6 +33,14 @@ pub fn parse(json: &str) -> Result<ScaffoldDescription, String> {
     serde_json::from_str(json).map_err(|error| format!("invalid scaffold JSON: {error}"))
 }
 
+/// Deliberately `Deserialize`-only, no `Serialize`: this type exists to cross the wire from a JSX-
+/// authoring tool (`@escher/jsx`, or an Ethos script emitting the same shape), not to be
+/// constructed directly in application code. Hand-building one in Rust would bypass Escher's own
+/// UI composition patterns (`Scaffold::style`/`slot`/`content`, the same ergonomic
+/// builder every native surface already composes with) in favor of assembling the wire schema by
+/// hand — technically works, but breaks the whole point of having one consistent authoring pattern
+/// across surfaces. See `ssg::render_scaffold_to_html` for how to render a real, natively-built
+/// `Scaffold` without ever touching this type.
 #[derive(Debug, Deserialize)]
 pub struct ScaffoldDescription {
     #[serde(default)]
@@ -91,17 +99,20 @@ pub enum FlexDirectionDescription {
 /// no per-child type is needed.
 struct DescribedSlot;
 
-pub(crate) fn apply_description(mut scaffold: Scaffold<'_>, description: ScaffoldDescription) -> Scaffold<'_> {
+/// `pub`, not `pub(crate)` — external consumers with their own `Scaffold` arena (e.g. Anvil's
+/// terminal renderer) build a real `Scaffold` from a `ScaffoldDescription` this way instead of
+/// going through JSON at all when they already have the parsed value in hand.
+pub fn apply_description(mut scaffold: Scaffold<'_>, description: ScaffoldDescription) -> Scaffold<'_> {
     for style in description.styles {
         scaffold = apply_style(scaffold, style);
     }
 
     if let Some(content) = description.content {
-        scaffold = scaffold.with_content(Some(content));
+        scaffold = scaffold.content(Some(content));
     }
 
     for child in description.children {
-        scaffold = scaffold.with_slot::<DescribedSlot>(move |slot| apply_description(slot, child));
+        scaffold = scaffold.slot::<DescribedSlot>(move |slot| apply_description(slot, child));
     }
 
     scaffold
@@ -109,18 +120,18 @@ pub(crate) fn apply_description(mut scaffold: Scaffold<'_>, description: Scaffol
 
 fn apply_style(scaffold: Scaffold<'_>, style: StyleDescription) -> Scaffold<'_> {
     match style {
-        StyleDescription::Size { width, height } => scaffold.with_style(Size(
+        StyleDescription::Size { width, height } => scaffold.style(Size(
             width.map(into_value).unwrap_or_default(),
             height.map(into_value).unwrap_or_default(),
             Value::Auto,
         )),
-        StyleDescription::Margin { edge, value } => scaffold.with_style(Margin(into_edge(edge), into_value(value))),
-        StyleDescription::Padding { edge, value } => scaffold.with_style(Padding(into_edge(edge), into_value(value))),
-        StyleDescription::Gap { value } => scaffold.with_style(Gap(into_value(value))),
-        StyleDescription::Flex { grow } => scaffold.with_style(Flex::new(grow)),
-        StyleDescription::FlexDirection { direction } => scaffold.with_style(into_flex_direction(direction)),
-        StyleDescription::BackgroundColor { color } => scaffold.with_style(BackgroundColor::try_from(color.as_str()).unwrap_or_default()),
-        StyleDescription::ContentColor { color } => scaffold.with_style(ContentColor::try_from(color.as_str()).unwrap_or_default()),
+        StyleDescription::Margin { edge, value } => scaffold.style(Margin(into_edge(edge), into_value(value))),
+        StyleDescription::Padding { edge, value } => scaffold.style(Padding(into_edge(edge), into_value(value))),
+        StyleDescription::Gap { value } => scaffold.style(Gap(into_value(value))),
+        StyleDescription::Flex { grow } => scaffold.style(Flex::new(grow)),
+        StyleDescription::FlexDirection { direction } => scaffold.style(into_flex_direction(direction)),
+        StyleDescription::BackgroundColor { color } => scaffold.style(BackgroundColor::try_from(color.as_str()).unwrap_or_default()),
+        StyleDescription::ContentColor { color } => scaffold.style(ContentColor::try_from(color.as_str()).unwrap_or_default()),
     }
 }
 

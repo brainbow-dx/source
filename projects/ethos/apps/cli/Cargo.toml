@@ -13,16 +13,14 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["std", "env-filter", "fmt", "ansi"] }
 tracing-log = { workspace = true, features = ["std", "log-tracer"] }
 
-# `run-command` — runs a single JS command script and prints its result, for
-# escher-terminal's assistant example (see its `/`-command JS scripting). A separate process
-# rather than a direct `escher-terminal` dependency: `escher-core`'s own nightly `allocator_api`
-# bumpalo feature and `ethos-deno`'s (via `deno_runtime`'s build-time `swc_allocator`)
-# `allocator-api2` feature can't coexist in one Cargo.lock (see escher's changelog, 2026-08-13,
-# "Fixed swc_allocator/bumpalo feature conflict" — the same conflict, just unavoidable this time
-# since escher-terminal genuinely needs both `escher-core` and JS execution).
+# `run-command` — runs a single JS/Lua command script and prints its result, this crate's own
+# demo of `ethos_deno::command::run_module_command`/`ethos_lua`. `escher-anvil` used to shell out
+# to this exact subcommand as an external process (a real, then-unavoidable `escher-core`/
+# `ethos-deno` bumpalo feature conflict — see escher's changelog, 2026-08-13, "Fixed
+# swc_allocator/bumpalo feature conflict") — it now embeds `ethos-deno` directly instead, once a
+# `deno_runtime` version bump resolved that conflict, so this subcommand is just this CLI's own
+# feature now, not load-bearing for any other host.
 ethos-core = { workspace = true }
 ethos-deno = { workspace = true }
 ethos-lua = { workspace = true }
-deno_core = { workspace = true }
-deno_runtime = { workspace = true }
 tokio = { workspace = true, features = ["rt"] }

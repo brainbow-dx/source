@@ -24,15 +24,18 @@
 //! tree, via `Scaffold::get_at_path` — never against a previous draw's arena. If a path no longer
 //! resolves (the tree changed shape in the meantime), the event is silently dropped.
 
+use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use bumpalo::Bump;
 
 use objc2::rc::Retained;
-use objc2::{MainThreadMarker, MainThreadOnly, Message};
+use objc2::{AnyThread, MainThreadMarker, MainThreadOnly, Message};
 
-use objc2_app_kit::{NSButton, NSBezelStyle, NSColor, NSFont, NSImageView, NSTextField, NSView};
+use objc2_app_kit::{NSButton, NSBezelStyle, NSCellImagePosition, NSColor, NSFont, NSImage, NSImageView, NSTextField, NSView};
+use objc2_foundation::NSData;
 use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 
 use raw_window_handle::RawWindowHandle;
@@ -59,6 +62,16 @@ enum NativeNode {
         _target: Retained<ActionTarget>,
         /// `None` on an unthemed surface (nothing to hover-tint into) — see `crate::hover`.
         _hover: Option<Retained<crate::hover::HoverTarget>>,
+        /// Shared with the hover closure above (when there is one) so its own "not hovering"
+        /// resting color can reflect the button's current `active` state instead of always
+        /// resetting to `theme.text` — `patch` writes here whenever `NodeKind::Button::active`
+        /// changes; `None` on an unthemed surface, same as `_hover`.
+        active: Option<Rc<Cell<bool>>>,
+        /// Whether the pointer is currently over this button — written by the hover closure,
+        /// read by `patch` so it can recompute the filled backdrop (`hovering || active`)
+        /// without stomping a currently-hovered button's fill back off the instant the next
+        /// reconciliation pass happens to run. `None` on an unthemed surface, same as `_hover`.
+        hovering: Option<Rc<Cell<bool>>>,
     },
     TextField {
         view: Retained<NSTextField>,
@@ -109,7 +122,7 @@ pub struct TabRowReleased(pub f64);
 /// borrows) to spawn/patch without re-walking the tree.
 enum NodeKind {
     Container,
-    Button { label: String, disabled: bool },
+    Button { label: String, disabled: bool, icon: Option<&'static str>, active: bool },
     TextField { value: String, placeholder: Option<String> },
     Label(String),
     Favicon { host: String },
@@ -128,7 +141,7 @@ impl escher_core::element::Element for FaviconImage {}
 
 /// Marks a node as a tab-strip row — see `NodeKind::TabRow`/`NativeNode::Row`. `selected` is the
 /// only data it carries; a row's actual tab identity lives in the closure `crate::tabs::tab_strip`
-/// gives each row's `.with_handler::<TabRowReleased>(..)`, not in this marker.
+/// gives each row's `.handle::<TabRowReleased>(..)`, not in this marker.
 #[derive(Debug, Clone, Default)]
 pub struct TabRowMarker {
     pub selected: bool,
@@ -138,7 +151,7 @@ impl escher_core::element::Element for TabRowMarker {}
 
 fn classify(node: &Scaffold) -> NodeKind {
     if let Some(button) = node.get_element::<Button>() {
-        return NodeKind::Button { label: button.label.clone(), disabled: button.disabled };
+        return NodeKind::Button { label: button.label.clone(), disabled: button.disabled, icon: button.icon, active: button.active };
     }
 
     if let Some(input) = node.get_element::<Input<String>>() {
@@ -272,7 +285,17 @@ enum Pin {
 #[derive(Debug, Clone, Copy)]
 pub struct Theme {
     pub background: (u8, u8, u8),
+    /// The toolbar/tab-strip's own surface — one visible step above `background`, so chrome
+    /// reads as chrome regardless of what page happens to be loaded underneath it. See
+    /// `spec/design/styleguide/anvil.md`'s own doc prose for the full layered-stack reasoning.
+    pub chrome: (u8, u8, u8),
     pub surface: (u8, u8, u8),
+    /// `surface`'s own hover/press state — one step up again, for a control that's both lifted
+    /// off its chrome *and* currently interactive (a hovered toolbar button, a pressed one).
+    pub control_hover: (u8, u8, u8),
+    /// A hairline separator's color, not a fill — the seam between chrome and page content, and
+    /// between the tab strip and the toolbar above it.
+    pub border: (u8, u8, u8),
     pub accent: (u8, u8, u8),
     pub text: (u8, u8, u8),
     pub ui_text_size: f64,
@@ -281,6 +304,14 @@ pub struct Theme {
 
 fn rgb_color((r, g, b): (u8, u8, u8)) -> Retained<NSColor> {
     NSColor::colorWithSRGBRed_green_blue_alpha(r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0, 1.0)
+}
+
+/// Shows or hides a themed toolbar button's filled backdrop (see its own `spawn` doc comment for
+/// why it has one at all) — `show` is `hovering || active`, computed by both call sites (the
+/// hover closure and `patch`) so neither can stomp the other's reason for the fill being on.
+fn apply_button_fill(view: &NSButton, control_hover: (u8, u8, u8), show: bool) {
+    let Some(layer) = view.layer() else { return };
+    layer.setBackgroundColor(show.then(|| rgb_color(control_hover).CGColor()).as_deref());
 }
 
 /// Attached at the top (or side) of some window, reconciles+renders a `Scaffold` tree into it
@@ -313,7 +344,35 @@ pub struct AppKitSurface {
     outbox: Arc<Mutex<Vec<(NodePath, NativeEvent)>>>,
     mtm: MainThreadMarker,
     pub favicons: FaviconCache,
+    /// Only ever `Some` for a `Pin::Left` surface (the tab strip) — see `attach_sidebar` and
+    /// `crate::views::SidebarResizeHandle`'s own doc comment for why this is plain surface chrome,
+    /// not a reconciled `Scaffold` node.
+    resize_handle: Option<Retained<crate::views::SidebarResizeHandle>>,
 }
+
+/// How wide `SidebarResizeHandle`'s own hit-target strip is, at the tab strip's right edge —
+/// narrow enough not to visibly eat into the sidebar's own content, wide enough to actually grab
+/// with a mouse without pixel-perfect aim. Public: a consumer inserting a webview beside this
+/// surface (see `crate::bevy::TabStripState::effective_width`) has to add this on top of that
+/// width when computing the webview's own left inset — otherwise the webview's frame starts
+/// exactly where the handle's own strip begins, so whichever view gets added to the window later
+/// (almost always the webview, since tabs open after the sidebar attaches) sits on top of the
+/// handle in z-order and silently eats every click meant for it.
+pub const RESIZE_HANDLE_WIDTH: f64 = 6.0;
+
+/// Never drag the sidebar narrower than this even in icon-only mode — just wide enough for one
+/// favicon plus its own padding to stay legible. Bounds `SidebarResizeHandle`'s own *native*
+/// `mouseDragged:` reframing directly (see that view's own doc comment on why it reframes `root`
+/// itself immediately, rather than waiting on a round trip through an ECS event queue) — confirmed
+/// live as a real bug otherwise: routing every drag tick through Bevy's `Update` schedule before
+/// the sidebar's actual frame ever moved read as visibly jittery, since a live AppKit mouse-drag
+/// runs its own nested tracking run loop that doesn't pump an engine's own (possibly throttled,
+/// e.g. `WinitSettings::desktop_app()`'s reactive scheduling) event loop at anything like the same
+/// steady rate. `crate::bevy::TabStripState`'s own event-driven clamp uses this exact same
+/// constant, not a duplicate, so the two paths can never disagree about the bounds.
+pub const MIN_WIDTH: f64 = 44.0;
+/// A reasonable ceiling so a drag can't swallow the whole window.
+pub const MAX_WIDTH: f64 = 400.0;
 
 impl AppKitSurface {
     /// Attaches an empty, flipped container to the top of `parent`'s window, `height` points
@@ -351,6 +410,19 @@ impl AppKitSurface {
             let _: () = objc2::msg_send![ns_view, addSubview: &*root, positioned: NS_WINDOW_ABOVE, relativeTo: std::ptr::null::<NSView>()];
         }
 
+        // Only the tab strip (`Pin::Left`) gets a resize handle — a `Pin::Top` toolbar's width
+        // always tracks its host's own, there's nothing to drag.
+        let resize_handle = matches!(pin, Pin::Left { .. }).then(|| {
+            let handle =
+                crate::views::SidebarResizeHandle::new(mtm, NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(0.0, 0.0)), Retained::into_super(Retained::clone(&root)));
+            // Above `root` itself, so it's always the frontmost thing at the sidebar's edge and
+            // never occluded by whatever the tab strip's own content draws there.
+            unsafe {
+                let _: () = objc2::msg_send![ns_view, addSubview: &*handle, positioned: NS_WINDOW_ABOVE, relativeTo: std::ptr::null::<NSView>()];
+            }
+            handle
+        });
+
         let surface = AppKitSurface {
             root: Retained::into_super(Retained::clone(&root)),
             root_flipped: root,
@@ -362,6 +434,7 @@ impl AppKitSurface {
             outbox: Arc::new(Mutex::new(Vec::new())),
             mtm,
             favicons: FaviconCache::new(),
+            resize_handle,
         };
         surface.reposition();
 
@@ -371,6 +444,20 @@ impl AppKitSurface {
     /// Recomputes `root`'s frame from `host`'s *current* frame and flip state and applies it — see
     /// `Pin`'s own doc comment for why this replaces relying on an autoresizing mask.
     fn reposition(&self) {
+        // A native drag is actively repositioning `root`/the handle itself right now (see
+        // `views::SidebarResizeHandle`'s own doc comment on why that has to happen synchronously,
+        // outside Bevy's own schedule) — skipping avoids a real bug otherwise: this method runs
+        // unconditionally every Bevy tick from `set_width`, using whatever
+        // `TabStripState::width` was left over from *before* this tick's own event dispatch —
+        // always one tick behind whatever the live drag had already pushed `root`'s frame to — so
+        // it kept yanking the frame back to a stale value and the user's continued dragging kept
+        // pushing it forward again, reading as constant fighting/jitter. Only ever `Some` and
+        // dragging for the tab strip's own surface instance (`Pin::Top`'s toolbar has no handle at
+        // all), so this never affects any other surface's own reposition.
+        if self.resize_handle.as_deref().is_some_and(crate::views::SidebarResizeHandle::is_dragging) {
+            return;
+        }
+
         let host_frame = self.host.frame();
         let host_is_flipped = self.host.isFlipped();
 
@@ -389,6 +476,11 @@ impl AppKitSurface {
         };
 
         self.root.setFrame(frame);
+
+        if let Some(handle) = &self.resize_handle {
+            let handle_frame = NSRect::new(NSPoint::new(frame.origin.x + frame.size.width, frame.origin.y), NSSize::new(RESIZE_HANDLE_WIDTH, frame.size.height));
+            handle.setFrame(handle_frame);
+        }
     }
 
     /// Changes a `Pin::Left` surface's width in place — e.g. collapsing/expanding a tab strip
@@ -404,13 +496,56 @@ impl AppKitSurface {
         }
     }
 
-    /// Applies a theme: paints `root`'s background immediately, and remembers `accent`/`text` for
-    /// nodes created from here on (existing tab rows/labels don't retroactively repaint — call
-    /// this before the surface's first `draw()`, which is the only time this crate itself calls
-    /// it today). See `Theme`'s own doc comment for why it's only these three colors.
+    /// Hides (or reveals) the resize handle — a no-op on a `Pin::Top` surface, same as
+    /// `set_resize_callback`. The caller (`crate::bevy::redraw_tab_strip`) passes
+    /// `TabStripState::icon_only()` here: a collapsed, favicon-only rail has nothing meaningful
+    /// left to drag-resize (its own width is a fixed constant, not something a user picks), and a
+    /// visible handle sitting past a rail that thin read as an odd, out-of-place sliver rather than
+    /// a real control. `setHidden:` also pulls the view out of hit-testing, so this doubles as
+    /// disabling the drag, not just hiding it visually.
+    pub fn set_resize_handle_hidden(&self, hidden: bool) {
+        if let Some(handle) = &self.resize_handle {
+            handle.setHidden(hidden);
+        }
+    }
+
+    /// Replaces the resize handle's own drag callback — a no-op on a `Pin::Top` surface, which
+    /// never has one (see `resize_handle`'s own doc comment). Meant to be called fresh every
+    /// `draw()`, the same "rebuild the closure each tick" convention every other native callback
+    /// in this surface already follows, so it always captures whatever's currently live. Wakes the
+    /// event loop after every call, same as every other native callback this surface installs
+    /// (see `NodeKind::TabRow`'s own construction) — without it, a drag wouldn't be noticed by
+    /// Bevy's `Update` schedule until `WinitSettings::desktop_app()`'s idle-fallback timer next
+    /// fires, up to several seconds later.
+    pub fn set_resize_callback(&self, mut on_resize: impl FnMut(f64) + 'static) {
+        let wake = self.wake.clone();
+        if let Some(handle) = &self.resize_handle {
+            handle.set_on_resize(move |delta| {
+                on_resize(delta);
+                if let Some(wake) = &wake {
+                    wake();
+                }
+            });
+        }
+    }
+
+    /// Applies a theme: paints `root`'s background immediately, and remembers the rest of
+    /// `theme` for nodes created from here on (existing tab rows/labels don't retroactively
+    /// repaint — call this before the surface's first `draw()`, which is the only time this
+    /// crate itself calls it today). Fills with `theme.chrome`, not `theme.background` — this
+    /// surface *is* the toolbar/tab-strip chrome, which reads as its own distinct layer sitting
+    /// above whatever page content (`theme.background`) happens to be loaded, not a continuation
+    /// of it.
     pub fn set_theme(&mut self, theme: Theme) {
         self.theme = Some(theme);
-        self.root_flipped.set_fill_color(Some(theme.background));
+        self.root_flipped.set_fill_color(Some(theme.chrome));
+        // Otherwise the resize handle stays fully transparent (see its own doc comment) and reads
+        // as a stray unstyled gap between the sidebar and whatever's beside it, not a divider —
+        // `theme.border`, not `theme.chrome`, so the handle still reads as a seam even while
+        // sitting directly against the chrome it's attached to.
+        if let Some(handle) = &self.resize_handle {
+            handle.set_fill_color(Some(theme.border));
+        }
     }
 
     /// Registers a callback fired the instant any native control this surface owns is activated —
@@ -602,21 +737,50 @@ impl AppKitSurface {
         match kind {
             NodeKind::Container => NativeNode::Container(Retained::into_super(FlippedView::new(mtm, zero_frame))),
 
-            NodeKind::Button { .. } => {
+            NodeKind::Button { icon, active, .. } => {
+                let active = Rc::new(Cell::new(*active));
                 let view = NSButton::initWithFrame(NSButton::alloc(mtm), zero_frame);
-                if self.theme.is_some() {
+                // A real icon (see `crate::icons`'s own doc comment) replaces the glyph label
+                // outright when this surface has one bundled for the given name — falls back to
+                // the plain-text label (already set below, same as an icon-unaware surface would
+                // use) if the name isn't recognized, so a typo'd or not-yet-bundled icon name is
+                // never a hard failure.
+                if let Some(icon) = icon.and_then(crate::icons::icon_bytes) {
+                    let data = NSData::with_bytes(icon);
+                    if let Some(image) = NSImage::initWithData(NSImage::alloc(), &data) {
+                        // Lucide's source is drawn on a 24x24 canvas (rasterized at 48x48 — see
+                        // `crate::icons`'s own doc comment) — full-size inside a 34pt toolbar
+                        // button left almost no margin and read as oversized. `16` is a standard,
+                        // comfortable toolbar-icon size.
+                        image.setSize(NSSize::new(16.0, 16.0));
+                        image.setTemplate(true);
+                        view.setImage(Some(&image));
+                        view.setImagePosition(NSCellImagePosition::ImageOnly);
+                    }
+                }
+                if let Some(theme) = self.theme {
                     // A themed toolbar reads as flat toolbar glyphs (back/forward/refresh/new-tab)
                     // rather than full macOS push buttons — `NSBezelStyle::Push`'s beveled chrome
                     // is the "clunky, inconsistent" look this replaces; an unthemed surface (no
                     // `Theme` set) keeps the original default untouched.
                     view.setBordered(false);
-                    view.setContentTintColor(self.theme.map(|theme| rgb_color(theme.text)).as_deref());
+                    let resting_color = if active.get() { theme.accent } else { theme.text };
+                    view.setContentTintColor(Some(&rgb_color(resting_color)));
                     // Default system-font size (13pt) reads as small/cramped for a lone glyph
                     // (‹, ›, ↻, ☰, ×) once the button chrome around it is gone — a themed surface
                     // bumps it for legibility, same reasoning as the wider `Size::width` values in
                     // `escher-chalk`'s `toolbar` and this crate's `tabs` compositions.
-                    if let Some(theme) = self.theme {
-                        view.setFont(Some(&NSFont::systemFontOfSize(theme.ui_text_size)));
+                    view.setFont(Some(&NSFont::systemFontOfSize(theme.ui_text_size)));
+                    // A real filled backdrop on hover/press (see the `hover` closure below), not
+                    // just the glyph's own tint color shifting — a bare glyph with no surrounding
+                    // shape read as "text pretending to be a button," not a real control. `6.0`
+                    // matches `spec/design/styleguide/anvil.md`'s own `radius` token; not worth
+                    // threading a dimension through `Theme` for one hardcoded geometry constant
+                    // every other toolbar-chrome size (`ROW_HEIGHT`, `RESIZE_HANDLE_WIDTH`, ...)
+                    // is already hardcoded the same way.
+                    view.setWantsLayer(true);
+                    if let Some(layer) = view.layer() {
+                        layer.setCornerRadius(6.0);
                     }
                 } else {
                     view.setBezelStyle(NSBezelStyle::Push);
@@ -639,26 +803,72 @@ impl AppKitSurface {
                 // Only themed buttons get a hover tint — an unthemed surface has no `accent`
                 // color to tint toward, and keeps its default system push-button hover behavior
                 // (which AppKit already provides for free) untouched.
+                let hovering_cell = Rc::new(Cell::new(false));
                 let hover = self.theme.map(|theme| {
                     let view_for_tint = view.clone();
+                    let active_for_hover = active.clone();
+                    let hovering_for_closure = hovering_cell.clone();
                     crate::hover::HoverTarget::attach(mtm, &view, move |hovering| {
-                        let color = if hovering { theme.accent } else { theme.text };
+                        hovering_for_closure.set(hovering);
+                        // Not-hovering rests at `theme.accent` too when `active` — the whole point
+                        // of a persistent toggle-state indicator is that it doesn't disappear the
+                        // instant the pointer moves away.
+                        let color = if hovering || active_for_hover.get() { theme.accent } else { theme.text };
                         view_for_tint.setContentTintColor(Some(&rgb_color(color)));
+                        apply_button_fill(&view_for_tint, theme.control_hover, hovering || active_for_hover.get());
                     })
                 });
 
-                NativeNode::Button { view, _target: target, _hover: hover }
+                NativeNode::Button {
+                    view,
+                    _target: target,
+                    _hover: hover,
+                    active: self.theme.is_some().then_some(active),
+                    hovering: self.theme.is_some().then_some(hovering_cell),
+                }
             }
 
             NodeKind::TextField { .. } => {
                 let view = NSTextField::initWithFrame(NSTextField::alloc(mtm), zero_frame);
-                view.setBezeled(true);
+                // A plain `NSTextFieldCell` draws top-aligned once the field's frame is taller
+                // than one line (always true here — every toolbar control shares one `Flex`-
+                // stretched row height) — see `VerticallyCenteredTextFieldCell`'s own doc comment.
+                // `setCell:` retains its own reference, so this temporary dropping at the end of
+                // the statement doesn't tear the cell down. Must happen *before* every `set*` call
+                // below, not after — a fresh `NSTextFieldCell` defaults to non-editable, so
+                // swapping it in after
+                // `setEditable(true)` silently discarded that (it had only ever been applied to
+                // the original, now-replaced cell), leaving the address field entirely read-only.
+                view.setCell(Some(&crate::views::VerticallyCenteredTextFieldCell::new(mtm)));
+                // Neither bezeled nor bordered — the native bezel draws its own gray inset border
+                // regardless of theming, which read as a mismatched "system gray edge around a
+                // dark themed fill" once a real theme was applied. A flat field, distinguished
+                // purely by `theme.surface` sitting one step lighter than the bar behind it (see
+                // `Theme`'s own doc comment), matches its surroundings instead of fighting them.
+                view.setBezeled(false);
+                view.setBordered(false);
                 view.setEditable(true);
-                view.setDrawsBackground(true);
                 if let Some(theme) = self.theme {
+                    // A real rounded pill, not a hard-cornered fill — `setDrawsBackground`
+                    // (used before this) paints a plain rectangle with no radius support at all,
+                    // which combined with `theme.surface` barely lifting off `theme.chrome` (the
+                    // bar it sits in, one shade darker) read as "is this even clickable" rather
+                    // than a distinct control. Layer-backed instead: fill *and* rounding *and* a
+                    // hairline border all come from the one layer, clipped to it so the text/
+                    // cursor never draws past the rounded corners.
+                    view.setDrawsBackground(false);
+                    view.setWantsLayer(true);
+                    if let Some(layer) = view.layer() {
+                        layer.setBackgroundColor(Some(&rgb_color(theme.surface).CGColor()));
+                        layer.setCornerRadius(8.0);
+                        layer.setMasksToBounds(true);
+                        layer.setBorderWidth(1.0);
+                        layer.setBorderColor(Some(&rgb_color(theme.border).CGColor()));
+                    }
                     view.setTextColor(Some(&rgb_color(theme.text)));
-                    view.setBackgroundColor(Some(&rgb_color(theme.surface)));
                     view.setFont(Some(&NSFont::systemFontOfSize(theme.body_text_size)));
+                } else {
+                    view.setDrawsBackground(true);
                 }
 
                 let outbox = self.outbox.clone();
@@ -729,9 +939,30 @@ impl AppKitSurface {
 
     fn patch(&mut self, native: &NativeNode, kind: &NodeKind) {
         match (native, kind) {
-            (NativeNode::Button { view, .. }, NodeKind::Button { label, disabled }) => {
+            (NativeNode::Button { view, active: active_cell, hovering: hovering_cell, .. }, NodeKind::Button { label, disabled, active, .. }) => {
+                // A no-op on an icon button (`imagePosition` is `ImageOnly`, so the title never
+                // actually shows) — harmless to still set, not worth a special case just to skip
+                // it, and the icon itself is fixed at spawn time (see `spawn`'s own `NodeKind::
+                // Button` arm), never re-applied here since none of this crate's icon buttons
+                // change which icon they show at runtime.
                 view.setTitle(&NSString::from_str(label));
                 view.setEnabled(!disabled);
+
+                // `active`, unlike the icon, *does* need to re-apply every draw — it's the whole
+                // point of the field (a toolbar pin button toggling live). `active_cell` also
+                // keeps the hover closure's own "not hovering" resting color in sync — see
+                // `spawn`'s own `NodeKind::Button` arm for why that's a shared cell, not just a
+                // one-off tint set here.
+                if let (Some(theme), Some(active_cell)) = (self.theme, active_cell) {
+                    active_cell.set(*active);
+                    let resting_color = if *active { theme.accent } else { theme.text };
+                    view.setContentTintColor(Some(&rgb_color(resting_color)));
+                    // Recomputed from both cells, not just `active` alone — otherwise a button
+                    // the pointer is currently sitting over would have its hover fill stomped
+                    // back off the moment this ran again on the very next reconciliation pass.
+                    let hovering = hovering_cell.as_ref().is_some_and(|cell| cell.get());
+                    apply_button_fill(view, theme.control_hover, hovering || *active);
+                }
             }
             (NativeNode::TextField { view, .. }, NodeKind::TextField { value, placeholder }) => {
                 // Skip touching `stringValue` at all while the user has this field open for
