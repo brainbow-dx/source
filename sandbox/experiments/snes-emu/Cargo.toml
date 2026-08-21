@@ -1,0 +1,14 @@
+[workspace]
+
+[package]
+name = "snes-emu-experiment"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+# Plain default features, not the trimmed `default-features = false` set the real Escher
+# workspace uses (see `runtimes/bevy/Cargo.toml`'s own comment on why it trims) -- this is a
+# standalone sandbox experiment, not production code, and isn't held to that same dependency
+# discipline yet. Trim this once/if this graduates out of `sandbox/`.
+bevy = "0.18"
