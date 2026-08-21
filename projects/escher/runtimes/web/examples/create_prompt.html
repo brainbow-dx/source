@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Not found</title>
+    <style>
+        body { font: 14px system-ui, sans-serif; color: #e5e5e5; background: #141414; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        main { text-align: center; }
+        code { background: #262626; padding: 2px 6px; border-radius: 4px; }
+        button { margin-top: 16px; font: inherit; padding: 8px 16px; border-radius: 6px; border: none; background: #6741d9; color: white; cursor: pointer; }
+        button:disabled { opacity: 0.6; cursor: default; }
+        p.error { color: #ff6b6b; }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>This page doesn't exist yet</h1>
+        <p><code>{{PATH}}</code></p>
+        <button id="create">Create this page</button>
+        <p class="error" id="error" hidden></p>
+    </main>
+    <script type="module">
+        const button = document.getElementById("create");
+        const error = document.getElementById("error");
+
+        button.addEventListener("click", async () => {
+            button.disabled = true;
+            error.hidden = true;
+
+            try {
+                const response = await fetch("/__escher/create", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ path: "{{PATH}}" }),
+                });
+
+                if (!response.ok) {
+                    throw new Error(await response.text());
+                }
+
+                location.reload();
+            } catch (cause) {
+                error.textContent = `Failed to create page: ${cause}`;
+                error.hidden = false;
+                button.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

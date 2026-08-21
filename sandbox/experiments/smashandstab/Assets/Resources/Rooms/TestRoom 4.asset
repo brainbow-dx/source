@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d2f271da89d36ea4b94a63b79de42551, type: 3}
+  m_Name: TestRoom 4
+  m_EditorClassIdentifier: 
+  roomFlags: 0
+  sprite: {fileID: 0}
+  baseWeight: 2
+  localModulePosList:
+  - {x: 0, y: 0}
+  - {x: 0, y: 1}
+  - {x: 1, y: 0}
+  - {x: 1, y: 1}
+  localConnectorList:
+  - modularPos: {x: 0, y: 0}
+    direction: 2
+  - modularPos: {x: 1, y: 0}
+    direction: 3
+  - modularPos: {x: 0, y: 1}
+    direction: 2
+  - modularPos: {x: 1, y: 1}
+    direction: 3
+  randomObjectSpawnPosList:
+  - modulePosition: {x: 0, y: 0}
+    tilePosition: {x: 7, y: 1}
+  - modulePosition: {x: 0, y: 1}
+    tilePosition: {x: 7, y: 4}
+  particularObjectSpawnPosList: []

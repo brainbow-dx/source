@@ -33,28 +33,15 @@ lto = true
 [dependencies]
 escher-core = { workspace = true }
 escher-macros = { workspace = true }
-escher-syn = { workspace = true, optional = true }
 escher-bevy = { workspace = true }
 escher-terminal = { workspace = true, optional = true }
 
-atlas = { workspace = true }
 
-prost = { workspace = true }
-prost-types = { workspace = true }
 
-# Bumpalo is the primary allocator used in the hot-path during scaffolding.
-# Note: For the moment (at least) we lean heavily on the allocator-api.
-# TODO: Deprecate nightly support wherever possible. Maybe here?
-bumpalo = { workspace = true, features = [
-    "allocator_api",
-    "boxed",
-    "collections",
-] }
-bumpalo-herd = { workspace = true }
+# Bumpalo is the primary allocator used in the hot-path during scaffolding, via the stable
+# allocator-api2 crate rather than nightly's own allocator_api.
 
 #--
-uuid = { workspace = true, features = ["v4"] }
-parking_lot = { workspace = true }
 derive_more = { workspace = true, features = [
     "from",
     "display",
@@ -64,25 +51,8 @@ derive_more = { workspace = true, features = [
     "deref_mut",
     "is_variant",
 ] }
-enum_dispatch = { workspace = true }
-num-traits = { workspace = true }
-hashbrown = { workspace = true, features = [
-    "core",
-    "alloc",
-    "default-hasher",
-    "serde",
-    "nightly",
-    "rayon",
-] }
 
-tracing = { workspace = true }
-tracing-core = { workspace = true }
-tracing-subscriber = { workspace = true, optional = true }
 
-oops = { workspace = true, features = ["macros"] }
-eyre = { workspace = true }
-color-eyre = { workspace = true }
-wasm-bindgen = { workspace = true, default-features = false }
 
 [target.'cfg(not(target_arch="wasm32"))'.dependencies]
 escher-terminal = { workspace = true }
@@ -91,54 +61,28 @@ crossterm = { workspace = true, features = ["events", "bracketed-paste"] }
 ansi-to-tui = { workspace = true }
 
 [target.'cfg(target_arch="wasm32")'.dependencies]
-uuid = { workspace = true, features = ["v4", "js"] }
 
 [target.'cfg(target_os="windows")'.dependencies]
 crossterm = { workspace = true, features = ["windows"] }
 
 [dev-dependencies]
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true, features = ["fmt", "ansi"] }
 
-hashbrown = { workspace = true, features = ["default-hasher"] }
 
-derive_more = { workspace = true, features = ["full"] }
+# Only "display" is used (examples/events.rs). "full" also enables derive_more's own `Debug`
+# derive, which can collide with a plain `#[derive(Debug)]` elsewhere in the workspace (E0659).
+derive_more = { workspace = true, features = ["display"] }
 
-eyre = { workspace = true, features = ["default"] }
-oops = { workspace = true, features = ["default"] }
-
-clap = { workspace = true, features = ["std", "derive", "color", "help", "usage"] }
-
-tokio = { workspace = true, features = ["full"] }
-tower = { workspace = true, features = ["full"] }
-tower-http = { workspace = true, features = ["full"] }
-axum = { workspace = true, features = [
-    "tokio",
-    "http1",
-    "http2",
-    "json",
-    "query",
-    "form",
-    "multipart",
-    "matched-path",
-    "original-uri",
-    "macros",
-    "tower-log",
-    "tracing",
-    "ws"
-] }
-notify = { workspace = true, default-features = false, features = ["macos_fsevent", "serde"] }
-axum-extra = { workspace = true, default-features = false, features = ["typed-header"]}
 
 [build-dependencies]
 prost-build = { workspace = true }
-eyre = { workspace = true }
 color-eyre = { workspace = true }
 napi-build = { workspace = true }
 
 #---
 [workspace]
 members = [
+    "apps/cli",
+    "apps/anvil",
     "apps/desktop",
     "apps/hudd",
     "extensions/vscode",
@@ -146,11 +90,16 @@ members = [
     "extensions/penpot",
     "extensions/blender",
     "packages/core",
+    "packages/chalk",
+    "packages/styleguide",
+    "packages/edit",
     "packages/jsx",
     "packages/macros",
     "packages/syn",
     "runtimes/os",
+    "runtimes/appkit",
     "runtimes/web",
+    "runtimes/webview",
     "runtimes/bevy",
     "runtimes/terminal",
     "runtimes/unity",
@@ -159,9 +108,13 @@ members = [
 
 [workspace.dependencies]
 escher = { path = "." }
-escher-hud = { path = "./apps/hud" }
+escher-anvil = { path = "./apps/anvil" }
+escher-hud = { path = "./apps/hudd" }
 escher-desktop = { path = "./apps/desktop" }
 escher-core = { path = "./packages/core" }
+escher-chalk = { path = "./packages/chalk" }
+escher-styleguide = { path = "./packages/styleguide" }
+escher-edit = { path = "./packages/edit" }
 escher-macros = { path = "./packages/macros" }
 escher-syn = { path = "./packages/syn" }
 escher-etch-io = { path = "./services/etch-io" }
@@ -169,8 +122,27 @@ escher-bevy = { path = "./runtimes/bevy" }
 escher-terminal = { path = "./runtimes/terminal" }
 escher-unity = { path = "./runtimes/unity" }
 escher-unreal = { path = "./runtimes/unreal" }
+escher-os = { path = "./runtimes/os" }
+escher-appkit = { path = "./runtimes/appkit" }
+escher-webview = { path = "./runtimes/webview" }
+escher-web = { path = "./runtimes/web" }
 
 atlas = { path = "../atlas" }
+# `escher-core` depends on this directly, not the full `atlas` facade crate — `atlas` pulls in
+# `atlas-relay` (a real WebSocket signaling server) unconditionally in its own `[dependencies]`,
+# with no `wasm32` gating; anything depending on plain `atlas` drags a native-only `tokio`
+# ("net") + `mio` stack into a wasm32 build, which doesn't compile. `escher-core` only ever
+# needed `atlas::collections::OrderedMap`, itself just a re-export of `atlas-core::collections`
+# — depending on `atlas-core` directly gets the same type without any of that.
+atlas-core = { path = "../atlas/packages/core" }
+
+# `escher-anvil`'s embedded JS/TS engine — only through this crate's own API, never
+# `deno_core`/`deno_runtime` directly (see `apps/anvil/Cargo.toml`).
+ethos-deno = { path = "../ethos/packages/deno" }
+# Ethos's `Workspace` — `escher-anvil`'s `/workspace` command is this crate's first real
+# consumer, proving out the "embed anywhere" design before an LSP/wasm consumer exists. See
+# `ethos/spec/agents/proposals/workspace-core.md`.
+ethos-workspace = { path = "../ethos/packages/workspace", features = ["native-fs"] }
 
 #--
 uuid = { version = "1.17", default-features = false, features = ["serde"] }
@@ -180,7 +152,9 @@ parking_lot = { version = "0.12", default-features = false }
 spin = { version = "0.10", default-features = false }
 derive_more = { version = "2.0", default-features = false }
 num-traits = { version = "0.2", default-features = false }
+unicode-width = { version = "0.2", default-features = false }
 palette = { version = "0.7", default-features = false }
+serde_yaml = { version = "0.9", default-features = false }
 ui-events = { version = "0.3", default-features = false }
 
 hashbrown = { version = "0.16", default-features = false }
@@ -194,6 +168,7 @@ dyn-clone = { version = "1.0", default-features = false }
 
 bumpalo = { version = "3.19", default-features = false }
 bumpalo-herd = { version = "0.1", default-features = false }
+allocator-api2 = { version = "0.2", default-features = false }
 
 slotmap = { version = "1.0", default-features = false }
 indexmap = { version = "2.10", default-features = false }
@@ -209,17 +184,54 @@ into-response = { version = "0.3", default-features = false }
 ansi-to-tui = { version = "8.0", default-features = false }
 crossterm = { version = "0.29", default-features = false }
 ratatui = { version = "0.30", default-features = false }
+arboard = { version = "3.6", default-features = false }
 
 bevy = { version = "0.18", default-features = false }
 
 winit = { version = "0.30", default-features = false }
 notify = { version = "8.2", default-features = false }
 dirs = { version = "6.0", default-features = false }
+hostname = { version = "0.4" }
+
+# Real-time position sync (Anvil's former `peer_sync.rs`, now `runtimes/bevy/examples/mario`'s
+# `relay.rs`) — a WebRTC signaling relay (room join, SDP offer/answer, ICE candidate relay), a
+# pure-Rust WebRTC data-channel implementation, and the WebSocket client the former is spoken
+# over.
+atlas-relay = { path = "../atlas/packages/relay" }
+webrtc = { version = "0.21.0-beta.1", default-features = false, features = ["runtime-tokio"] }
+tokio-tungstenite = { version = "0.24", default-features = false, features = ["connect"] }
+# `webrtc`'s own `PeerConnectionEventHandler` trait is implemented via `#[async_trait::async_
+# trait]` — its methods are async fns in a trait object (`Arc<dyn PeerConnectionEventHandler>`),
+# which plain Rust doesn't support natively.
+async-trait = { version = "0.1", default-features = false }
+# Splitting a WebSocket into its read/write halves (`SinkExt`/`StreamExt`) for the relay client
+# above. Not `default-features = false` like most entries here — matches `atlas-relay`'s own
+# `Cargo.toml`, an external crate this workspace doesn't control, which depends on it the same
+# unpinned way for the same reason.
+futures-util = "0.3"
+
+# Embedded `libsql` replica synced against a remote `sqld` primary — Anvil's own chat/task
+# persistence and `runtimes/bevy/examples/mario`'s gamepad-ownership/ghost persistence both use
+# this same transport.
+libsql = "0.9.30"
+
+raw-window-handle = { version = "0.6", default-features = false }
+objc2 = { version = "0.6" }
+objc2-foundation = { version = "0.3" }
+objc2-app-kit = { version = "0.3" }
+objc2-web-kit = { version = "0.3" }
+objc2-quartz-core = { version = "0.3" }
+objc2-core-graphics = { version = "0.3" }
+block2 = { version = "0.6" }
+
+winapi = { version = "0.3" }
+webview2 = { version = "0.1" }
 
 tracing = { version = "0.1", default-features = false }
 tracing-core = { version = "0.1", default-features = false }
 tracing-subscriber = { version = "0.3", default-features = false }
 tracy-client = { version = "0.18", default-features = false }
+signal-hook = { version = "0.3", default-features = false, features = ["iterator", "extended-siginfo"] }
 
 clap = { version = "4.5", default-features = false }
 eyre = { version = "0.6", default-features = false }
@@ -230,6 +242,7 @@ oops = { git = "https://github.com/open-dx/oops-rs", default-features = false, f
 
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = { version = "1.0", default-features = false }
+toml = { version = "0.9", default-features = false }
 
 prost = { version = "0.14", default-features = false, features = ["derive"] }
 prost-types = { version = "0.14", default-features = false }
@@ -238,6 +251,8 @@ prost-build = { version = "0.14", default-features = false }
 napi = { version = "3.8", default-features = false }
 napi-build = { version = "2.3", default-features = false }
 wasm-bindgen = { version = "0.2", default-features = false }
+web-sys = { version = "0.3", default-features = false }
+js-sys = { version = "0.3", default-features = false }
 bindgen = { version = "0.72", default-features = false }
 cbindgen = { version = "0.29", default-features = false }
 cwrap = { git = "https://github.com/open-dx/cwrap-rs", default-features = false, features = ["macros"] }
@@ -245,3 +260,25 @@ cwrap = { git = "https://github.com/open-dx/cwrap-rs", default-features = false,
 proc-macro2 = { version = "1.0", default-features = false }
 quote = { version = "1.0", default-features = false }
 syn = { version = "2.0", default-features = false }
+
+# `escher-anvil` links both `libsql-ffi` (its own sqld persistence, via `libsql`) and, via
+# `ethos-deno`/`deno_runtime`, `rusqlite`'s hard-required `bundled` feature — two independently
+# vendored copies of SQLite's C implementation, both exporting the exact same `sqlite3_*` symbol
+# names. A linker can only resolve that by silently keeping one and discarding the other for
+# every caller, with no guarantee it keeps the right one — vanilla SQLite (from `libsqlite3-sys`)
+# can silently win over libsql's own fork, causing a segfault in libsql's replication code.
+# `deno_kv`/`deno_cache`/`deno_node_sqlite`/`deno_webstorage` all hard-code `rusqlite`'s `bundled`
+# feature in their own published `Cargo.toml`s, so this can't be avoided by feature selection
+# alone. This patch replaces `libsqlite3-sys` with `patches/libsqlite3-sys` — the same FFI
+# declarations, plus its own compiled copy of libsql-ffi's exact vendored SQLite source (not
+# "rely on `libsql-ffi` being linked into the same binary elsewhere," which breaks for build units
+# that pull `rusqlite` in without `libsql` anywhere in that graph — `ethos-deno`'s own V8-snapshot-
+# generating build script is one such case). `escher-anvil`'s own final binary still ends up with
+# two independently-compiled objects exporting the same symbol names, but since both are byte-
+# identical source compiled with the same flags, whichever one the linker keeps behaves
+# identically to the other — the original crash was two *different* SQLite forks colliding, not
+# merely duplicate ones. See that crate's own `src/lib.rs` and `build.rs` doc comments for the
+# full story. Remove this once upstream stops hard-requiring `bundled` (tracked in
+# `spec/ROADMAP.md`).
+[patch.crates-io]
+libsqlite3-sys = { path = "patches/libsqlite3-sys" }

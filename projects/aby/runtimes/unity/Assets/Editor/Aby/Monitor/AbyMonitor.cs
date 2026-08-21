@@ -6,15 +6,15 @@ using UnityEngine.UIElements;
 using UnityEditor;
 using UnityEditor.UIElements;
 
-using Unity.Runtime;
+using Theta.Unity.Runtime;
 using System;
 
-namespace Unity.Editor.Aby
+namespace Theta.Unity.Editor.Aby
 {
     /// <summary>
     /// TODO
     /// </summary>
-    public class EcmaRuntimeMonitorEditorWindow : EditorWindow
+    public class AbyRuntimeMonitorEditorWindow : EditorWindow
     {
         /// <summary>
         /// TODO
@@ -32,7 +32,7 @@ namespace Unity.Editor.Aby
         /// TODO
         /// </summary>
         [SerializeField]
-        private static string m_LogFilter = "./Logs/EcmaRuntime.*.log";
+        private static string m_LogFilter = "./Logs/AbyRuntime.*.log";
 
         /// <summary>
         /// TODO
@@ -43,10 +43,10 @@ namespace Unity.Editor.Aby
         /// <summary>
         /// TODO
         /// </summary>
-        [MenuItem("Aby/Aby Runtime Monitor")]
+        [MenuItem("Theta/Aby Runtime Monitor")]
         public static void ShowWindow()
         {
-            var abyMonitorWindow = GetWindow<EcmaRuntimeMonitorEditorWindow>();
+            var abyMonitorWindow = GetWindow<AbyRuntimeMonitorEditorWindow>();
             abyMonitorWindow.titleContent = new GUIContent("Aby Monitor");
         }
 

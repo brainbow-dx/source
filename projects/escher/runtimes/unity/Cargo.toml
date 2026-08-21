@@ -3,4 +3,26 @@ name = "escher-unity"
 version = "0.0.0"
 edition = "2024"
 
+#--
+# This crate doesn't build its own native library — the actual C-ABI surface Unity loads is
+# `ethos-ecma`'s own cdylib (see `scripts/sync-plugin.sh`, which builds it directly from ethos's
+# own workspace and copies the result plus its `csbindgen`-generated C# bindings into
+# `Assets/Plugins/Escher/`). This crate has no Rust dependency on `ethos-ecma` at all — it used to
+# (a `pub use ethos_ecma::runtime::ffi as ffi;` convenience re-export, never actually consumed by
+# anything), but that pulled `deno_runtime`'s build-time `swc_allocator` into escher's main
+# workspace Cargo.lock, conflicting with escher-core's own nightly `allocator_api` bumpalo feature
+# (bumpalo treats the two as mutually exclusive). Removing the unused dependency
+# instead of isolating this crate into its own workspace keeps it a normal member of escher's main
+# workspace, consistent with every other `runtimes/*` crate — no Rust-level FFI surface here means
+# nothing here ever needs deno_runtime in the first place. This is the home for the Unity `Assets/`
+# integration and its build/sync scripts, not a Rust library with real code of its own (yet).
+#
+# `csbindgen` below is unrelated to that concern — it's a small `syn`-based source-file parser
+# (see `src/bin/codegen.rs`), not a dependency on `ethos-ecma` itself, and pulls in nothing near
+# `deno_runtime`/`bumpalo`.
 [dependencies]
+csbindgen = { version = "1.9" }
+# Only for `src/bin/export_shape.rs`'s JSON parsing of `ethos-cli run-command`'s stdout — plain
+# `serde_json`, not `ethos-ecma`/`ethos-deno`, so the `bumpalo`/`swc_allocator` conflict this
+# crate's own doc comment above describes doesn't apply here.
+serde_json = { workspace = true, features = ["std"] }

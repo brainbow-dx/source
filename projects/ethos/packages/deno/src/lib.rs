@@ -1,0 +1,38 @@
+//! Deno-embedding infrastructure: constructing and driving a `deno_core`/`deno_runtime`
+//! `MainWorker`, and (feature `ffi`) the C-ABI embedding surface hosts like Unity call into. A
+//! dialect (e.g. `ethos-ecma`) only knows how to parse and print its own syntax — this crate is
+//! where "how do you actually run JS/TS" lives, independent of any dialect.
+
+pub mod bootstrap;
+pub mod command;
+pub mod config;
+pub mod event;
+pub mod host_actions;
+pub mod logging;
+pub mod runtime;
+pub mod start;
+pub mod stdio;
+pub mod tracing;
+pub mod worker;
+
+pub mod cwrap {
+    use core::ffi::CStr;
+    use core::str::Utf8Error;
+
+    pub enum CStringError {
+        Uninitialized,
+        #[allow(unused)] // TODO
+        Utf8Error(Utf8Error),
+    }
+
+    pub unsafe fn try_unwrap_cstr<'out>(bytes: *const i8) -> Result<&'out str, CStringError> {
+        if bytes.is_null() {
+            return Err(CStringError::Uninitialized);
+        }
+
+        match CStr::from_ptr(bytes).to_str() {
+            Ok(c_str) => Ok(c_str),
+            Err(error) => Err(CStringError::Utf8Error(error)),
+        }
+    }
+}

@@ -1,5 +1,6 @@
 #!/usr/bin/env deno
 import { resolve } from "@std/path";
+import { blue, red } from "@std/fmt/colors";
 
 import { $ } from "@ethos/dev/shell";
 import * as sh from "@ethos/dev/shell";
@@ -22,7 +23,7 @@ args.clean ??= false;
 
 const workspaceRoot = resolve(args.workdir, "../..");
 
-console.info($.red(`
+console.info(red(`
     Workspace: 
     Project: 
     Rust: 
@@ -35,13 +36,13 @@ Deno.chdir(args.workdir);
 console.info(`Workspace: ${workspaceRoot}`);
 console.info(`Project: ${Deno.cwd()}`);
 //#tmpl.include(args.rust)
-console.info(`Rust`, $.blue(await sh.which("rustc") ?? "<not-found>"));
+console.info(`Rust`, blue(await sh.which("rustc") ?? "<not-found>"));
 //#tmpl.include(args.deno)
-console.info(`Deno`, $.blue(await sh.which("deno") ?? "<not-found>"));
+console.info(`Deno`, blue(await sh.which("deno") ?? "<not-found>"));
 //#tmpl.include(args.flutter)
 console.info(`
-    ${$.blue("Dart")}: ${await sh.which("dart") ?? "<not-found>"} \n
-    ${$.blue("Flutter")}: ${await sh.which("flutter") ?? "<not-found>"}
+    ${blue("Dart")}: ${await sh.which("dart") ?? "<not-found>"} \n
+    ${blue("Flutter")}: ${await sh.which("flutter") ?? "<not-found>"}
 `);
 
 //#tmpl.include(args.deno)

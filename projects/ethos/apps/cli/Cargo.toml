@@ -1,0 +1,25 @@
+[package]
+name = "ethos-cli"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "ethos"
+path = "src/main.rs"
+
+[dependencies]
+clap = { workspace = true, features = ["std", "derive", "color", "help", "usage"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["std", "env-filter", "fmt", "ansi"] }
+tracing-log = { workspace = true, features = ["std", "log-tracer"] }
+
+# `run-command` — runs a single JS/Lua command script and prints its result, this crate's own
+# demo of `ethos_deno::command::run_module_command`/`ethos_lua`. `escher-anvil` used to shell out
+# to this exact subcommand as an external process (a real, then-unavoidable `escher-core`/
+# `ethos-deno` bumpalo feature conflict — see escher's changelog, 2026-08-13, "Fixed
+# swc_allocator/bumpalo feature conflict") — it now embeds `ethos-deno` directly instead, once a
+# `deno_runtime` version bump resolved that conflict, so this subcommand is just this CLI's own
+# feature now, not load-bearing for any other host.
+ethos-core = { workspace = true }
+ethos-deno = { workspace = true }
+ethos-lua = { workspace = true }

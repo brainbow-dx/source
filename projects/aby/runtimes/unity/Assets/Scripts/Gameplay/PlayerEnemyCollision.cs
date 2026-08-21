@@ -4,9 +4,6 @@ using Platformer.Core;
 using Platformer.Mechanics;
 using Platformer.Model;
 using static Platformer.Core.Simulation;
-using Aby;
-using UnityEngine.UIElements;
-using static UnityEngine.RuleTile.TilingRuleOutput;
 
 namespace Platformer.Gameplay
 {

@@ -1,0 +1,165 @@
+{
+	"Version": 3,
+	"Parameters": [
+		{
+			"Id": "Param2",
+			"GroupId": "ParamGroup",
+			"Name": "death position"
+		},
+		{
+			"Id": "f_arm_rot",
+			"GroupId": "ParamGroup",
+			"Name": "front arm rot"
+		},
+		{
+			"Id": "b_arm_rot",
+			"GroupId": "ParamGroup",
+			"Name": "back arm rot"
+		},
+		{
+			"Id": "upperbody",
+			"GroupId": "ParamGroup",
+			"Name": "UpperBody"
+		},
+		{
+			"Id": "movementcycle",
+			"GroupId": "ParamGroup",
+			"Name": "movement cycle"
+		},
+		{
+			"Id": "idle",
+			"GroupId": "ParamGroup2",
+			"Name": "idle"
+		},
+		{
+			"Id": "walk",
+			"GroupId": "ParamGroup2",
+			"Name": "walk"
+		},
+		{
+			"Id": "run",
+			"GroupId": "ParamGroup2",
+			"Name": "run"
+		},
+		{
+			"Id": "dead",
+			"GroupId": "ParamGroup2",
+			"Name": "dead"
+		},
+		{
+			"Id": "back_curl",
+			"GroupId": "ParamGroup2",
+			"Name": "back curl"
+		},
+		{
+			"Id": "Param",
+			"GroupId": "ParamGroup2",
+			"Name": "curl"
+		},
+		{
+			"Id": "flip",
+			"GroupId": "ParamGroup2",
+			"Name": "flip head"
+		},
+		{
+			"Id": "char",
+			"GroupId": "ParamGroup2",
+			"Name": "character"
+		},
+		{
+			"Id": "rav",
+			"GroupId": "ParamGroup3",
+			"Name": "rev arm vis"
+		},
+		{
+			"Id": "fav",
+			"GroupId": "ParamGroup3",
+			"Name": "forward arm vis"
+		},
+		{
+			"Id": "knife_vis",
+			"GroupId": "ParamGroup3",
+			"Name": "knife vis "
+		},
+		{
+			"Id": "Param3",
+			"GroupId": "ParamGroup3",
+			"Name": "front arm running"
+		}
+	],
+	"ParameterGroups": [
+		{
+			"Id": "ParamGroup",
+			"GroupId": "",
+			"Name": "movement"
+		},
+		{
+			"Id": "ParamGroup2",
+			"GroupId": "",
+			"Name": "toggles"
+		},
+		{
+			"Id": "ParamGroup3",
+			"GroupId": "",
+			"Name": "visibility"
+		}
+	],
+	"Parts": [
+		{
+			"Id": "Part9",
+			"Name": "Knife.psd"
+		},
+		{
+			"Id": "Part8",
+			"Name": "head.psd"
+		},
+		{
+			"Id": "Part7",
+			"Name": "NewRabbit.psd"
+		},
+		{
+			"Id": "Part2",
+			"Name": "Gun.psd"
+		},
+		{
+			"Id": "Cat",
+			"Name": "Cat"
+		},
+		{
+			"Id": "Rabbit",
+			"Name": "Rabbit"
+		},
+		{
+			"Id": "Possum",
+			"Name": "Possum"
+		},
+		{
+			"Id": "PartSketch0",
+			"Name": "[ Guide Image]"
+		},
+		{
+			"Id": "Rabbit2",
+			"Name": "Rabbit"
+		},
+		{
+			"Id": "Part",
+			"Name": "New group"
+		},
+		{
+			"Id": "Part3",
+			"Name": "New group"
+		},
+		{
+			"Id": "Part4",
+			"Name": "New group"
+		},
+		{
+			"Id": "Part5",
+			"Name": "New group"
+		},
+		{
+			"Id": "Part6",
+			"Name": "New group"
+		}
+	]
+}

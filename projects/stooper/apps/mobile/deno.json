@@ -10,8 +10,7 @@
     ".": "./src/mod.ts"
   },
   "imports": {
-    "@david/which": "jsr:@david/which@^0.4.1",
-    "dzx": "https://deno.land/x/dzx@0.4.0/mod.ts"
+    "@david/which": "jsr:@david/which@^0.4.1"
   },
   "compilerOptions": {
     "lib": [

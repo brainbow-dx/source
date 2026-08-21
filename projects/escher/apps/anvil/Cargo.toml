@@ -1,0 +1,72 @@
+[package]
+name = "escher-anvil"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "escher-anvil"
+path = "src/main.rs"
+
+#---
+[dependencies]
+escher-core = { workspace = true }
+escher-styleguide = { workspace = true }
+escher-terminal = { workspace = true }
+escher-bevy = { workspace = true }
+escher-webview = { workspace = true }
+escher-os = { workspace = true }
+# The embedded JS/TS engine for JS-backed slash commands — through this crate's own API
+# (`ethos_deno::stdio::RuntimeStdio`, `ethos_deno::command::run_module_command`), not
+# `deno_core`/`deno_runtime` directly.
+ethos-deno = { workspace = true }
+# The `/workspace` command's backing model — this app is its first real embedder.
+ethos-workspace = { workspace = true }
+# `ssg`/`description` only — turns a `ScaffoldDescription` JSON string into a real `Scaffold`
+# (terminal rendering) or a static HTML page (the `/shape` web leg).
+escher-web = { workspace = true }
+# `bevy` feature: the toolbar/tab-strip plugin (`escher_appkit::bevy`), the only part of this
+# crate anvil names directly.
+escher-appkit = { workspace = true, features = ["bevy"] }
+
+atlas = { workspace = true }
+# The relay console (`/relay-console`) needs a real relay to connect to — `atlas_relay::serve`
+# run in-process, on this app's own runtime, rather than shelling out to the standalone
+# `atlas-relay` binary and needing to track whether it's built/on `PATH`.
+atlas-relay = { workspace = true }
+# Resolving `~/.anvil` — deliberately not `atlas::env::get_data_dir`, which is Atlas's own
+# isolated data-storage convention, not a generic "any app" utility.
+dirs = { workspace = true }
+
+# `"default"` (2d + 3d + ui) pulls in Bevy's whole 3D stack (`bevy_pbr`/lighting/`bevy_gltf`/
+# animation/KTX2 textures) unconditionally — nothing anywhere in this app renders 3D content, so
+# `3d` is dropped. `2d` on its own already pulls in what a real app actually needs regardless
+# (`default_app`/`default_platform`: windowing, winit, asset loading, logging, input, gamepad) —
+# see `bevy`'s own `Cargo.toml` feature graph for why `2d` alone, not each of those individually.
+bevy = { workspace = true, features = ["2d", "ui"] }
+winit = { workspace = true }
+ratatui = { workspace = true, features = ["crossterm"] }
+crossterm = { workspace = true, features = ["events", "bracketed-paste"] }
+
+clap = { workspace = true, features = ["std", "derive", "color", "help", "usage"] }
+unicode-width = { workspace = true }
+parking_lot = { workspace = true }
+
+tracing = { workspace = true, features = ["std"] }
+tracing-subscriber = { workspace = true, features = ["std", "env-filter", "fmt", "ansi", "registry"] }
+eyre = { workspace = true }
+color-eyre = { workspace = true }
+
+tokio = { workspace = true, features = ["full"] }
+libsql = { workspace = true }
+# `v5`: deriving a fixed-size, deterministic UUID from this instance's own `--identity` string —
+# a real UUID (a 16-byte BLOB) rather than a variable-length string is the right shape for an id
+# meant to identify an entity consistently across a larger system.
+uuid = { workspace = true, features = ["v5"] }
+
+# Only for parsing the embedded JS engine's JSON return values (the `/shape` command) — see
+# `escher-unity`'s own `Cargo.toml` for the identical `default-features = false` workspace quirk
+# this `features = ["std"]` works around.
+serde_json = { workspace = true, features = ["std"] }
+serde = { workspace = true }
+# `.anvil.toml` (see `config.rs`) — `anvil init` writes it, startup reads it.
+toml = { workspace = true, features = ["parse", "display", "serde"] }

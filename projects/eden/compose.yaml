@@ -1,0 +1,21 @@
+services:
+  # `docker compose --profile docs up` builds the image (a real release binary/static book — the
+  # Dockerfile's own default), but this service always overrides the command to `mdbook serve` and
+  # bind-mounts spec/docs straight in — watch is on unconditionally the moment this service is up,
+  # no separate `docker compose watch`/`--watch` invocation required. mdbook's own file watcher
+  # sees host edits immediately through the bind mount and rebuilds + live-reloads.
+  docs:
+    build:
+      context: .
+      dockerfile: docs/Dockerfile
+    profiles: [docs]
+    ports:
+      - 8096:3000
+    command: ["mdbook", "serve", "--hostname", "0.0.0.0", "--port", "3000"]
+    volumes:
+      - ./spec/docs:/spec/docs
+networks:
+  default:
+    # You can configure custom networks here if needed.
+    # For a basic setup, the default bridge network is usually sufficient.
+    # driver: bridge

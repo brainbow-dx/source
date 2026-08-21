@@ -1,0 +1,17 @@
+[template]
+name = "workspace"
+include = [
+    "Cargo.toml",
+    "src/**/*.rs",
+    "deno.json",
+]
+# .. or
+# exclude = [
+#     ".output/",
+#     ".scratch/",
+# ]
+
+# No `[hooks.generate]` yet — unlike app/package/service, this template's `Cargo.toml` uses
+# forward-looking `#set(...)`/`#rename(...)` directive comments (see the file itself) that no
+# generate script processes today; `.generate.tsx`'s own "process file for template tags" TODO is
+# the prerequisite. Don't point a hook at a script that doesn't exist yet.

@@ -2,86 +2,21 @@
 name = "ethos-ecma"
 version = "0.1.0"
 edition = "2021"
-build = "scripts/build.rs"
-
-[features]
-default = ["std", "ffi", "runtime"]
-std = ["tracing-subscriber/std", "tracing-subscriber/fmt", "tracing-subscriber/env-filter", "tracing-subscriber/ansi"]
-dev = []
-verbose = []
-runtime = []
-ffi = []
 
 #--
-[lib]
-crate-type=["rlib", "cdylib"]
-
-[[example]]
-name = "counter"
-required-features = ["ffi"]
-
-#--
+# The ECMAScript/TypeScript dialect: parsing and printing only, via `swc_core`. No execution —
+# that's `ethos-deno`'s job (paired with this crate by `ethos-cli`, not a dependency between the
+# two). This crate used to also own the whole runtime/FFI surface; that moved to `ethos-deno`.
 [dependencies]
-parking_lot = { workspace = true }
+ethos-core = { workspace = true }
 
-derive_more = { workspace = true, features = [
-    "from",
-    "display",
-    "deref",
-    "deref_mut",
-] }
-
-bindgen = { workspace = true }
-cbindgen = { workspace = true }
-cwrap = { workspace = true }
-
-eyre = { workspace = true }
-oops = { workspace = true }
-
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
-
-tempfile = { workspace = true }
-sys_traits = { workspace = true }
-
-slab = { workspace = true }
-
-futures = { workspace = true }
-tokio = { workspace = true, features = [
-    "rt", "rt-multi-thread", "macros", "bytes", "fs", "net", "signal",
-    "socket2", "sync", "time", "tokio-macros", "tracing", "process",
-] }
-
-deno_core = { workspace = true }
-deno_runtime = { workspace = true, features = ["include_js_files_for_snapshotting"] }
-deno_resolver = { workspace = true }
-
-[dev-dependencies]
-eyre = { workspace = true }
-
-clap = { workspace = true, features = ["std", "derive"] }
-
-tracing = { workspace = true, features = ["std"] }
-tracing-subscriber = { workspace = true, features = [
-    "std",
-    "env-filter",
-    "fmt",
-    "ansi",
-] }
-
-# Used to evaluate and benchmark swc parsing/tools against deno.
 swc_core = { workspace = true, features = [
     "base",
     "common",
     "typescript",
     "ecma_ast",
-    "ecma_quote",
     "ecma_codegen",
     "ecma_parser",
     "ecma_parser_typescript",
     "ecma_loader",
 ] }
-
-[build-dependencies]
-anyhow = "1.0"
-csbindgen = { version = "1.9" }

@@ -1,0 +1,9 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <Style src="Shape.uss" />
+    <ui:VisualElement class="escher-root">
+        <ui:VisualElement class="escher-node-1">
+            <ui:VisualElement class="escher-node-2" />
+            <ui:Label class="escher-node-3" text="Escher demo shape: a 240×140px box filled #7aa2f7. This page is static HTML rendered by escher-web's SSG path (Anvil's /shape command, via escher_web::ssg::render_page_to_html) -- not a live game canvas or Unity view. The same description is also compiled to Unity UXML/USS (Assets/UI/Generated/Shape.{uxml,uss} in Aby's Unity project) but nothing loads or displays it in a running Unity scene yet -- that file just sits on disk for a human to wire up manually." />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

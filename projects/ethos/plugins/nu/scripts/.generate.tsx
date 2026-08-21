@@ -1,6 +1,7 @@
 #!/usr/bin/env deno
 // deno-lint-ignore-file no-explicit-any no-unused-vars verbatim-module-syntax
 import { join, resolve, normalize, dirname, basename } from "@std/path";
+import { bold, magenta, yellow } from "@std/fmt/colors";
 import * as path from "@std/path";
 import { exists, existsSync, walk, WalkOptions } from "@std/fs";
 
@@ -42,7 +43,7 @@ export const DEFAULT_PLATFORMS: string = "windows,mac,linux,ios,android,web";
 export const OUT_DIR: string = resolve(Deno.cwd(), args._[0]?.toString() ?? ".");
 
 if (args.verbose === true) {
-    console.debug($.bold.magenta(`Args:`), args);
+    console.debug(bold(magenta(`Args:`)), args);
 }
 
 if (args.name == undefined) {
@@ -55,7 +56,7 @@ console.debug(`Generating ${args.name} @ '${OUT_DIR}'`);
 console.debug(` .. from template @ '${args.tpldir}'`);
 
 if (args.reset === true && await exists(OUT_DIR)) {
-    console.warn($.yellow.bold(`Got reset! Removing '${OUT_DIR}' ..`));
+    console.warn(yellow(bold(`Got reset! Removing '${OUT_DIR}' ..`)));
     console.info(`Press <enter> to continue; ctrl+c to exit.`);
 
     const stdinBuf = new Uint8Array(100);
@@ -88,7 +89,7 @@ if (args.rust === true) {
     //     .replace(/\\"|"(?:\\"|[^"])*"|(\/\/.*|\/\*[\s\S]*?\*\/)/g, (m, g) => g ? "" : m);
     // const cargoWorkspaceConfig = JSON.parse(cargoWorkspaceConfigContents);
 
-    console.debug($.bold.magenta(`Rust`), cargoWorkspaceConfigPath);
+    console.debug(bold(magenta(`Rust`)), cargoWorkspaceConfigPath);
 
     const match = [
         path.globToRegExp(`./Cargo.toml`),
@@ -163,7 +164,7 @@ if (args.deno === true) {
         .replace(/\\"|"(?:\\"|[^"])*"|(\/\/.*|\/\*[\s\S]*?\*\/)/g, (m, g) => g ? "" : m);
     const denoWorkspaceConfig = JSON.parse(denoWorkspaceConfigContents);
 
-    console.debug($.bold.magenta(`Deno`), denoWorkspaceConfigPath);
+    console.debug(bold(magenta(`Deno`)), denoWorkspaceConfigPath);
 
     const match = [
         // path.globToRegExp(`./pubspec.yaml`),
@@ -246,7 +247,7 @@ if (args.flutter === true) {
     // const flutterWorkspaceConfigContents = await Deno.readTextFile(flutterWorkspaceConfigPath);
     // const flutterWorkspaceConfig = JSON.parse(flutterWorkspaceConfigContents);
 
-    console.debug($.bold.magenta(`Flutter`), flutterWorkspaceConfigPath);
+    console.debug(bold(magenta(`Flutter`)), flutterWorkspaceConfigPath);
 
     const match = [
         path.globToRegExp(`./pubspec.yaml`),
@@ -311,12 +312,12 @@ if (args.flutter === true) {
 }
 
 if (args.dry) {
-    console.info($.bold(`Dry run. Exiting!`));
+    console.info(bold(`Dry run. Exiting!`));
     Deno.exit(0);
 }
 
 //---
-console.warn($.magenta.bold(`Fin. <3`));
+console.warn(magenta(bold(`Fin. <3`)));
 // TODO: More information pls ..
 
 //---

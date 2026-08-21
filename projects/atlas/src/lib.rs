@@ -1,6 +1,9 @@
 extern crate atlas_store;
 pub use atlas_core::*;
 
+pub mod env;
+pub mod log;
+
 pub extern crate atlas_store as store;
 
 pub extern crate atlas_relay as relay;

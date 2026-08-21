@@ -1,0 +1,63 @@
+{
+  "styles": [
+    {
+      "type": "flexDirection",
+      "direction": "column"
+    },
+    {
+      "type": "gap",
+      "value": {
+        "unit": "px",
+        "value": 16
+      }
+    },
+    {
+      "type": "padding",
+      "edge": "all",
+      "value": {
+        "unit": "px",
+        "value": 24
+      }
+    }
+  ],
+  "children": [
+    {
+      "styles": [
+        {
+          "type": "backgroundColor",
+          "color": "#7aa2f7"
+        },
+        {
+          "type": "size",
+          "width": {
+            "unit": "px",
+            "value": 240
+          },
+          "height": {
+            "unit": "px",
+            "value": 140
+          }
+        }
+      ]
+    },
+    {
+      "content": "Escher demo shape: a 240\u00d7140px box filled #7aa2f7. This page is static HTML rendered by escher-web's SSG path (Anvil's /shape command, via escher_web::ssg::render_page_to_html) -- not a live game canvas or Unity view. The same description is also compiled to Unity UXML/USS (Assets/UI/Generated/Shape.{uxml,uss} in Aby's Unity project) but nothing loads or displays it in a running Unity scene yet -- that file just sits on disk for a human to wire up manually.",
+      "styles": [
+        {
+          "type": "contentColor",
+          "color": "#e0e0e0"
+        },
+        {
+          "type": "size",
+          "width": {
+            "unit": "px",
+            "value": 420
+          },
+          "height": {
+            "unit": "auto"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -5,7 +5,7 @@ using Platformer.Mechanics;
 using UnityEngine;
 using static Platformer.Core.Simulation;
 
-namespace Aby
+namespace Theta
 {
     public class TrapController : MonoBehaviour
     {

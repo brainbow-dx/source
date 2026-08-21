@@ -26,8 +26,14 @@ if (args.build) {
 }
 
 if (args.run) {
+    const port = 3615;
+    await freePort(port);
+
     // const desktopCommand = $`deno desktop main.ts`;
-    await $`cargo run --example serve --features dev -- --address 127.0.0.1:3615 --workspace ${args.workspace}`;
+    // 0.0.0.0, not 127.0.0.1 — still reachable at localhost for normal local dev, but also
+    // reachable through a container's published port mapping, which only forwards to the
+    // container's external interface, not its loopback.
+    await $`cargo run --example serve --features dev -- --address 0.0.0.0:${port} --workspace ${args.workspace}`;
     /*
     const runCommand = $`cargo run --example serve --features dev -- --address 127.0.0.1:3615 --workspace ${args.workspace}`;
     
@@ -77,6 +83,36 @@ if (args.run) {
 if (args.clean === true) {
     await $`cargo clean`;
     await $`deno task clean`;
+}
+
+/**
+ * Kills whatever's already listening on `port` — a leftover `serve` instance from a previous
+ * `deno task dev` run is the common case, since nothing currently stops it on exit.
+ */
+async function freePort(port: number) {
+    const { stdout } = await new Deno.Command("lsof", {
+        args: ["-ti", `:${port}`],
+        stdout: "piped",
+        stderr: "null",
+    }).output();
+
+    const pids = new TextDecoder().decode(stdout).trim().split("\n").filter(Boolean).map(Number);
+
+    if (pids.length === 0) {
+        return;
+    }
+
+    console.info(`Port ${port} is already in use (pid ${pids.join(", ")}) — stopping it.`);
+    for (const pid of pids) {
+        try {
+            Deno.kill(pid, "SIGTERM");
+        } catch {
+            // Already gone.
+        }
+    }
+
+    // Give the OS a moment to actually release the socket before we try to bind it again.
+    await new Promise((resolve) => setTimeout(resolve, 300));
 }
 
 export interface WatchEvent extends Deno.FsEvent {

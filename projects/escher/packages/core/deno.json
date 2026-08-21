@@ -5,6 +5,7 @@
     "exports": {
         ".": "./src/mod.ts",
         "./draw": "./src/draw.ts",
-        "./surface": "./src/surface.ts"
+        "./surface": "./src/surface.ts",
+        "./style": "./src/style.ts"
     }
 }

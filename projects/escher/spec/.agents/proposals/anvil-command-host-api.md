@@ -1,0 +1,28 @@
+# Anvil command host API
+
+Flagged in PR review: `commands/quit.js` was a one-line script that returned a magic sentinel string (`QUIT_SENTINEL` in `main.rs`) which Rust then grepped for in a command's output to decide to exit. `commands/clear.js` followed the identical pattern with its own `CLEAR_SENTINEL`. The reviewer's point: a command script should be able to *do* the thing directly — call a real host-exposed function — rather than communicate intent back through a string Rust has to interpret after the fact.
+
+## Status: implemented
+
+`ethos-deno`'s `host_actions` module (`packages/deno/src/host_actions.rs`) is the real mechanism:
+
+- One generic `op_host_action` op, not a specialized op per action. A script calls it with a real structured message (`{ type: "quit", ...anyExtraData }`), not a bare type name — the whole `HostMessage` (a `type: String` plus a `data` map for anything else) survives the round trip, not just the type.
+- `commands/quit.js`/`commands/clear.js` define a small local `postMessage({ type, ...data })` wrapper around `globalThis.__ethosHostAction` — a deliberately familiar public shape (matching `Worker`/`BroadcastChannel` conventions script authors already know), even though the mechanism underneath is a direct host call, not real cross-realm message passing (see "Why not postMessage/BroadcastChannel for real" below).
+- `globalThis.__ethosHostAction`, not the raw op, is what a script actually calls. `deno_runtime`'s own bootstrap (`99_main.js`) deletes every op not on its own hardcoded CLI allowlist from `Deno.core.ops` before a command script ever runs, and separately replaces the whole `Deno` namespace object outright. `host_actions_init.js` (a classic, non-module extension script that runs eagerly at extension setup, before either of those things happen) grabs a direct reference to the op function while it's still there and hangs it off `globalThis` instead, where it survives.
+- `run_module_command` takes a new `extensions: Vec<Extension>` parameter (previously hardcoded to `vec![]`); a caller builds the extension via `host_actions::host_action_extension(actions)` and passes its own `HostActions` handle, which it drains after the run completes.
+- `AppState::spawn_js_command` drains the actions after each run and reacts: `"quit"` sets the existing `quit_requested: Arc<AtomicBool>` flag (already polled every tick in `assistant_terminal_draw` — this cross-thread handoff already existed, just needed a real trigger instead of a sentinel-string match), `"clear"` wipes the live transcript the same way the old `CLEAR_SENTINEL` branch did.
+- `QUIT_SENTINEL`/`CLEAR_SENTINEL` are gone entirely. `Persistence::is_hidden_from_history` no longer content-matches the assistant reply text (that content is real, human-chosen text now, not a fixed string) — `spawn_js_command` instead knows from context (`command_name == "quit"`) and calls a new `save_message_with_hidden` override directly.
+- Real test: `host_actions.rs`'s own `#[test]` drives the actual `run_module_command`/`bootstrap_main_worker` path with a real script calling the real op — not a reimplementation.
+
+## Why not postMessage/BroadcastChannel for real
+
+Considered and rejected using Deno's actual `Worker.postMessage`/`BroadcastChannel` machinery as the transport. Both are JS-realm-to-JS-realm APIs (worker ↔ parent worker, or same-origin cross-context) — this is JS calling *into its native host*, which is precisely what ops are for in `deno_core` (the same mechanism `fetch()`/`console.log` use). Routing through `BroadcastChannel` would mean Rust code pretending to be a JS worker peer just to receive a message — more indirection, not less, and not a real fit structurally. `deno_broadcast_channel` is already wired into `bootstrap_main_worker` (`broadcast_channel: Default::default()` in the worker service options) for the genuinely different case of **two scripts talking to each other** — untested/unverified whether that default is actually functional yet; a real follow-up if that need shows up (the user's already flagged wanting this for some examples), not part of this change.
+
+## Cross-runtime note
+
+`host_actions` lives in `ethos-deno` specifically, not `ethos-core` — it's scoped to the JS/Deno runtime today, not a cross-dialect commitment. The `data` payload is `serde_json::Map<String, serde_json::Value>`, which isn't really "JSON the wire format" (op2 marshals straight from V8 values into the Rust struct, never through JSON text) — it's just the standard structured-data shape most serialization ecosystems (MessagePack, CBOR, `mlua`'s own serde bridge for Lua tables) already convert to/from. If a second runtime (Lua, etc.) ever wants to share this exact mechanism rather than defining its own equivalent, the natural move is lifting `type: String` (already universal) into `ethos-core` and making `data` generic over `serde::Serialize + Deserialize` instead of hardcoded to `serde_json::Map` — a small, backward-compatible change, not worth doing ahead of an actual second consumer.
+
+## Follow-ups not done here
+
+- `/relay-console` is still a Rust-hardcoded `SlashCommand` (not a discovered script) whose Rust handler shells out to `scripts/serve-relay-console.ts`/`scripts/open-page.js` directly. Whether it should become a real discovered command built on this same host API, or stay Rust-native since it manages a long-lived subprocess (not a fire-and-forget action), is still an open question — see `spec/.agents/principles.md`'s `commands/` vs `scripts/` section.
+- Two-script-to-script messaging (a real, separate need the user's flagged) — check whether `BroadcastChannel`'s already-wired default is actually usable, or needs real implementation.

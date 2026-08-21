@@ -1,0 +1,10 @@
+[book]
+title = "Escher"
+authors = ["Brainbow"]
+language = "en"
+multilingual = false
+src = "../spec/docs"
+
+[build]
+build-dir = "../.output/docs"
+create-missing = true

@@ -2,8 +2,14 @@
     "name": "@escher/jsx",
     "version": "0.0.0-preview",
     "license": "MIT",
+    "compilerOptions": {
+        "jsx": "react-jsx",
+        "jsxImportSource": "@escher/jsx"
+    },
     "exports": {
         ".": "./src/mod.ts",
-        "./dev": "./src/dev.ts"
+        "./dev": "./src/dev.ts",
+        "./jsx-runtime": "./src/mod.ts",
+        "./jsx-dev-runtime": "./src/dev.ts"
     }
 }

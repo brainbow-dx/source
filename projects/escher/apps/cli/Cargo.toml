@@ -1,0 +1,12 @@
+[package]
+name = "escher-cli"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "escher"
+path = "src/main.rs"
+
+[dependencies]
+clap = { workspace = true, features = ["std", "derive", "color", "help", "usage"] }
+escher-os = { workspace = true }

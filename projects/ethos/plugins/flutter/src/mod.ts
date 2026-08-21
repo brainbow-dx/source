@@ -73,7 +73,7 @@ export class FlutterProject {
         // await $`flutter build web`;
         const buildCommand = await $`flutter build ${platform}`;
 
-        if (buildCommand.status > 0) {
+        if (buildCommand.code > 0) {
             // TODO: Ensure the build command was successful before moving on ..
             console.debug(`Build Command Failed:`, buildCommand);
         }

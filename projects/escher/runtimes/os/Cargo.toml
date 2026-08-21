@@ -1,6 +1,16 @@
 [package]
-name = "package"
-version = "0.1.0"
+name = "escher-os"
+version = "0.0.0"
 edition = "2024"
 
+#--
+# OS-level integration — native dialogs, the application menu bar, and clipboard access — kept
+# separate from `escher-webview` (attaching a browser view to a window) and from any specific
+# engine/runtime (`escher-bevy` etc. are consumers, not owners, of this). macOS only for now, via
+# `objc2`/AppKit — same toolkit already used by `escher-webview`.
 [dependencies]
+
+[target.'cfg(target_os="macos")'.dependencies]
+objc2 = { workspace = true }
+objc2-foundation = { workspace = true }
+objc2-app-kit = { workspace = true }

@@ -1,22 +1,23 @@
 [template]
-name = "Basic App"
-exclude = [
-    # TODO
-    ".output/",
-    ".scratch/",
+name = "service"
+include = [
+    "Cargo.toml",
+    "src/**/*.rs",
+    "deno.json",
+    "scripts/**/*.tsx",
+    "lib/**/*.dart",
+    "pubspec.yaml",
+    "web/**/*.html",
     "README.md",
 ]
+# .. or
+# exclude = [
+#     ".output/",
+#     ".scratch/",
+# ]
 
-[vars.dang]
-default = "todo"
-module = ""
+[hooks.generate]
+command = "deno run -A scripts/.init.tsx"
 
-[generate.hooks]
-run = [
-    # TODO
-    "deno run -A scripts/#generate.tsx",
-]
-watch = [
-    # TODO
-    "deno watch -A scripts/#generate.txx",
-]
+# [hooks.error]
+# command = "deno run scripts/.cleanup.tsx"

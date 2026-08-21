@@ -1,0 +1,9 @@
+.escher-node-2 {
+    background-color: #7aa2f7;
+    width: 240px;
+    height: 140px;
+}
+.escher-node-3 {
+    width: 420px;
+    height: auto;
+}

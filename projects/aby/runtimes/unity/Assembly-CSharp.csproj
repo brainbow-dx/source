@@ -43,7 +43,7 @@
     <UnityVersion>6000.3.8f1</UnityVersion>
   </PropertyGroup>
   <ItemGroup>
-    <Analyzer Include="/Users/lorren/.vscode/extensions/visualstudiotoolsforunity.vstuc-1.2.1/Analyzers/Microsoft.Unity.Analyzers.dll" />
+    <Analyzer Include="/Users/lorren/.vscode/extensions/visualstudiotoolsforunity.vstuc-1.3.1/Analyzers/Microsoft.Unity.Analyzers.dll" />
     <Analyzer Include="/Applications/Unity/Hub/Editor/6000.3.8f1/Unity.app/Contents/Resources/BuildPipeline/Unity.SourceGenerators/Unity.SourceGenerators.dll" />
     <Analyzer Include="/Applications/Unity/Hub/Editor/6000.3.8f1/Unity.app/Contents/Resources/BuildPipeline/Unity.SourceGenerators/Unity.Properties.SourceGenerator.dll" />
     <Analyzer Include="/Applications/Unity/Hub/Editor/6000.3.8f1/Unity.app/Contents/Resources/BuildPipeline/Unity.SourceGenerators/Unity.UIToolkit.SourceGenerator.dll" />
@@ -61,9 +61,9 @@
     <Compile Include="Assets/Scripts/Model/PlatformerModel.cs" />
     <Compile Include="Assets/Scripts/View/ParallaxLayer.cs" />
     <Compile Include="Assets/Scripts/Core/Simulation.Event.cs" />
+    <Compile Include="Assets/Scripts/Networking/NetworkPlayer.cs" />
     <Compile Include="Assets/Scripts/Mechanics/EnemyController.cs" />
     <Compile Include="Assets/Scripts/Gameplay/PlayerDeath.cs" />
-    <Compile Include="Assets/Scripts/Aby/AbyRuntimeSettings.cs" />
     <Compile Include="Assets/Scripts/Gameplay/PlayerTokenCollision.cs" />
     <Compile Include="Assets/Scripts/Mechanics/VictoryZone.cs" />
     <Compile Include="Assets/SpawnPortalController.cs" />
@@ -73,17 +73,21 @@
     <Compile Include="Assets/Scripts/Core/HeapQueue.cs" />
     <Compile Include="Assets/Scripts/Mechanics/SpawnPoint.cs" />
     <Compile Include="Assets/Scripts/Gameplay/PlayerStopJump.cs" />
-    <Compile Include="Assets/Scripts/Runtime/AbyEnv.cs" />
+    <Compile Include="Assets/Scripts/Networking/SignalingProtocol.cs" />
     <Compile Include="Assets/Scripts/Mechanics/PlayAudioClip.cs" />
     <Compile Include="Assets/Scripts/Mechanics/AnimationController.cs" />
     <Compile Include="Assets/Scripts/Core/Simulation.cs" />
     <Compile Include="Assets/Scripts/Mechanics/PatrolPath.cs" />
-    <Compile Include="Assets/Scripts/Runtime/ThetaRuntime.cs" />
+    <Compile Include="Assets/Scripts/Networking/NativeWebRtcTransport.cs" />
+    <Compile Include="Assets/Scripts/Networking/WebGLWebRtcTransport.cs" />
+    <Compile Include="Assets/Scripts/Networking/SignalingClient.cs" />
     <Compile Include="Assets/Scripts/Audio/AudioManager.cs" />
     <Compile Include="Assets/Collectibles/Chest/ChestEffect.cs" />
     <Compile Include="Assets/Scripts/Audio/AudioPlayer.cs" />
     <Compile Include="Assets/Scripts/UI/MetaGameController.cs" />
+    <Compile Include="Assets/Scripts/Networking/IPeerTransport.cs" />
     <Compile Include="Assets/Scripts/Gameplay/EnablePlayerInput.cs" />
+    <Compile Include="Assets/Scripts/Networking/PeerTransportFactory.cs" />
     <Compile Include="Assets/Scripts/Gameplay/PlayerJumped.cs" />
     <Compile Include="Assets/TrapController.cs" />
     <Compile Include="Assets/Scripts/Mechanics/TokenController.cs" />
@@ -98,12 +102,31 @@
     <Compile Include="Assets/Scripts/Gameplay/EnemyDeath.cs" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="Assets/TextMesh Pro/Resources/Shaders/TMPro.cginc" />
     <None Include="Assets/Environments/Oak Woods/README.TXT" />
+    <None Include="Assets/TextMesh Pro/Resources/Shaders/TMP_SDF-Mobile Overlay.shader" />
+    <None Include="Assets/TextMesh Pro/Resources/Shaders/TMP_Bitmap.shader" />
     <None Include="Assets/UI Panels/Hud/HudStyles.uss" />
     <None Include="Assets/Environments/Changelog.txt" />
+    <None Include="Assets/UI/Generated/Shape.uxml" />
+    <None Include="Assets/TextMesh Pro/Resources/Shaders/TMP_SDF-Surface-Mobile.shader" />
+    <None Include="Assets/TextMesh Pro/Resources/Shaders/TMP_SDF-Surface.shader" />
+    <None Include="Assets/TextMesh Pro/Sprites/EmojiOne Attribution.txt" />
+    <None Include="Assets/TextMesh Pro/Resources/Shaders/TMP_Bitmap-Custom-Atlas.shader" />
+    <None Include="Assets/TextMesh Pro/Resources/Shaders/TMP_SDF.shader" />
+    <None Include="Assets/TextMesh Pro/Resources/LineBreaking Leading Characters.txt" />
+    <None Include="Assets/TextMesh Pro/Resources/Shaders/TMPro_Properties.cginc" />
     <None Include="Assets/UI Panels/Halo/PlayerHalo.uxml" />
+    <None Include="Assets/TextMesh Pro/Resources/Shaders/TMPro_Surface.cginc" />
     <None Include="Assets/Examples/Platformer/PlatformerMicrogame_README.txt" />
     <None Include="Assets/UI Panels/Hud/HudLayout.uxml" />
+    <None Include="Assets/TextMesh Pro/Resources/LineBreaking Following Characters.txt" />
+    <None Include="Assets/TextMesh Pro/Resources/Shaders/TMP_SDF-Mobile Masking.shader" />
+    <None Include="Assets/TextMesh Pro/Resources/Shaders/TMP_SDF Overlay.shader" />
+    <None Include="Assets/TextMesh Pro/Resources/Shaders/TMP_Bitmap-Mobile.shader" />
+    <None Include="Assets/UI/Generated/Shape.uss" />
+    <None Include="Assets/TextMesh Pro/Resources/Shaders/TMP_SDF-Mobile.shader" />
+    <None Include="Assets/TextMesh Pro/Resources/Shaders/TMP_Sprite.shader" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="UnityEngine">
@@ -1596,6 +1619,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="Assembly-CSharp-firstpass.csproj" />
   </ItemGroup>
   <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
   <ItemGroup>

@@ -1,7 +1,9 @@
 use core::any::Any;
 use core::any::TypeId;
 use core::fmt::Debug;
-use core::alloc::Allocator;
+
+use bumpalo::Bump;
+use bumpalo::collections::Vec as BVec;
 
 use derive_more::*;
 
@@ -31,29 +33,27 @@ pub trait Style {
 }
 
 #[derive(Debug, Index, IndexMut, Deref, DerefMut)]
-pub struct StyleSheet<A: Allocator> {
+pub struct StyleSheet<'bump> {
     #[deref]
     #[deref_mut]
     #[index]
     #[index_mut]
-    styles: HashMap<TypeId, Vec<Property, A>, DefaultHashBuilder, A>,
-    arena: A,
+    styles: HashMap<TypeId, BVec<'bump, Property>, DefaultHashBuilder, &'bump Bump>,
+    arena: &'bump Bump,
 }
 
-impl<A: Allocator + Copy> StyleSheet<A> {
-    pub fn new_in(arena: A) -> Self {
+impl<'bump> StyleSheet<'bump> {
+    pub fn new_in(arena: &'bump Bump) -> Self {
         StyleSheet {
             styles: HashMap::new_in(arena),
             arena,
         }
     }
-}
 
-impl<A: Allocator + Copy> StyleSheet<A> {
     pub fn insert<S: Into<Property> + Any>(&mut self, style: S) -> &Self {
         self.styles
             .entry(style.type_id())
-            .or_insert_with(|| Vec::new_in(self.arena))
+            .or_insert_with(|| BVec::new_in(self.arena))
             .push(style.into());
         self
     }
@@ -70,10 +70,15 @@ pub enum Property {
     FlexDirection(FlexDirection),
     Heading(Heading),
     FontStyle(FontStyle),
+    FontWeight(FontWeight),
+    TextDecorationLine(TextDecorationLine),
+    TextAlign(TextAlign),
+    Overflow(Overflow),
     ContentColor(ContentColor),
     BackgroundColor(BackgroundColor),
     Border(Border),
     ScrollPosition(ScrollPosition),
+    OverlayInset(OverlayInset),
 }
 
 //---
@@ -552,7 +557,7 @@ impl Style for Flex {
     //..
 }
 
-#[derive(Clone, Copy, Default, Debug, IsVariant)]
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, IsVariant)]
 pub enum FlexDirection {
     #[default]
     Column,
@@ -590,6 +595,68 @@ pub enum FontStyle {
 }
 
 impl Style for FontStyle {
+    //..
+}
+
+//---
+// Separate from `FontStyle` (italic is independent of weight — CSS doesn't fold `font-weight`
+// into `font-style` either, and text can be bold *and* italic at once, which a single enum
+// can't express).
+#[derive(Clone, Copy, Default, Debug, IsVariant)]
+pub enum FontWeight {
+    #[default]
+    Normal,
+    Bold,
+}
+
+impl Style for FontWeight {
+    //..
+}
+
+//---
+// A practical subset of CSS `text-decoration-line`; no `overline` (rare, and ratatui has no
+// native modifier for it).
+#[derive(Clone, Copy, Default, Debug, IsVariant)]
+pub enum TextDecorationLine {
+    #[default]
+    None,
+    Underline,
+    LineThrough,
+}
+
+impl Style for TextDecorationLine {
+    //..
+}
+
+//---
+#[derive(Clone, Copy, Default, Debug, IsVariant)]
+pub enum TextAlign {
+    #[default]
+    Left,
+    Center,
+    Right,
+}
+
+impl Style for TextAlign {
+    //..
+}
+
+//---
+// A practical subset of CSS `overflow`: `Visible` isn't really achievable without a Paragraph
+// painting outside its own rect (which ratatui doesn't support), so it renders the same as
+// `Hidden` today — content is always clipped to its rect either way. What `Overflow::Scroll`
+// actually adds is that it's the only setting under which a sibling `ScrollPosition` has any
+// effect; without it, `ScrollPosition` is ignored (mirrors CSS: overflow has to opt in before
+// a scroll offset means anything).
+#[derive(Clone, Copy, Default, Debug, IsVariant)]
+pub enum Overflow {
+    #[default]
+    Visible,
+    Hidden,
+    Scroll,
+}
+
+impl Style for Overflow {
     //..
 }
 
@@ -733,5 +800,29 @@ impl ScrollPosition {
 }
 
 impl Style for ScrollPosition {
+    //..
+}
+
+//---
+/// Extra edge inset for a detached overlay's fixed-corner positioning (see
+/// `Scaffold::overlay`). Deliberately distinct from `Margin`: `Margin` shrinks a node's
+/// *own* internal content layout, while this only tells the runtime where to place the
+/// overlay's rect — reusing `Margin` for both would mean setting one also (unintentionally)
+/// applies the other.
+#[derive(Clone, Copy, Default, Display, Debug)]
+#[display("{:} {:}", self.0, self.1)]
+pub struct OverlayInset(pub Edge, pub Value);
+
+impl OverlayInset {
+    pub fn bottom(weight: impl Into<Value>) -> Self {
+        OverlayInset(Edge::Bottom, weight.into())
+    }
+
+    pub fn right(weight: impl Into<Value>) -> Self {
+        OverlayInset(Edge::Right, weight.into())
+    }
+}
+
+impl Style for OverlayInset {
     //..
 }

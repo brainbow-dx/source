@@ -1,0 +1,33 @@
+[package]
+name = "escher-webview"
+version = "0.0.0"
+edition = "2024"
+
+#--
+# Attaches a native browser webview to an existing OS window, given nothing more than that
+# window's raw handle (`raw-window-handle`, the same engine-agnostic crate Bevy itself uses) — no
+# dependency on Bevy or any other specific engine/runtime. `escher-bevy` is a consumer of this
+# crate, not the other way around; see its own `src/webview.rs` for the thin Bevy-specific glue
+# (reading `RawHandleWrapper`, wiring up a `WebViewTarget` resource) that calls into this one.
+[dependencies]
+raw-window-handle = { workspace = true }
+tracing = { workspace = true }
+
+[target.'cfg(target_os="macos")'.dependencies]
+objc2 = { workspace = true }
+objc2-foundation = { workspace = true }
+objc2-app-kit = { workspace = true }
+objc2-web-kit = { workspace = true }
+block2 = { workspace = true }
+
+[target.'cfg(target_os="windows")'.dependencies]
+# Wraps the real `ICoreWebView2`/`ICoreWebView2Controller` COM interfaces with an ergonomic,
+# callback-based API — the same crate (and the same API shape) `runtimes/bevy/src/legacy/
+# webview.rs` already used against a pre-refactor prototype, ported here against the current
+# `escher-webview` contract instead of hand-rolling raw COM bindings from scratch.
+webview2 = { workspace = true }
+# `winapi::shared::windef::{HWND, RECT}` — the exact types `webview2`'s own API is built against
+# (its `Controller::put_bounds`/`get_parent_window` etc. take/return these directly), so this
+# crate uses the same types at the boundary rather than introducing a second, incompatible Win32
+# binding (`windows-sys`/`windows`) that would need casts to bridge.
+winapi = { workspace = true, features = ["combaseapi", "shellapi", "winerror", "winuser"] }

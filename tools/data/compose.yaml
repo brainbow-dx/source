@@ -4,3 +4,18 @@ services:
     ports:
       - 3902:3000
     restart: unless-stopped
+
+  sqld:
+    image: ghcr.io/tursodatabase/libsql-server:latest
+    environment:
+      - SQLD_NODE=primary
+      - SQLD_DB_PATH=/var/lib/sqld/data.sqld
+    volumes:
+      - sqld-data:/var/lib/sqld
+    ports:
+      - 8081:8080  # HTTP/Hrana — what libsql clients (e.g. projects/escher's assistant.rs) sync against
+      - 5002:5001  # internal gRPC
+    restart: unless-stopped
+
+volumes:
+  sqld-data:

@@ -3,4 +3,21 @@ name = "atlas-relay"
 version = "0.0.0"
 edition = "2024"
 
+#--
 [dependencies]
+axum = { workspace = true, features = ["ws", "tokio", "json", "http1"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "sync"] }
+futures-util = "0.3"
+
+serde = { workspace = true, features = ["derive", "std"] }
+serde_json = { workspace = true }
+
+uuid = { workspace = true, features = ["v4", "serde"] }
+parking_lot = { workspace = true }
+
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+tokio-tungstenite = "0.24"
