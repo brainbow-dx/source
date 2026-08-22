@@ -65,7 +65,7 @@ pub fn spawn_scene_window_on_toggle(mut commands: Commands, state: Res<GameState
 
     if wants_open {
         let window_entity = commands
-            .spawn((SceneWindowMarker, escher_bevy::window::create_window("Mario — Scene", SCENE_WIDTH, SCENE_HEIGHT, true, WindowLevel::Normal)))
+            .spawn((SceneWindowMarker, escher_bevy::window::create_window("Mario — Scene", SCENE_WIDTH, SCENE_HEIGHT, true, false, WindowLevel::Normal)))
             .id();
         commands.spawn((
             SceneWindowMarker,

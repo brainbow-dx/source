@@ -1,0 +1,17 @@
+[workspace]
+
+[package]
+name = "esp32-escher-experiment"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Deliberately checked on the *host* target, not a real ESP32 target, and deliberately not linked
+# against `esp-hal`/`esp-idf-hal` yet -- see README.md. The one question this crate exists to
+# answer right now is narrower and host-checkable: does `escher-core` (Escher's `Scaffold`
+# composition/styling core) and `bevy_ecs` alone actually compile with `default-features = false`
+# (the `no_std` posture both already declare intent for)? That's a language-level property, not an
+# architecture one -- no ESP32 toolchain is needed to check it, only `default-features = false`.
+[dependencies]
+bevy_ecs = { version = "0.18", default-features = false }
+escher-core = { path = "../../../projects/escher/packages/core", default-features = false, features = ["macros"] }

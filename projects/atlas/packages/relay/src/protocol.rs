@@ -2,15 +2,24 @@
 //! tagged by `"type"` so both sides can deserialize without knowing which variant to expect.
 //!
 //! Both enums derive both `Serialize` and `Deserialize` (not just the one direction this crate's
-//! own relay server needs) so a real peer — which sends `ClientMessage` and receives
-//! `ServerMessage`, the opposite of the relay — can depend on this crate for the wire types
-//! directly instead of hand-rolling a second copy of the protocol against raw JSON strings, the
-//! way this crate's own `tests/relay.rs` has to today.
+//! own relay server needs) so a real peer -- which sends `ClientMessage` and receives
+//! `ServerMessage`, the opposite of the relay -- can depend on this crate for the wire types
+//! directly instead of hand-rolling a second copy of the protocol against raw JSON strings. Both
+//! the native peer (`escher`'s `mario` example, `relay.rs`) and the wasm32 browser peer (this
+//! crate's own `client_wasm` module) do exactly that.
 
 use serde::Deserialize;
 use serde::Serialize;
+use uuid::Uuid;
 
-use crate::room::PeerId;
+/// A peer's identity within a room, assigned by the relay server on join -- never supplied by the
+/// peer itself. Lives here, not `room.rs`, since `room.rs`'s `Rooms` is native-only (uses
+/// `tokio::sync::mpsc`), while this type has to stay available on every target -- both the native
+/// peer path and the wasm32 `client_wasm` module need it, and both already depend on this module
+/// for `ClientMessage`/`ServerMessage`. `room.rs` re-exports it under its own existing path so no
+/// native call site (`atlas_relay::room::PeerId`) needs to change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct PeerId(pub Uuid);
 
 /// What a peer sends to the relay.
 #[derive(Debug, Serialize, Deserialize)]

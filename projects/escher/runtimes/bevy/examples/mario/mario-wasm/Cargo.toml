@@ -1,0 +1,34 @@
+[package]
+name = "mario-wasm"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+mario-core = { path = "../mario-core" }
+# Same `atlas-relay` dependency `escher-bevy`'s own native relay.rs already uses (cross-workspace
+# path dep into `atlas`'s own `[workspace]` root -- a pattern already proven by that existing use).
+# For a wasm32 build specifically, this crate is `atlas-relay`'s own `client_wasm` module (target-
+# gated in that crate's `Cargo.toml`/`lib.rs`): a generic browser-side WebRTC-over-relay client,
+# using `web-sys`'s `RtcPeerConnection` since `webrtc-rs` -- what the native `relay.rs` uses --
+# doesn't target wasm32. This crate only knows the `PositionPacket`/`CombatEvent` JSON shapes
+# riding on top of that generic transport.
+atlas-relay = { workspace = true }
+serde = { workspace = true, features = ["derive", "std"] }
+serde_json = { workspace = true, features = ["std"] }
+# `{ workspace = true }`, same as `escher-web`'s own dependency — this workspace's one shared
+# `Cargo.lock` already pins `wasm-bindgen` to 0.2.126 (via `deno_webgpu`'s transitive requirement),
+# so this crate must build against that same version too. The `wasm-bindgen` CLI that turns this
+# crate's `.wasm` into browser-ready JS glue has to match that exact schema version — see
+# `web/README.md` for the local, scoped-install command if the machine's own `wasm-bindgen` isn't
+# already 0.2.126.
+wasm-bindgen = { workspace = true }
+
+# No `web-sys` dependency: gamepad input (`poll_gamepad` in `src/lib.rs`) is read via raw
+# `js_sys::Reflect` property access instead of `web-sys`'s typed `Window`/`Navigator`/`Gamepad`/
+# `GamepadButton` bindings -- see `poll_gamepad`'s own doc comment for the real, reproduced
+# `wasm-bindgen-cli` 0.2.126 bug this dodges.
+js-sys = { workspace = true }

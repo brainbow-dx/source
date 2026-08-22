@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Escher Mario (browser)</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+<style>
+  /* `overflow: hidden` on both -- there's nothing on this page meant to scroll (the terminal fills
+     the viewport itself and `FitAddon` handles internal sizing); without it, `100%`'s own layout
+     rounding plus xterm's canvas layers could add a fraction of a pixel of overflow and spawn a
+     visible scrollbar for a page with nothing to scroll to. */
+  /* Plain black/light-gray, not a specific theme's accent color (Tokyo Night navy, previously) --
+     the native TUI doesn't paint its own background at all (crossterm leaves cells unset, so a
+     real terminal session just shows through whatever the user's own terminal app is themed as).
+     There's no single "correct" color to match since that's per-user/per-terminal; a neutral
+     near-black plus light gray text is the closest browser-side equivalent to "no opinion", closer
+     to what most terminal apps default to than a specific accent palette was. */
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0c0c0c; }
+  /* `100%`, not `100vw`/`100vh`: a `vw` unit counts the scrollbar's own width when one is present,
+     which is exactly the kind of self-inflicted horizontal overflow that spawns a second one --
+     `100%` of an already `height: 100%`-chained `html`/`body` has no such gotcha. */
+  #terminal { width: 100%; height: 100%; }
+  #hint {
+    position: fixed; bottom: 8px; left: 12px; color: #999999;
+    font: 12px monospace; pointer-events: none;
+  }
+  #status {
+    position: fixed; top: 8px; right: 12px; color: #999999;
+    font: 12px monospace; pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="terminal"></div>
+<div id="hint">arrows/WASD/gamepad move &middot; up/space/W/South jump &middot; X/J/East attack &middot; down/S crouch</div>
+<div id="status"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+<script type="module">
+  // Browser build of the mario example's solo game feel -- see `../README.md` for scope (no
+  // ghosts/sound/pause menu, and combat isn't synced over the relay yet -- see `mario-wasm/src/
+  // lib.rs`'s own doc comment). Real game logic lives entirely in the `mario-wasm` crate
+  // (`mario-core` underneath it); this file is only the xterm.js harness: render the frame string
+  // `Game.tick()` returns, forward keydown/keyup (gamepad input is read directly by `Game.tick`
+  // itself, no JS-side wiring needed).
+  import init, { Game } from "./pkg/mario_wasm.js";
+
+  const term = new Terminal({
+    fontFamily: "Menlo, Consolas, monospace",
+    fontSize: 14,
+    theme: { background: "#0c0c0c", foreground: "#d0d0d0" },
+    cursorBlink: false,
+    disableStdin: true, // input is read as raw keydown/keyup below, not typed at the terminal
+  });
+  const fitAddon = new FitAddon.FitAddon();
+  term.loadAddon(fitAddon);
+  term.open(document.getElementById("terminal"));
+  fitAddon.fit();
+  window.addEventListener("resize", () => fitAddon.fit());
+  // `cursorBlink: false` only stops the blink -- the block cursor itself still renders (the "extra
+  // white box" reported live). This DEC private-mode escape (`?25l`, "cursor invisible") is the
+  // real, standard way to hide it outright; `disableStdin: true` above means nothing ever needs it
+  // visible again.
+  term.write("\x1b[?25l");
+
+  await init();
+  const game = new Game();
+
+  // Joins the same `atlas-relay` room a native `mario --host`/`--connect` session uses, so this
+  // tab and a native peer see each other move. `?relay=`/`?room=` query params override the
+  // defaults (a host on this same machine, the default room name) for joining a different
+  // session. Connection failures are non-fatal -- `Game` keeps playing solo either way, matching
+  // the native example's own "no relay reachable, local play keeps working" posture.
+  const params = new URLSearchParams(location.search);
+  const relayUrl = params.get("relay") || "ws://127.0.0.1:9200/ws";
+  const room = params.get("room") || "mario";
+  try {
+    game.connect(relayUrl, room);
+  } catch (error) {
+    console.warn("mario: failed to start connecting to the relay:", error);
+  }
+
+  const statusEl = document.getElementById("status");
+  let lastFrameTime = performance.now();
+  function frame(now) {
+    const dt = Math.min(Math.max((now - lastFrameTime) / 1000, 1 / 60), 0.1);
+    lastFrameTime = now;
+    const text = game.tick(dt, term.cols, term.rows);
+    // Cursor-home, not a full clear: `mario_body_text` already pads every row to the terminal's
+    // full width, so every cell gets overwritten every frame -- clearing first would only add
+    // flicker for no benefit.
+    term.write("\x1b[H" + text.replaceAll("\n", "\r\n"));
+    statusEl.textContent = `peers: ${game.connectedPeerCount()}`;
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+</script>
+</body>
+</html>

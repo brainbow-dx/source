@@ -3,15 +3,13 @@
 use std::collections::HashMap;
 
 use parking_lot::RwLock;
-use serde::Deserialize;
-use serde::Serialize;
 use tokio::sync::mpsc::UnboundedSender;
-use uuid::Uuid;
 
 use crate::protocol::ServerMessage;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct PeerId(pub Uuid);
+/// Re-exported from `protocol.rs` -- see that module's own doc comment on `PeerId` for why it
+/// lives there instead of here.
+pub use crate::protocol::PeerId;
 
 type Peers = HashMap<PeerId, UnboundedSender<ServerMessage>>;
 

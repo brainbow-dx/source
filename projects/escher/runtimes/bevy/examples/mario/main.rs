@@ -55,6 +55,9 @@ use escher_core::element::Body;
 use escher_core::element::Header;
 use escher_core::style::FlexDirection;
 use escher_core::style::Size;
+use escher_core::style::TextAlign;
+
+use unicode_width::UnicodeWidthStr;
 
 use escher_core::event::keyboard::Code;
 use escher_core::event::keyboard::KeyState;
@@ -137,6 +140,22 @@ fn local_lan_ip() -> Option<std::net::IpAddr> {
     socket.local_addr().ok().map(|addr| addr.ip())
 }
 
+/// Windows only: whether to spawn a real (invisible, taskbar-hidden) primary window purely so this
+/// process — not whatever terminal it's running inside — owns OS input focus. Windows Terminal is
+/// a XAML/WinUI-hosted app, and XAML's built-in gamepad-to-UI-focus-navigation has no per-app or
+/// end-user off switch (confirmed still open: microsoft-ui-xaml#1496, "UWP Controller support
+/// cannot be disabled") — as long as Terminal's own window has OS focus, its D-pad/stick input
+/// competes with this game's, showing up as tabs/buttons getting a white focus outline instead of
+/// controlling the player. A plain Win32 window doesn't carry that XAML behavior at all, so
+/// spawning one and letting it take focus at creation (`bevy::window::Window::focused` defaults
+/// `true`) sidesteps the problem entirely, without touching any system-wide gamepad setting that'd
+/// affect other apps. Not needed on macOS/Linux — this class of OS-level gamepad-UI-navigation
+/// grab is Windows-specific. Not yet live-verified on a real Windows machine (no toolchain here);
+/// on the user to confirm this actually wins focus away from Windows Terminal in practice.
+fn windows_focus_holder_window() -> bool {
+    cfg!(target_os = "windows")
+}
+
 fn main() -> Result<ExitCode> {
     let args = Args::parse();
     color_eyre::install()?;
@@ -199,20 +218,27 @@ fn main() -> Result<ExitCode> {
         state.remote_mario.clone(),
         state.outgoing_combat_events.clone(),
         state.incoming_combat_events.clone(),
+        state.relay_status.clone(),
     );
 
+    let focus_holder_window = windows_focus_holder_window();
+    let bevy_config = EscherBevyConfig::default()
+        .with_window_title("Escher Mario Example")
+        .with_spawn_primary_window(focus_holder_window)
+        .with_window_visible(false)
+        .with_skip_taskbar(focus_holder_window)
+        .with_spawn_terminal_plugin(false)
+        // On every other platform, no window exists at all in the terminal-only case (only
+        // `scene.rs`'s on-demand `B`-toggle ever opens one). Bevy's default `OnAllClosed` exit
+        // condition would otherwise fire immediately since a window count of zero also counts as
+        // "all closed" -- and stays needed even on Windows, where a real primary window now
+        // exists (see `windows_focus_holder_window`'s own doc comment): that window is never
+        // meant to be user-closable, so nothing should treat its closing as "quit" either.
+        // `terminal_exit`/the signal watcher already send the real `AppExit`.
+        .with_exit_condition(ExitCondition::DontExit);
+
     App::new()
-        .add_plugins(EscherBevyPlugin::new(
-            EscherBevyConfig::default()
-                .with_window_title("Escher Mario Example")
-                .with_spawn_primary_window(false)
-                .with_spawn_terminal_plugin(false)
-                // No window exists at all in the terminal-only case (only `scene.rs`'s on-demand
-                // `B`-toggle ever opens one). Bevy's default `OnAllClosed` exit condition would
-                // otherwise fire immediately since a window count of zero also counts as "all
-                // closed." `terminal_exit`/the signal watcher already send the real `AppExit`.
-                .with_exit_condition(ExitCondition::DontExit),
-        ))
+        .add_plugins(EscherBevyPlugin::new(bevy_config))
         // `EscherBevyPlugin` defaults to `WinitSettings::desktop_app()`, a power-saving mode that
         // only ticks the schedule every 5s while idle (or once a second, from
         // `spawn_input_watcher`'s own heartbeat wake; see its doc comment). That's exactly the
@@ -241,12 +267,18 @@ pub struct GameState {
     pub local_mario_snapshot: Arc<RwLock<Vec<relay::PositionPacket>>>,
     pub remote_mario: relay::RemoteMarioTable,
     /// Hits this instance's own local attackers landed on a remote-tracked target, waiting to go
-    /// out over the reliable combat channel. Pushed to by `physics::update_mario_physics`, drained
+    /// out over the reliable combat channel. Pushed to by `physics::resolve_mario_hits`, drained
     /// by `relay`'s own combat send loop.
     pub outgoing_combat_events: Arc<RwLock<Vec<relay::CombatEvent>>>,
     /// Combat events landed on this instance's own local players by a remote attacker, waiting to
     /// be applied. Pushed to by `relay`'s combat receive loop, drained once per physics tick.
     pub incoming_combat_events: Arc<RwLock<Vec<relay::CombatEvent>>>,
+    /// Empty while the relay connection is healthy (or was never reachable at all); set by
+    /// `relay::run`'s own reconnect loop to a human-readable status ("relay reconnecting… 18s")
+    /// while a dropped connection is retrying, and to "relay unreachable" if it gives up. `draw_
+    /// frame`'s header surfaces this so a drop reads as "reconnecting", not a silent, unexplained
+    /// stall for new players trying to join.
+    pub relay_status: Arc<RwLock<String>>,
     /// Cached wrapped backdrop rows, recomputed only when the terminal width actually changes.
     mario_wrap_cache: Arc<RwLock<Option<(u16, Arc<Vec<String>>)>>>,
     pub ghosts: Arc<RwLock<Vec<ghosts::GhostEntry>>>,
@@ -307,6 +339,7 @@ impl GameState {
             remote_mario: Arc::new(RwLock::new(std::collections::HashMap::new())),
             outgoing_combat_events: Arc::new(RwLock::new(Vec::new())),
             incoming_combat_events: Arc::new(RwLock::new(Vec::new())),
+            relay_status: Arc::new(RwLock::new(String::new())),
             mario_wrap_cache: Arc::new(RwLock::new(None)),
             ghosts: Arc::new(RwLock::new(Vec::new())),
             cheat_menu_open: Arc::new(RwLock::new(false)),
@@ -333,7 +366,21 @@ impl Plugin for MarioTerminalPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, (terminal_startup, physics::spawn_platform, sfx::setup_mario_sfx));
         app.add_systems(PreUpdate, terminal_draw);
-        app.add_systems(Update, (physics::update_mario_physics, scene::spawn_scene_window_on_toggle, scene::sync_scene_sprites).chain());
+        app.add_systems(
+            Update,
+            (
+                physics::reconcile_gamepad_ownership,
+                physics::handle_cheat_menu_input,
+                physics::step_mario_physics,
+                physics::apply_incoming_combat_events,
+                physics::resolve_mario_hits,
+                physics::resolve_mario_collisions_and_grounding,
+                physics::publish_local_mario_snapshot,
+                scene::spawn_scene_window_on_toggle,
+                scene::sync_scene_sprites,
+            )
+                .chain(),
+        );
         app.add_systems(Last, terminal_exit);
     }
 }
@@ -371,7 +418,7 @@ fn terminal_draw(
         return;
     }
 
-    let colliders: Vec<(f32, f32, f32, f32)> = colliders.iter().map(|collider| collider.rect).collect();
+    let colliders: Vec<physics::MarioCollider> = colliders.iter().copied().collect();
 
     match draw_frame(&mut terminal.surface, &state, &colliders) {
         Ok(TerminalAction::Exit(_)) => {
@@ -401,6 +448,41 @@ fn terminal_exit(terminal: Option<ResMut<TerminalHandle>>, mut exit_evt: Message
     }
 }
 
+/// Pads `line` with leading spaces to center it within `width` columns -- same approach `render.
+/// rs`'s own pause-menu lines already use, duplicated rather than shared since it's a single line
+/// of arithmetic and the two call sites live in genuinely different files with no existing shared
+/// "small text util" module to put it in.
+fn center_line(line: &str, width: usize) -> String {
+    let indent = width.saturating_sub(UnicodeWidthStr::width(line)) / 2;
+    format!("{}{line}", " ".repeat(indent))
+}
+
+/// Pads/truncates `line` to `width` columns, then splices `overlay` onto its rightmost
+/// characters -- whatever was already there to the left of that stays untouched. Used to lay the
+/// fps counter over the body's own last row without a separate layout slot stealing a row from the
+/// play area for it (see `draw_frame`'s own fps-overlay comment).
+fn overlay_right(line: &str, overlay: &str, width: usize) -> String {
+    let mut chars: Vec<char> = line.chars().collect();
+    chars.resize(width, ' ');
+    let overlay_chars: Vec<char> = overlay.chars().collect();
+    let start = width.saturating_sub(overlay_chars.len());
+    for (offset, c) in overlay_chars.into_iter().enumerate() {
+        if let Some(slot) = chars.get_mut(start + offset) {
+            *slot = c;
+        }
+    }
+    chars.into_iter().collect()
+}
+
+/// Real, live-reported bug this fixed: names used to come *only* from `connected_players`, which
+/// is populated by `persistence.rs`'s own async sqld roster sync -- it eventually resolves a name
+/// for every local player too, but on a real network round-trip's worth of delay, not instantly.
+/// Until that first sync lands, a solo player's own name never showed at all, even though `state.
+/// identity` (this instance's own resolved display name, set once at startup from `--name` or the
+/// hostname) was sitting right there the whole time. Local players are now listed directly from
+/// `state.mario` (always current, no sync delay), falling back to `state.identity` only for the
+/// (common, solo-play) case where the roster sync hasn't attached a synced name yet; genuinely
+/// remote-only players (never local) still come from `connected_players`, unchanged.
 fn scoreboard_text(state: &GameState) -> String {
     let local_mario = state.mario.read();
     let connected_players = state.connected_players.read();
@@ -409,12 +491,15 @@ fn scoreboard_text(state: &GameState) -> String {
     }
 
     let mut parts = Vec::new();
+    for (_, candidate_id, mario) in local_mario.iter() {
+        let name = connected_players.iter().find(|(id, ..)| id == candidate_id).map(|(_, name, _)| name.as_str()).unwrap_or(state.identity.as_str());
+        parts.push(format!("{name}: {} kills", mario.kills));
+    }
     for (candidate_id, name, _) in connected_players.iter() {
-        let kills = local_mario.iter().find(|(_, id, _)| id == candidate_id).map(|(_, _, mario)| mario.kills);
-        match kills {
-            Some(kills) => parts.push(format!("{name}: {kills} kills")),
-            None => parts.push(format!("{name}: (remote)")),
+        if local_mario.iter().any(|(_, id, _)| id == candidate_id) {
+            continue; // already listed above, with a live kill count instead of a static "(remote)"
         }
+        parts.push(format!("{name}: (remote)"));
     }
     parts.join("  |  ")
 }
@@ -422,24 +507,68 @@ fn scoreboard_text(state: &GameState) -> String {
 fn draw_frame(
     surface: &mut TerminalSurface<CrosstermBackend<Stdout>>,
     state: &GameState,
-    colliders: &[(f32, f32, f32, f32)],
+    colliders: &[physics::MarioCollider],
 ) -> Result<TerminalAction> {
     let area = surface.size()?;
     let body_width = area.width;
     let body_height = area.height.saturating_sub(HEADER_HEIGHT);
     *state.body_rect_seen.write() = Some(Rect { x: 0, y: HEADER_HEIGHT, width: body_width, height: body_height });
 
-    let rows = {
+    let slab = colliders.iter().find(|collider| !collider.passable);
+
+    // The help caption: wrapped to 80% of the *platform's own* width (not the full terminal --
+    // real, live-reported follow-up: "it's pretty tight and way too wide"), centered on screen,
+    // and positioned a fixed distance below the platform (cached by that wrap width, the word-
+    // wrap's only real input; the vertical placement below needs `colliders`/`body_height`, which
+    // the cache doesn't track -- cheap enough to redo fresh every frame). Per the earlier direct
+    // user request this replaced: previously this filled the play area bottom-up regardless of
+    // where the platform actually sat, reading as loose instructional text with no real anchor.
+    let caption_wrap_width = slab.map_or(body_width, |slab| {
+        let denom = body_width.saturating_sub(1).max(1) as f32;
+        let col0 = (slab.rect.0 * denom).round();
+        let col1 = (slab.rect.2 * denom).round();
+        (((col1 - col0 + 1.0) * 0.8).round() as u16).max(1)
+    });
+    let wrapped_caption = {
         let mut cache = state.mario_wrap_cache.write();
         match cache.as_ref() {
-            Some((width, rows)) if *width == body_width => rows.clone(),
+            Some((width, rows)) if *width == caption_wrap_width => rows.clone(),
             _ => {
-                let rows = Arc::new(render::wrap_to_columns(BACKDROP_TEXT, body_width as usize));
-                *cache = Some((body_width, rows.clone()));
+                let centered: Vec<String> = render::wrap_to_columns(BACKDROP_TEXT, caption_wrap_width as usize)
+                    .into_iter()
+                    .map(|line| center_line(&line, body_width as usize))
+                    .collect();
+                let rows = Arc::new(centered);
+                *cache = Some((caption_wrap_width, rows.clone()));
                 rows
             }
         }
     };
+    let mut rows = vec![String::new(); body_height as usize];
+    if let Some(slab) = slab {
+        let denom = body_height.saturating_sub(1).max(1) as f32;
+        let platform_row = (slab.rect.1 * denom).round().clamp(0.0, denom) as usize;
+        // +3 clears the slab's own collision row (blank, per the "never overlap platform
+        // material" fix) plus its light and dark bands, one row each; +4 more per direct user
+        // request ("bump it down four or five units") for real breathing room below the platform.
+        let caption_start = platform_row.saturating_add(3).saturating_add(4);
+        for (offset, line) in wrapped_caption.iter().enumerate() {
+            if let Some(row) = rows.get_mut(caption_start + offset) {
+                *row = line.clone();
+            }
+        }
+    }
+
+    // FPS overlaid onto the body's own last row (bottom-right), not a separate footer slot -- real,
+    // live-reported bug this replaced: reserving a footer shrunk `body_height` by one row, so the
+    // ground (`MARIO_GROUND_Y`, the body's own last row) sat one row above the terminal's actual
+    // bottom edge, reading as "the avatar floats above the floor." Overlaying it onto the body's own
+    // last row instead means the floor really is the terminal's own bottom row again, with fps
+    // layered on top of (never stealing space from) whatever's already there.
+    let fps = state.fps.write().tick();
+    if let Some(last_row) = rows.last_mut() {
+        *last_row = overlay_right(last_row, &format!("{fps:.0} fps"), body_width as usize);
+    }
 
     let local_mario = state.mario.read();
     let connected_players = state.connected_players.read();
@@ -468,15 +597,11 @@ fn draw_frame(
             dust_effect: None,
             facing: 1.0,
             attack_cooldown: 0.0,
-            // Combat events (see `relay::CombatEvent`) are synced now, but only applied to a
-            // player's own owning instance (`physics::apply_local_death`), not reflected back into
-            // how a third instance renders someone else's death here — a remote player still always
-            // renders as idle and alive on a screen that isn't theirs, even mid-swing or dead.
             time_since_last_attack: physics::MARIO_ATTACK_SPAM_WINDOW + 1.0,
             attack_spam_stacks: 0,
             kills: 0,
             attack_effect: None,
-            alive: true,
+            alive: packet.alive,
             lives: physics::MARIO_STARTING_LIVES,
             respawn_remaining: None,
             death_effect: None,
@@ -502,8 +627,11 @@ fn draw_frame(
 
     let menu_lines = if *state.cheat_menu_open.read() { Some(render::cheat_menu_lines(*state.cheat_menu_selected.read())) } else { None };
     let body_content = render::mario_body_text(&rows, &sprites, &ghost_positions, menu_lines.as_deref(), body_width, body_height, colliders);
-    let fps = state.fps.write().tick();
-    let header_text = format!("{}  |  {fps:.0} fps", scoreboard_text(state));
+    // Names/connection status in the header (top-left); fps is already overlaid into `body_content`
+    // above, not a separate slot.
+    let relay_status = state.relay_status.read();
+    let header_text = if relay_status.is_empty() { scoreboard_text(state) } else { format!("{}  |  {relay_status}", scoreboard_text(state)) };
+    drop(relay_status);
     let bevy_scene_open = state.bevy_scene_open.clone();
 
     surface.draw_with_poll_timeout(
@@ -518,7 +646,7 @@ fn draw_frame(
                         *open = !*open;
                     }
                 })
-                .slot::<Header>(move |header| header.style(Size::height(HEADER_HEIGHT)).content(Some(header_text)))
+                .slot::<Header>(move |header| header.style(Size::height(HEADER_HEIGHT)).style(TextAlign::Left).content(Some(header_text)))
                 .slot::<Body>(move |body| body.content(Some(body_content)))
         },
         Duration::ZERO,

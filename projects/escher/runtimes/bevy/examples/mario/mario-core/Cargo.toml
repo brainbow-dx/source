@@ -1,0 +1,11 @@
+[package]
+name = "mario-core"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Deliberately Bevy-free (see this crate's own `src/lib.rs` doc comment) so it builds for
+# wasm32-unknown-unknown without pulling in `bevy`'s native-only window/render/input stack.
+[dependencies]
+owo-colors = "4"
+unicode-width = { workspace = true }

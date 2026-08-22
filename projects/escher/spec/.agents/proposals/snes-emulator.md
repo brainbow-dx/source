@@ -1,5 +1,13 @@
 # SNES emulator (vision, thought experiment)
 
+See also `proposals/esp32-no-std-game-dev.md` — a separate, differently-sized exploration
+(ESP32 already has a real modern Rust/no_std target; this document's own "Part B" is a
+from-scratch 65816 compiler-backend problem with no LLVM target at all). Deliberately not merged;
+that document's own "Relationship to the SNES proposal" section explains the reasoning. The one
+real shared thread worth revisiting once either has a concrete implementation: a generic
+`Scaffold` → constrained-hardware-rendering abstraction, parameterized by target primitives
+(tile/sprite/palette here, a small `embedded-graphics` framebuffer there).
+
 Status: vision only. A stub experiment exists at `sandbox/experiments/snes-emu/` (a bare Bevy
 window, no emulator core wired in yet) — nothing else here is started. Written up per direct user
 request after a "simple thought experiment" conversation, so the reasoning isn't lost.

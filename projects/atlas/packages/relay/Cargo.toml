@@ -4,19 +4,60 @@ version = "0.0.0"
 edition = "2024"
 
 #--
+# Cross-target: `protocol.rs`'s wire types need to compile everywhere, including wasm32 (a
+# browser peer, `client_wasm`, depends on this crate directly for them -- see `lib.rs`'s own doc
+# comments on why the server and the wasm client are target-gated apart within one crate instead
+# of split into separate ones).
 [dependencies]
+serde = { workspace = true, features = ["derive", "std"] }
+serde_json = { workspace = true, features = ["std"] }
+parking_lot = { workspace = true }
+tracing = { workspace = true }
+
+# Native only: the signaling server itself (`serve`, `room::Rooms`) is built on `axum`/`tokio`,
+# neither of which targets wasm32.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 axum = { workspace = true, features = ["ws", "tokio", "json", "http1"] }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "sync"] }
 futures-util = "0.3"
-
-serde = { workspace = true, features = ["derive", "std"] }
-serde_json = { workspace = true }
-
+# "v4" only needed natively -- `room::PeerId(Uuid::new_v4())` is server-only; a wasm32 peer only
+# ever deserializes a `PeerId` the server already assigned. "v4" pulls in `getrandom`, which needs
+# a "js" backend feature to build for wasm32 that nothing here would otherwise need -- see the
+# wasm32 dependency table below for the trimmed feature set that dodges this.
 uuid = { workspace = true, features = ["v4", "serde"] }
-parking_lot = { workspace = true }
-
-tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
+
+# wasm32 only: `client_wasm`'s browser-native WebRTC client, using `web-sys`. Loose "0.2"/"0.3"
+# version requirements, not pinned here -- when this crate is built as part of a consuming
+# workspace (e.g. `escher`'s, via `mario-wasm`), that workspace's own `Cargo.lock` governs the
+# actual resolved version. See `escher/runtimes/bevy/examples/mario/mario-wasm/README.md`'s
+# wasm-bindgen-CLI version-matching note, which applies transitively through here too.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+uuid = { workspace = true, features = ["serde"] }
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
+version = "0.3"
+features = [
+  "WebSocket",
+  "MessageEvent",
+  "CloseEvent",
+  "ErrorEvent",
+  "Event",
+  "RtcPeerConnection",
+  "RtcConfiguration",
+  "RtcIceServer",
+  "RtcSessionDescriptionInit",
+  "RtcIceCandidateInit",
+  "RtcIceCandidate",
+  "RtcPeerConnectionIceEvent",
+  "RtcDataChannel",
+  "RtcDataChannelInit",
+  "RtcDataChannelEvent",
+  "console",
+]
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }

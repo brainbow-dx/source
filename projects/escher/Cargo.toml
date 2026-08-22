@@ -29,6 +29,24 @@ codegen-units = 1
 incremental = false
 lto = true
 
+# A separate named profile, not a `[profile.release.package.*]` override -- LTO is a whole-artifact
+# setting Cargo can't scope to one package, and this workspace's own `[profile.release]` LTO
+# genuinely can't be used for `mario-wasm`'s wasm32 build: real, reproduced bug, not a guess --
+# `wasm-bindgen-cli` 0.2.126 fails post-processing an LTO'd `web-sys`-using wasm32 binary with
+# "duplicate string enums" (confirmed against two different aux enums -- `RtcSdpType` and
+# `SupportedValuesKey` -- depending on which other crates are in the build, consistent with an
+# LTO-driven duplication of an inlined type-registration thunk, not something specific to one
+# type). A plain `debug` build doesn't hit it. This profile keeps real optimization (`opt-level =
+# 3`) for a shippable wasm binary while dropping only `lto`, scoped to this one build path via
+# `--profile wasm-release` (see `runtimes/bevy/examples/mario/mario-wasm/README.md`) -- every other
+# `cargo build --release` in this workspace is unaffected.
+[profile.wasm-release]
+inherits = "dev"
+opt-level = 1
+
+[profile.wasm-release.package."*"]
+opt-level = 3
+
 #---
 [dependencies]
 escher-core = { workspace = true }
@@ -101,6 +119,8 @@ members = [
     "runtimes/web",
     "runtimes/webview",
     "runtimes/bevy",
+    "runtimes/bevy/examples/mario/mario-core",
+    "runtimes/bevy/examples/mario/mario-wasm",
     "runtimes/terminal",
     "runtimes/unity",
     "runtimes/unreal",

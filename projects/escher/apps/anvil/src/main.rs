@@ -1094,7 +1094,7 @@ fn spawn_browser_window_on_command(
     for SceneCommand { url } in browser_evt.read() {
         if browser.window.is_none() {
             toolbar.pinned = state.always_on_top;
-            let mut window = escher_bevy::window::create_window("Anvil — Browser", 1100.0, 760.0, true, window_level);
+            let mut window = escher_bevy::window::create_window("Anvil — Browser", 1100.0, 760.0, true, false, window_level);
             // Lets the toolbar (`WantsToolbar`'s `Pin::Top` surface, see `AppKitSurface::attach`)
             // paint underneath the native titlebar instead of below it. `fullsize_content_view`
             // extends the content view up into the titlebar's own area, `titlebar_transparent`
@@ -1159,7 +1159,7 @@ fn spawn_scene_window_on_command(mut commands: Commands, state: Res<AppState>) {
     // `AppState::always_on_top`'s starting value, with no live per-window toggle available yet.
     let window_level = if state.always_on_top { bevy::window::WindowLevel::AlwaysOnTop } else { bevy::window::WindowLevel::Normal };
 
-    let window_entity = commands.spawn((escher_bevy::window::create_window("Anvil — Scene", 800.0, 600.0, true, window_level), FocusPending)).id();
+    let window_entity = commands.spawn((escher_bevy::window::create_window("Anvil — Scene", 800.0, 600.0, true, false, window_level), FocusPending)).id();
     commands.spawn((
         Camera2d,
         bevy::camera::Camera { clear_color: ClearColorConfig::Custom(BevyColor::hsla(220.0, 0.15, 0.16, 1.0)), ..Default::default() },

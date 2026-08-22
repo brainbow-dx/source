@@ -41,6 +41,13 @@ pub struct EscherBevyConfig {
     /// (e.g. `apps/anvil`: every scene window is spawned fresh in response to `/scene`, there's
     /// no single window to pre-create at startup anymore) sets this `false` and starts headless.
     pub spawn_primary_window: bool,
+    /// Whether the primary window is hidden from the taskbar/Alt-Tab (Windows-only, per
+    /// `bevy::window::Window::skip_taskbar`'s own doc comment). Most windows want to show up
+    /// normally (`false`, the default); a caller spawning a window purely to hold OS input focus
+    /// rather than to be looked at (e.g. `examples/mario`'s Windows-only focus-holder window, see
+    /// its own doc comment) sets this `true` so it doesn't clutter the taskbar with an invisible
+    /// entry the user can't do anything useful with.
+    pub skip_taskbar: bool,
     /// Whether `EscherBevyPlugin` registers its own `terminal::TerminalPlugin` (behind the
     /// `terminal` Cargo feature). Most examples that enable the feature want this crate's generic
     /// `Scaffold`-drawn terminal UI too, so the default is `true`; a caller that only needs the
@@ -68,6 +75,7 @@ impl Default for EscherBevyConfig {
             window_width: 800.0,
             window_height: 600.0,
             spawn_primary_window: true,
+            skip_taskbar: false,
             spawn_terminal_plugin: true,
         }
     }
@@ -122,6 +130,11 @@ impl EscherBevyConfig {
 
     pub fn with_spawn_primary_window(mut self, spawn_primary_window: bool) -> Self {
         self.spawn_primary_window = spawn_primary_window;
+        self
+    }
+
+    pub fn with_skip_taskbar(mut self, skip_taskbar: bool) -> Self {
+        self.skip_taskbar = skip_taskbar;
         self
     }
 

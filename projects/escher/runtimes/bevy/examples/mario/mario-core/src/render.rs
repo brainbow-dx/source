@@ -1,38 +1,44 @@
 //! Renders the play area as one dimmed backdrop with bright, per-player sprites, ghosts, and
-//! effects spliced on top. The terminal surface has no free-standing 2D drawing primitive, so a
-//! frame is built as plain text: every non-sprite cell renders dim, and each live element overrides
-//! or tints exactly the cells it occupies.
+//! effects spliced on top, as an ANSI-colored `String` — no terminal I/O, so both the native
+//! `crossterm` build and a `wasm-bindgen`/xterm.js build can hand the same text straight to
+//! whatever actually draws it. The terminal surface has no free-standing 2D drawing primitive, so
+//! a frame is built as plain text: every non-sprite cell renders dim, and each live element
+//! overrides or tints exactly the cells it occupies.
 
 use std::fmt::Write as _;
 
-use bevy::ecs::entity::Entity;
-use color_eyre::owo_colors::OwoColorize;
-use escher_core::animate::lerp_color;
+use owo_colors::OwoColorize;
 use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
 
-use crate::physics::MarioCollider;
-use crate::physics::MarioState;
-use crate::physics::MARIO_ATTACK_EFFECT_DURATION;
-use crate::physics::MARIO_ATTACK_FLASH_MAX_BLEND;
-use crate::physics::MARIO_ATTACK_TINT_MAX_BLEND;
-use crate::physics::MARIO_ATTACK_VISUAL_REACH;
-use crate::physics::MARIO_ATTACK_REACH;
-use crate::physics::MARIO_DEATH_EFFECT_DURATION;
-use crate::physics::MARIO_DUST_EFFECT_DURATION;
-use crate::physics::MARIO_STARTING_LIVES;
+use crate::ghosts::MARIO_GHOST_DIM_FRACTION;
 use crate::ghosts::mario_ghost_glyph;
+use crate::state::MARIO_ATTACK_EFFECT_DURATION;
+use crate::state::MARIO_ATTACK_FLASH_MAX_BLEND;
+use crate::state::MARIO_ATTACK_REACH;
+use crate::state::MARIO_ATTACK_TINT_MAX_BLEND;
+use crate::state::MARIO_ATTACK_VISUAL_REACH;
+use crate::state::MARIO_DEATH_EFFECT_DURATION;
+use crate::state::MARIO_DUST_EFFECT_DURATION;
+use crate::state::MarioCollider;
+use crate::state::MarioState;
 
 pub const DIM: (u8, u8, u8) = (60, 65, 90);
 pub const ACCENT_BLUE: (u8, u8, u8) = (122, 162, 247);
 pub const ACCENT_ORANGE: (u8, u8, u8) = (224, 175, 104);
 
-/// Every live player, effect, and platform renders as a solid background-color block rather than
-/// a colored character on the terminal's own default background. This is the user's own explicit
-/// direction, after finding a previous rainbow-of-foreground-glyphs look "totally stood out"
-/// against itself. `texture_fg_for` always derives a readable foreground for whatever glyph sits
-/// on top of a block from that block's own color, so no effect needs to hand-pick a contrasting
-/// pair of colors.
+/// Linearly interpolates between two `(r, g, b)` colors at `t` (0.0 = `a`, 1.0 = `b`). Copied from
+/// `escher-core`'s `animate::lerp_color` (same body) rather than depending on that crate, so this
+/// crate stays dependency-free beyond `owo-colors`/`unicode-width` — see this crate's own `lib.rs`
+/// doc comment on the deliberate-duplication tradeoff this build made under time pressure.
+fn lerp_color(a: (u8, u8, u8), b: (u8, u8, u8), t: f64) -> (u8, u8, u8) {
+    let lerp = |x: u8, y: u8| (x as f64 + (y as f64 - x as f64) * t).round() as u8;
+    (lerp(a.0, b.0), lerp(a.1, b.1), lerp(a.2, b.2))
+}
+
+/// Every live player, effect, and platform renders as a solid background-color block rather than a
+/// colored character on the terminal's own default background. `texture_fg_for` always derives a
+/// readable foreground for whatever glyph sits on top of a block from that block's own color.
 fn texture_fg_for(bg: (u8, u8, u8)) -> (u8, u8, u8) {
     let luminance = 0.2126 * bg.0 as f64 + 0.7152 * bg.1 as f64 + 0.0722 * bg.2 as f64;
     if luminance > 140.0 {
@@ -43,9 +49,8 @@ fn texture_fg_for(bg: (u8, u8, u8)) -> (u8, u8, u8) {
 }
 
 /// One glyph per player slot, on top of that player's own bright block color
-/// (`physics::mario_player_color`). It is not yet player-chosen (see the module doc above this
-/// file's usage sites); this is the deterministic placeholder every player index maps to until a
-/// real picker exists.
+/// (`state::mario_player_color`). Not yet player-chosen; a deterministic placeholder every player
+/// index maps to.
 const PLAYER_FLAIRS: [char; 4] = ['#', '@', '%', '&'];
 
 pub fn mario_player_flair(player_index: usize) -> char {
@@ -66,11 +71,11 @@ const PLATFORM_COLOR: (u8, u8, u8) = (44, 46, 48);
 const STONE_LIGHT_FLECK: (u8, u8, u8) = (110, 113, 117);
 
 /// The underside's own, notably darker fill -- per direct user design intent, a solid platform is
-/// now two entities (see `physics::MarioCollider`'s own doc comment): a light, collidable slab on
-/// top, and a dark, pass-through underside hanging below it, reading as the shadowed bottom face of
-/// a floating stone slab rather than more of the same surface. Same cool hue/ratio as
-/// `PLATFORM_COLOR`, just scaled down (roughly 55-60% as bright) rather than a different color
-/// entirely -- still reads as the same stone family, just in shadow.
+/// now two entities (see `MarioCollider`'s own doc comment): a light, collidable slab on top, and a
+/// dark, pass-through underside hanging below it, reading as the shadowed bottom face of a floating
+/// stone slab rather than more of the same surface. Same cool hue/ratio as `PLATFORM_COLOR`, just
+/// scaled down (roughly 55-60% as bright) rather than a different color entirely -- still reads as
+/// the same stone family, just in shadow.
 const UNDERSIDE_COLOR: (u8, u8, u8) = (26, 27, 28);
 const UNDERSIDE_LIGHT_FLECK: (u8, u8, u8) = (62, 64, 66);
 
@@ -79,7 +84,11 @@ const UNDERSIDE_LIGHT_FLECK: (u8, u8, u8) = (62, 64, 66);
 /// live-reported "feels cheap up close" mistake) — solid block/shade glyphs read as texture with
 /// real visual weight instead of stray marks. Also deliberately disjoint from `PLAYER_FLAIRS`
 /// (`#@%&`) so a background speckle is never mistaken for a player's own identity glyph.
-const STONE_TEXTURE_CHARS: [char; 5] = ['▓', '▒', '░', '■', '▪'];
+// `pub(crate)`, not private: this session's own tests already went stale once by hardcoding a
+// duplicate of this set (a literal `'='` check) instead of referencing it directly, silently
+// checking nothing the moment this list changed. Exposed so the test module can check against the
+// real set instead of repeating that mistake.
+pub(crate) const STONE_TEXTURE_CHARS: [char; 5] = ['▓', '▒', '░', '■', '▪'];
 
 /// One cell's own stone glyph, background, and *foreground* — deterministic, not real randomness:
 /// the same cell must render identically every frame (no flicker as the platform sits there),
@@ -203,61 +212,10 @@ fn pad_to_width(text: &str, width: usize) -> String {
     }
 }
 
-/// The pause menu's short entry list. Each entry's actual effect lives in `apply_cheat`, indexed
-/// by position in this array.
-pub const CHEAT_ENTRIES: [&str; 2] = ["Revive all players (restore lives)", "Reset kill scores"];
-
-/// Applies `CHEAT_ENTRIES[index]`'s effect against every locally simulated player. Silently does
-/// nothing for an out-of-range index, which should never happen since the menu only ever selects
-/// a real row.
-pub fn apply_cheat(mario: &mut Vec<(Entity, String, MarioState)>, index: usize) {
-    match index {
-        0 => {
-            for (_, _, mario_state) in mario.iter_mut() {
-                mario_state.alive = true;
-                mario_state.lives = MARIO_STARTING_LIVES;
-                mario_state.respawn_remaining = None;
-                mario_state.death_effect = None;
-                mario_state.x = 0.5;
-                mario_state.y = crate::physics::MARIO_GROUND_Y;
-                mario_state.vx = 0.0;
-                mario_state.vy = 0.0;
-                mario_state.jumps_used = 0;
-            }
-        }
-        1 => {
-            for (_, _, mario_state) in mario.iter_mut() {
-                mario_state.kills = 0;
-            }
-        }
-        _ => {}
-    }
-}
-
-/// The pause menu's literal box content: `(line, is_selected_row)` per line, plain and unstyled.
-/// `mario_body_text` colors it (border one color, the selected row highlighted) and centers it
-/// within the play area at render time.
-pub fn cheat_menu_lines(selected: usize) -> Vec<(String, bool)> {
-    const TITLE: &str = "* GAME MENU *";
-    let inner_width = CHEAT_ENTRIES.iter().map(|entry| UnicodeWidthStr::width(*entry) + 4).max().unwrap_or(0).max(UnicodeWidthStr::width(TITLE) + 4);
-
-    let mut lines = Vec::new();
-    lines.push((format!("+{}+", "-".repeat(inner_width)), false));
-    lines.push((format!("|{:^inner_width$}|", TITLE), false));
-    lines.push((format!("+{}+", "-".repeat(inner_width)), false));
-    lines.push((format!("|{:inner_width$}|", ""), false));
-    for (index, entry) in CHEAT_ENTRIES.iter().enumerate() {
-        let marker = if index == selected { ">" } else { " " };
-        lines.push((format!("|{:<inner_width$}|", format!("  {marker} {entry}")), index == selected));
-    }
-    lines.push((format!("|{:inner_width$}|", ""), false));
-    lines.push((format!("+{}+", "-".repeat(inner_width)), false));
-    lines.push(("Up/Down select, South confirm, Start close".to_string(), false));
-    lines
-}
-
-/// Everything a frame needs to render: the backdrop text plus live sprites, ghosts, and an
-/// optional open menu.
+/// Everything a frame needs to render: the backdrop text plus live sprites, ghosts, and an optional
+/// open menu (`menu_lines`, `(line, is_selected_row)` — the native example's `render::
+/// cheat_menu_lines` builds this; `mario-wasm` doesn't have a pause menu yet, so it always passes
+/// `None`).
 pub fn mario_body_text(
     backdrop_rows: &[String],
     sprites: &[(MarioState, (u8, u8, u8), usize)],
@@ -279,13 +237,12 @@ pub fn mario_body_text(
     // color is the solid background fill; its glyph's own foreground is always derived from it via
     // `texture_fg_for`, never chosen separately, so every block/glyph pair stays readable.
     let mut sprites_by_row: std::collections::HashMap<u16, Vec<(u16, (u8, u8, u8), char)>> = std::collections::HashMap::new();
-    // Background-only fills (no glyph override) for a swing's own blast/motion trail. The
-    // existing backdrop character shows through as the texture, recolored via `texture_fg_for`.
+    // Background-only fills (no glyph override) for a swing's own blast/motion trail. The existing
+    // backdrop character shows through as the texture, recolored via `texture_fg_for`.
     let mut tints_by_row: std::collections::HashMap<u16, Vec<(u16, (u8, u8, u8))>> = std::collections::HashMap::new();
-    // Foreground-only glyph overrides with no background fill at all. Ghosts render this way
-    // rather than through `sprites_by_row` so they stay a plain colored dot directly on the dim
-    // backdrop, never a solid block: a background memorial, not something meant to visually
-    // compete with a live player for attention.
+    // Foreground-only glyph overrides with no background fill at all. Ghosts render this way rather
+    // than through `sprites_by_row` so they stay a plain colored dot directly on the dim backdrop,
+    // never a solid block.
     let mut glyphs_by_row: std::collections::HashMap<u16, Vec<(u16, (u8, u8, u8), char)>> = std::collections::HashMap::new();
     let to_cell = |x: f32, y: f32| -> (u16, u16) {
         let col = (x * width.saturating_sub(1) as f32).round().clamp(0.0, width.saturating_sub(1) as f32) as u16;
@@ -322,9 +279,10 @@ pub fn mario_body_text(
     // position math, fixed the same way each time: stop deriving a row from a fraction tuned for
     // one specific size, derive it directly from another row instead.
     //
-    // Only physics filters colliders down to solid-only (see `resolve_mario_collisions_and_
-    // grounding`) -- render paints every collider it's given, solid or passable, since a passable
-    // underside is just as real a visual surface as the slab above it, only not a collidable one.
+    // Only physics filters colliders down to solid-only (see `is_grounded`/`resolve_mario_
+    // collisions`'s own callers) -- render paints every collider it's given, solid or passable,
+    // since a passable underside is just as real a visual surface as the slab above it, only not a
+    // collidable one.
     let mut platforms_by_row: std::collections::HashMap<u16, (u16, u16, bool)> = std::collections::HashMap::new();
     let mut solid_light_end: Option<u16> = None;
     for collider in colliders.iter().filter(|c| !c.passable) {
@@ -382,9 +340,6 @@ pub fn mario_body_text(
             // glyph is pinned elsewhere, reading as "the indicator is ahead of where the avatar
             // actually is" even though both come from the same underlying position.
             let dust_row = sprite_render_row(effect.x, effect.y, &solid_colliders, dust_row, height, &to_cell);
-            // Fades toward the backdrop's own dim tone as `remaining` runs out, toward the
-            // player's own block color rather than a fixed neutral tone, so a puff reads as that
-            // player's own kick-up settling back into the background.
             let fade = (effect.remaining / MARIO_DUST_EFFECT_DURATION).clamp(0.0, 1.0) as f64;
             let dust_color = lerp_color(DIM, block_color, fade);
             sprites_by_row.entry(dust_row).or_default().push((dust_col, dust_color, 'o'));
@@ -402,10 +357,6 @@ pub fn mario_body_text(
             // swinging at, reading as "the attack shows on the other side of what I hit." A swing
             // visually overlapping a block's own texture slightly is a minor, expected cosmetic
             // overlap; rendering on the wrong side of it entirely is not.
-            //
-            // A short solid extension of the avatar's own body: the swing reads as the avatar
-            // itself reaching out, not a separate mark appearing near it. Flashes toward white at
-            // the instant of the swing, then settles to the player's own block color as it fades.
             let fade = (effect.remaining / MARIO_ATTACK_EFFECT_DURATION).clamp(0.0, 1.0) as f64;
             let swipe_color = lerp_color(block_color, (255, 255, 255), fade * MARIO_ATTACK_FLASH_MAX_BLEND);
             for offset_fraction in [0.3_f32, 0.55_f32, 0.8_f32] {
@@ -414,9 +365,6 @@ pub fn mario_body_text(
                 sprites_by_row.entry(swipe_row).or_default().push((swipe_col, swipe_color, '/'));
             }
 
-            // A short motion trail between the attacker and the swipe: a solid background fill,
-            // lit partway toward the player's own block color, so the swing reads as moving
-            // through that space rather than a mark just appearing.
             let tint_fade = fade * MARIO_ATTACK_TINT_MAX_BLEND;
             let tint_color = lerp_color(DIM, block_color, tint_fade);
             for offset_fraction in [0.12_f32, 0.26_f32] {
@@ -427,12 +375,6 @@ pub fn mario_body_text(
         }
 
         if let Some(effect) = mario.death_effect {
-            // A scattered spark burst expanding outward from the death spot as `remaining` counts
-            // down, flashing white-hot at the instant of death and fading to nothing. Radius grows
-            // with elapsed time rather than shrinking with `remaining`, since an expanding-then-
-            // vanishing burst reads as an explosion rather than a puff. Fanned around the reverse
-            // of whatever swing killed this player at varied angles and reach, not a tidy
-            // symmetric cross.
             let elapsed_fraction = (1.0 - effect.remaining / MARIO_DEATH_EFFECT_DURATION).clamp(0.0, 1.0);
             let fade = (effect.remaining / MARIO_DEATH_EFFECT_DURATION).clamp(0.0, 1.0) as f64;
             let death_color = lerp_color(block_color, (255, 255, 255), fade);
@@ -453,11 +395,10 @@ pub fn mario_body_text(
     }
 
     // Every lost life, ever. Rendered through `glyphs_by_row`, not `sprites_by_row`, so a ghost is
-    // always a faint colored dot directly on the plain backdrop, never a solid block. They're a
-    // memorial, not something anyone's currently standing on.
+    // always a faint colored dot directly on the plain backdrop, never a solid block.
     for &(x, y, color, flicker) in ghosts {
         let (col, row) = to_cell(x, y);
-        let ghost_color = lerp_color(DIM, color, crate::ghosts::MARIO_GHOST_DIM_FRACTION * flicker);
+        let ghost_color = lerp_color(DIM, color, MARIO_GHOST_DIM_FRACTION * flicker);
         glyphs_by_row.entry(row).or_default().push((col, ghost_color, mario_ghost_glyph(flicker)));
     }
 
@@ -512,17 +453,7 @@ pub fn mario_body_text(
 }
 
 /// Splices `sprites` (column, block color, glyph) on top of `row_text`, already padded to `width`.
-/// Every sprite and tinted column renders as a solid background-color block, its foreground always
-/// derived from that block color via `texture_fg_for` rather than a separately-chosen fg, so a
-/// player, an effect, and a platform all read as "a colored block with a readable glyph on it"
-/// rather than colored text on the terminal's own background. `tints` (column, color) fills a
-/// background without overriding the underlying character, so the backdrop's own text becomes the
-/// texture showing through a motion trail or glow. `glyphs` (column, color, glyph) overrides the
-/// character and its foreground with no background fill at all: a plain colored mark directly on
-/// the dim backdrop, for anything (ghosts) that must never read as a solid block. `platform_cols`, if
-/// the platform spans this row, is the lowest-priority layer: any column not otherwise claimed but
-/// inside that range renders as solid platform instead of plain dim backdrop. Priority, high to
-/// low: sprite > tint > glyph > platform > plain dim backdrop.
+/// Priority, high to low: sprite > tint > glyph > platform > plain dim backdrop.
 fn render_row_with_sprites(
     row_text: &str,
     width: u16,

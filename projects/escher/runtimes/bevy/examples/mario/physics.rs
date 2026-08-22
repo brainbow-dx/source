@@ -9,6 +9,7 @@ use std::time::Duration;
 use bevy::ecs::component::Component;
 use bevy::ecs::entity::Entity;
 use bevy::ecs::system::Commands;
+use bevy::prelude::ChildOf;
 use bevy::ecs::system::Query;
 use bevy::ecs::system::Res;
 use bevy::ecs::message::MessageWriter;
@@ -180,14 +181,42 @@ pub const MARIO_JUMP_VELOCITY_ROWS_PER_SEC: f32 = -54.0;
 /// Pressure-sensitive jumping, implemented the way most platformers do it: not by measuring press
 /// duration up front, but by applying much stronger gravity the instant the button is released
 /// while still ascending. Holding through the whole ascent never triggers this, so a held jump
-/// reaches full height, while releasing early cuts the ascent short.
-pub const MARIO_JUMP_CUT_GRAVITY_MULTIPLIER: f32 = 2.5;
+/// reaches full height, unaffected by this constant at all -- only an early release ever takes
+/// this path.
+///
+/// 2.5 → 8.0 per direct live feedback: "the normal jump height from a short tap... is too high...
+/// I want the tap to just barely bump a player, for precise movement." The initial jump velocity
+/// (`MARIO_JUMP_VELOCITY_ROWS_PER_SEC`) is the same for a tap and a hold -- only this multiplier
+/// tells them apart -- so a tap's apex height is `MARIO_JUMP_VELOCITY_ROWS_PER_SEC.powi(2) / (2.0 *
+/// MARIO_GRAVITY_ROWS_PER_SEC2 * MARIO_JUMP_CUT_GRAVITY_MULTIPLIER)`: roughly 40% of a full jump's
+/// height at the old 2.5, down to roughly 12% at 8.0 -- a real, deliberate "barely leaves the
+/// ground" tap, not a redesign of the mechanism itself.
+pub const MARIO_JUMP_CUT_GRAVITY_MULTIPLIER: f32 = 8.0;
 /// One extra jump while airborne, noticeably smaller than the primary jump.
 pub const MARIO_DOUBLE_JUMP_VELOCITY_ROWS_PER_SEC: f32 = -38.0;
 pub const MARIO_MAX_JUMPS: u8 = 2;
 /// How fast a wall kick snaps `vx` toward the chosen direction, faster than ordinary movement so it
 /// reads as a decisive push-off rather than a normal jump that happens to also move sideways.
 pub const MARIO_WALL_KICK_SPEED_MULTIPLIER: f32 = 1.5;
+/// A quick omnidirectional burst on either bumper, aimed by the left stick (or `facing` if the
+/// stick is neutral -- the same fallback the attack's own aim uses, see `stick_unit_direction`).
+/// Applied as velocity *added* on top of whatever `vx`/`vy` already are, not a snap-to a fixed
+/// speed, so the same button either amplifies existing momentum (stick aimed with it) or cuts
+/// against it (stick aimed opposite) -- one primitive for both a directional boost and a counter to
+/// an existing force, per direct user design intent.
+///
+/// Deliberately asymmetric per direct live feedback after trying a single uniform speed: sideways
+/// and downward dashes read as too strong, while an upward one didn't read as enough real lift. A
+/// light nudge horizontally/downward (`MARIO_DASH_SPEED_*`, well under move speed), a real vertical
+/// kick specifically when aimed upward (`MARIO_DASH_LIFT_ROWS_PER_SEC`, comparable to the primary
+/// jump's own `MARIO_JUMP_VELOCITY_ROWS_PER_SEC` magnitude) -- see `step`'s own dash block for which
+/// applies when.
+pub const MARIO_DASH_SPEED_COLUMNS_PER_SEC: f32 = 42.0;
+pub const MARIO_DASH_SPEED_ROWS_PER_SEC: f32 = 22.0;
+/// Bumped up slightly (62→72) per direct live feedback once the sideways/downward split landed:
+/// "slightly stronger on the upward curve... a slight but useful boost if they happen to be caught
+/// at the very edge of something" -- an edge-recovery nudge, not a second jump.
+pub const MARIO_DASH_LIFT_ROWS_PER_SEC: f32 = 72.0;
 /// How much of `MARIO_MOVE_SPEED_COLUMNS_PER_SEC` applies per second while airborne. `step` blends
 /// `vx` toward the requested speed at this rate rather than snapping to it, so a mid-air direction
 /// change nudges the trajectory instead of fully redirecting it.
@@ -209,6 +238,11 @@ pub const MARIO_ATTACK_BUTTON: bevy::input::gamepad::GamepadButton = bevy::input
 /// own labeling calls LT/RT rather than LB/RB.
 pub const MARIO_HEAVY_HIT_BUTTONS: [bevy::input::gamepad::GamepadButton; 2] =
     [bevy::input::gamepad::GamepadButton::LeftTrigger2, bevy::input::gamepad::GamepadButton::RightTrigger2];
+/// Either shoulder bumper triggers a dash (see `MARIO_DASH_SPEED_COLUMNS_PER_SEC`) -- `Trigger`, not
+/// `Trigger2` (the analog triggers `MARIO_HEAVY_HIT_BUTTONS` already uses), what most controllers'
+/// own labeling calls LB/RB rather than LT/RT.
+pub const MARIO_DASH_BUTTONS: [bevy::input::gamepad::GamepadButton; 2] =
+    [bevy::input::gamepad::GamepadButton::LeftTrigger, bevy::input::gamepad::GamepadButton::RightTrigger];
 pub const MARIO_ATTACK_EFFECT_DURATION: f32 = 0.18;
 /// Minimum time between two attacks from the same player.
 pub const MARIO_ATTACK_COOLDOWN: f32 = 0.35;
@@ -252,6 +286,19 @@ pub const MARIO_GROUND_Y: f32 = 1.0;
 /// before the next grounded check runs.
 const MARIO_GROUNDED_EPSILON: f32 = 0.002;
 
+/// A unit vector toward wherever the left stick is pointing, or straight along `facing` (no
+/// vertical component) if the stick is centered -- shared by the attack's own aim and the dash
+/// burst, both of which need "aim where I'm pointing, or aim where I'm facing if I'm not pointing
+/// anywhere."
+fn stick_unit_direction(move_input: f32, stick_y: f32, facing: f32) -> (f32, f32) {
+    if move_input.abs() > MARIO_STICK_DEADZONE || stick_y.abs() > MARIO_STICK_DEADZONE {
+        let length = (move_input * move_input + stick_y * stick_y).sqrt().max(f32::EPSILON);
+        (move_input / length, stick_y / length)
+    } else {
+        (facing, 0.0)
+    }
+}
+
 impl MarioState {
     /// Advances the simulation by `dt` seconds. Pure: no Bevy types, no I/O, so the gamepad-reading
     /// system stays a thin adapter over this and this itself stays independently testable.
@@ -259,7 +306,9 @@ impl MarioState {
     /// separate from the press edge so a held-vs-tapped button can be told apart at all, which is
     /// what pressure-sensitive jumping needs. `body_height`/`body_width`: the play area's current
     /// height/width in rows/columns. `crouch_held`: only actually crouches while `grounded`,
-    /// pressing down in the air still just aims a downward stomp.
+    /// pressing down in the air still just aims a downward stomp. `dash_pressed`: edge-triggered
+    /// (like `jump_pressed`/`attack_pressed`), a bumper burst in the left stick's current direction
+    /// -- see `MARIO_DASH_SPEED_COLUMNS_PER_SEC`.
     #[allow(clippy::too_many_arguments)]
     pub fn step(
         &mut self,
@@ -271,6 +320,7 @@ impl MarioState {
         attack_pressed: bool,
         heavy_held: bool,
         crouch_held: bool,
+        dash_pressed: bool,
         body_height: f32,
         body_width: f32,
     ) {
@@ -308,6 +358,26 @@ impl MarioState {
             }
         }
 
+        if dash_pressed {
+            let (dx, dy) = stick_unit_direction(move_input, stick_y, self.facing);
+            self.vx += (dx * MARIO_DASH_SPEED_COLUMNS_PER_SEC) / body_width;
+            // `dy < 0.0` is upward (see `MarioState::y`'s down-is-positive convention) -- a real
+            // lift there, a light nudge everywhere else (downward or level).
+            //
+            // The lift scales with `dy` *squared*, not linear, per direct live feedback: "it should
+            // follow an arc [...] if the player is pointing the joystick up, the arc is tighter,
+            // meaning the bump is slightly higher but takes less distance. The closer it is to any
+            // other direction, the more even it is." A linear scale gave even a 45-degree diagonal
+            // dash almost the same strong lift as a purely vertical one (`sin(45°) ≈ 0.71`, i.e.
+            // 71% of full lift) -- the actual "too high in some conditions" bug. Squaring leaves a
+            // genuinely vertical aim's lift untouched (`1.0² = 1.0`) while a 45-degree dash drops to
+            // half (`0.71² ≈ 0.5`), and anything closer to level barely lifts at all -- only a real,
+            // close-to-straight-up aim gets the tight, high, short-distance arc; everything else
+            // reads as the flatter, more horizontally-even burst described above.
+            let vertical_magnitude = if dy < 0.0 { MARIO_DASH_LIFT_ROWS_PER_SEC } else { MARIO_DASH_SPEED_ROWS_PER_SEC };
+            self.vy += dy.signum() * dy.abs().powi(2) * vertical_magnitude / body_height;
+        }
+
         let gravity = if self.vy < 0.0 && !jump_held { MARIO_GRAVITY_ROWS_PER_SEC2 * MARIO_JUMP_CUT_GRAVITY_MULTIPLIER } else { MARIO_GRAVITY_ROWS_PER_SEC2 };
         self.vy += (gravity / body_height) * dt;
         self.x = (self.x + self.vx * dt).clamp(0.0, 1.0);
@@ -333,13 +403,7 @@ impl MarioState {
             self.time_since_last_attack = 0.0;
             self.attack_cooldown = MARIO_ATTACK_COOLDOWN + self.attack_spam_stacks as f32 * MARIO_ATTACK_SPAM_COOLDOWN_STEP;
 
-            let stick_active = move_input.abs() > MARIO_STICK_DEADZONE || stick_y.abs() > MARIO_STICK_DEADZONE;
-            let (dx, dy) = if stick_active {
-                let length = (move_input * move_input + stick_y * stick_y).sqrt().max(f32::EPSILON);
-                (move_input / length, stick_y / length)
-            } else {
-                (self.facing, 0.0)
-            };
+            let (dx, dy) = stick_unit_direction(move_input, stick_y, self.facing);
 
             // A stomp fires automatically, instead of a plain swing, whenever the attack fires
             // while airborne, already falling, and aimed mostly downward.
@@ -396,11 +460,22 @@ fn touching_wall(mario: &MarioState, colliders: &[(f32, f32, f32, f32)]) -> Opti
     })
 }
 
-/// A static platform, `(x0, y0, x1, y1)` in the same 0.0-1.0 fractional space `MarioState::x`/`y`
-/// live in. Spawned once at startup and never moved.
-#[derive(Component)]
+/// A static surface, `(x0, y0, x1, y1)` in the same 0.0-1.0 fractional space `MarioState::x`/`y`
+/// live in. Spawned once at startup and never moved. `passable`: whether physics can ever stop
+/// against it at all -- per direct user design intent ("we should be able to define collision per
+/// entity"), a platform is no longer always one solid rect; `spawn_platform` now spawns a solid
+/// slab paired with a `passable` decorative underside.
+///
+/// Deliberately, physics itself (`resolve_mario_collisions_and_grounding` below, and everything it
+/// calls) never sees this flag at all, only ever a plain `&[(f32, f32, f32, f32)]` rect slice --
+/// filtered to `!passable` entities before physics ever runs, so physics doesn't need to know this
+/// concept exists. Only the render call site (`main.rs`) needs the full component, since it needs
+/// both a rect *and* whether to paint it as light stone (solid) or dark stone (a pass-through
+/// underside) -- see `render::mario_body_text`'s own `colliders` param.
+#[derive(Component, Clone, Copy)]
 pub struct MarioCollider {
     pub rect: (f32, f32, f32, f32),
+    pub passable: bool,
 }
 
 /// Pushes `mario` back out of any `colliders` it ended up inside of (or swept clean through) after
@@ -498,39 +573,51 @@ pub fn gamepad_candidate_id(pad: &bevy::input::gamepad::Gamepad) -> String {
     format!("{}:{:04x}:{:04x}", *MACHINE_ID, pad.vendor_id().unwrap_or(0), pad.product_id().unwrap_or(0))
 }
 
-/// Steps one `MarioState` per connected gamepad. `bevy_gilrs` gives each connected controller its
-/// own ECS entity carrying a `Gamepad` component, so "one sprite per controller" falls out of
-/// iterating the query fully. `GameState::mario` is keyed by that same entity: a newly seen one
-/// gets a fresh `MarioState::default()`, and one no longer in the query (controller unplugged) is
-/// dropped. A physical controller that disconnects and reconnects gets a new entity and so a fresh,
-/// reset sprite: `bevy_gilrs` doesn't preserve identity across that gap.
+/// The seven systems below replace what used to be one large `update_mario_physics` doing all of
+/// this inline in a single per-gamepad loop plus three trailing loops over `GameState::mario` — a
+/// real, live-flagged problem, not just a style complaint: many small systems with narrow, disjoint
+/// concerns are what let Bevy's scheduler reason about a tick at all, and a single system silently
+/// sequencing "read input, step physics, trigger sfx, resolve combat, resolve collisions, publish
+/// network state" inside its own control flow gives the scheduler nothing to work with — it's a
+/// hand-rolled update loop wearing one `System` label, not real ECS decomposition. Split into:
+/// `reconcile_gamepad_ownership` (which players exist and are mine to simulate), `handle_cheat_menu_
+/// input` (the pause menu), `step_mario_physics` (per-player input decode + physics + jump/attack
+/// sfx + respawn/death-effect countdown + new-player registration), `apply_incoming_combat_events`,
+/// `resolve_mario_hits` (attack-cone hit detection, local and remote-tracked), `resolve_mario_
+/// collisions_and_grounding`, and `publish_local_mario_snapshot`. `main.rs` registers all seven in
+/// this exact order via `.chain()`, matching the original single system's own internal ordering
+/// exactly — this is a decomposition, not a behavior change. One real ordering subtlety worth
+/// stating plainly since it's easy to miss (and exactly the kind of thing that bit us with tonight's
+/// render bugs): `resolve_mario_hits` runs on positions from this tick's `step_mario_physics`
+/// *before* `resolve_mario_collisions_and_grounding` resolves them against any collider — that was
+/// already true in the original single-system code (collision resolution was its own trailing loop,
+/// after hit detection, not interleaved per-player with stepping), this split just makes it a
+/// visible ordering between two named systems instead of an implicit one between two loops in one
+/// function body.
 ///
-/// `dt` is clamped to a small fixed range regardless of how long actually elapsed, so a sparse tick
-/// produces one bounded hop rather than a teleport or falling through the floor.
-pub fn update_mario_physics(
-    state: Res<GameState>,
-    gamepads: Query<(Entity, &bevy::input::gamepad::Gamepad)>,
-    colliders: Query<&MarioCollider>,
-    time: Res<Time>,
-    mut rumble: MessageWriter<bevy::input::gamepad::GamepadRumbleRequest>,
-    mut commands: Commands,
-    sfx: Res<MarioSfx>,
-) {
-    let dt = time.delta_secs().clamp(1.0 / 60.0, 0.1);
-
-    // Ghosts freeze too while the pause menu is open: see `GameState::paused_accumulated`.
-    if *state.cheat_menu_open.read() {
-        *state.paused_accumulated.write() += Duration::from_secs_f32(dt);
-    }
-
-    let body_height = state.body_rect_seen.read().map(|rect| rect.height as f32).filter(|&height| height > 0.0).unwrap_or(40.0);
-    let body_width = state.body_rect_seen.read().map(|rect| rect.width as f32).filter(|&width| width > 0.0).unwrap_or(100.0);
-
-    let collider_rects: Vec<(f32, f32, f32, f32)> = colliders.iter().map(|collider| collider.rect).collect();
-
-    // Published for the ownership-reconciliation task regardless of ownership: it needs to know
-    // about every gamepad this instance can physically see, not just the ones it currently
-    // controls.
+/// What this pass deliberately does *not* do: migrate `GameState::mario` off `Arc<RwLock<Vec<...>>>`
+/// onto real Bevy `Component`s/`Query`s. Every system below still takes `Res<GameState>` and reaches
+/// into the same shared lock, which means Bevy's scheduler still can't see any of these as
+/// non-conflicting and still can't actually parallelize them — `.chain()` here is enforcing an order
+/// the scheduler has no way to discover on its own, not merely documenting one it already would have
+/// picked. That bigger migration (real per-player components, systems with genuinely disjoint
+/// queries) is what would unlock real scheduling benefit and is also the actual prerequisite for the
+/// "someone else's app plugs in a few systems" reusability goal discussed earlier this session — a
+/// second, larger, higher-risk pass, not attempted here.
+/// Publishes every gamepad this instance can currently see (read by the ownership-reconciliation
+/// task regardless of ownership — it needs to know about every gamepad physically visible, not just
+/// the ones this instance currently controls), prunes `GameState::mario` down to just the gamepads
+/// this instance is actually allowed to drive right now, and registers a fresh `MarioState` for any
+/// owned gamepad that doesn't have one yet. Real, standalone concern from everything downstream:
+/// deciding *which players exist this tick*, before physics, the menu, combat, or networking ever
+/// touches `mario`.
+///
+/// The registration half used to live inside `step_mario_physics`'s own per-gamepad match, a real,
+/// live-reported architectural mismatch: "player spawn location feels like a startup system, not a
+/// physics system." Moved here, which already owns exactly this "which players exist" concern and
+/// already runs first in the chain, so a new entry is always in place before `step_mario_physics`
+/// looks for it later this same tick.
+pub fn reconcile_gamepad_ownership(state: Res<GameState>, gamepads: Query<(Entity, &bevy::input::gamepad::Gamepad)>) {
     *state.visible_gamepad_candidates.write() = gamepads.iter().map(|(_, pad)| gamepad_candidate_id(pad)).collect();
 
     // No sqld connection, or the first tick or two after connecting before the first sync round
@@ -540,11 +627,97 @@ pub fn update_mario_physics(
     let is_owned = |pad: &bevy::input::gamepad::Gamepad| !reconciling || owned.contains(&gamepad_candidate_id(pad));
 
     let mut mario = state.mario.write();
-
     mario.retain(|(entity, ..)| gamepads.get(*entity).is_ok_and(|(_, pad)| is_owned(pad)));
 
     for (entity, pad) in gamepads.iter() {
+        if !is_owned(pad) || mario.iter().any(|(existing, ..)| *existing == entity) {
+            continue;
+        }
+        // On the platform, weighted toward its edges, not the ground center -- per direct user
+        // request, so any number of players joining a free-for-all brawl find a reasonable
+        // spread-out starting position instead of stacking on the same point.
+        let candidate_id = gamepad_candidate_id(pad);
+        let (side_random, position_random) = spawn_random_pair(&candidate_id);
+        let (x0, y0, x1, _) = platform_slab_rect();
+        let x = weighted_edge_x(x0, x1, side_random, position_random);
+        mario.push((entity, candidate_id, MarioState { x, y: y0, prev_x: x, prev_y: y0, ..MarioState::default() }));
+    }
+}
+
+/// The pause menu: opens/closes on a real gamepad Start button (any of this instance's *owned*
+/// gamepads can toggle it — the same ownership gate `reconcile_gamepad_ownership` applies, rechecked
+/// here since this system doesn't otherwise see that decision), and while open, every owned
+/// gamepad's D-pad/South drives its navigation instead of a player. Runs before `step_mario_physics`
+/// so this tick's toggle (if any) is already settled by the time physics decides whether to skip a
+/// gamepad for "menu is open" — every gamepad sees the same, final open/closed state for this tick,
+/// not whatever it happened to be mid-iteration the way the original single loop's own order-
+/// dependent read did.
+pub fn handle_cheat_menu_input(state: Res<GameState>, gamepads: Query<(Entity, &bevy::input::gamepad::Gamepad)>, time: Res<Time>) {
+    let dt = time.delta_secs().clamp(1.0 / 60.0, 0.1);
+
+    // Ghosts freeze too while the pause menu is open: see `GameState::paused_accumulated`.
+    if *state.cheat_menu_open.read() {
+        *state.paused_accumulated.write() += Duration::from_secs_f32(dt);
+    }
+
+    let reconciling = state.persistence.read().is_some();
+    let owned = state.gamepad_owned_by_me.read();
+    let is_owned = |pad: &bevy::input::gamepad::Gamepad| !reconciling || owned.contains(&gamepad_candidate_id(pad));
+
+    let mut mario = state.mario.write();
+    for (_, pad) in gamepads.iter() {
         if !is_owned(pad) {
+            continue;
+        }
+
+        if pad.just_pressed(bevy::input::gamepad::GamepadButton::Start) {
+            let mut open = state.cheat_menu_open.write();
+            *open = !*open;
+            *state.cheat_menu_selected.write() = 0;
+        }
+
+        if *state.cheat_menu_open.read() {
+            if pad.just_pressed(bevy::input::gamepad::GamepadButton::DPadUp) {
+                let mut selected = state.cheat_menu_selected.write();
+                *selected = selected.checked_sub(1).unwrap_or(CHEAT_ENTRIES.len() - 1);
+            }
+            if pad.just_pressed(bevy::input::gamepad::GamepadButton::DPadDown) {
+                let mut selected = state.cheat_menu_selected.write();
+                *selected = (*selected + 1) % CHEAT_ENTRIES.len();
+            }
+            if pad.just_pressed(bevy::input::gamepad::GamepadButton::South) {
+                apply_cheat(&mut mario, *state.cheat_menu_selected.read());
+            }
+        }
+    }
+}
+
+/// Advances each of this instance's own players by one tick: decodes this gamepad's own stick/
+/// d-pad/button state into `MarioState::step`'s own input shape, steps physics for an alive player
+/// (with the jump/attack sfx a `step` call can't report on its own — a before/after diff on `jumps_
+/// used`/`attack_effect` is the only way to tell "a jump/swing actually fired this tick" from "the
+/// button's just being held"), counts a dead-with-lives-left player down to respawn, and registers a
+/// newly seen gamepad as a fresh player. Skipped entirely for a gamepad while the pause menu is open
+/// (`handle_cheat_menu_input` runs first and settles this tick's open/closed state before this
+/// system ever checks it) — matches the *entire* original per-gamepad body being skipped, including
+/// a brand new gamepad plugged in mid-pause: it won't be registered until the menu closes, same as
+/// before this system was split out.
+pub fn step_mario_physics(state: Res<GameState>, gamepads: Query<(Entity, &bevy::input::gamepad::Gamepad)>, time: Res<Time>, mut commands: Commands, sfx: Res<MarioSfx>) {
+    let dt = time.delta_secs().clamp(1.0 / 60.0, 0.1);
+    let body_height = state.body_rect_seen.read().map(|rect| rect.height as f32).filter(|&height| height > 0.0).unwrap_or(40.0);
+    let body_width = state.body_rect_seen.read().map(|rect| rect.width as f32).filter(|&width| width > 0.0).unwrap_or(100.0);
+
+    let reconciling = state.persistence.read().is_some();
+    let owned = state.gamepad_owned_by_me.read();
+    let is_owned = |pad: &bevy::input::gamepad::Gamepad| !reconciling || owned.contains(&gamepad_candidate_id(pad));
+
+    let mut mario = state.mario.write();
+
+    for (entity, pad) in gamepads.iter() {
+        if !is_owned(pad) {
+            continue;
+        }
+        if *state.cheat_menu_open.read() {
             continue;
         }
 
@@ -562,33 +735,7 @@ pub fn update_mario_physics(
         let jump_held = pad.pressed(bevy::input::gamepad::GamepadButton::South);
         let attack_pressed = pad.just_pressed(MARIO_ATTACK_BUTTON);
         let heavy_held = MARIO_HEAVY_HIT_BUTTONS.iter().any(|button| pad.pressed(*button));
-
-        // The pause menu opens on a real gamepad Start button. Any one of this instance's owned
-        // gamepads can open or close it.
-        if pad.just_pressed(bevy::input::gamepad::GamepadButton::Start) {
-            let mut open = state.cheat_menu_open.write();
-            *open = !*open;
-            *state.cheat_menu_selected.write() = 0;
-        }
-
-        // While the menu is open, every gamepad's input drives it instead of a player: players and
-        // ghosts freeze. D-pad up/down navigates, South confirms. `continue` skips this gamepad's
-        // own player entirely for the tick, which is what "freeze" means for a player (ghosts
-        // freeze via the wall-clock accumulator above instead).
-        if *state.cheat_menu_open.read() {
-            if pad.just_pressed(bevy::input::gamepad::GamepadButton::DPadUp) {
-                let mut selected = state.cheat_menu_selected.write();
-                *selected = selected.checked_sub(1).unwrap_or(CHEAT_ENTRIES.len() - 1);
-            }
-            if pad.just_pressed(bevy::input::gamepad::GamepadButton::DPadDown) {
-                let mut selected = state.cheat_menu_selected.write();
-                *selected = (*selected + 1) % CHEAT_ENTRIES.len();
-            }
-            if pad.just_pressed(bevy::input::gamepad::GamepadButton::South) {
-                apply_cheat(&mut mario, *state.cheat_menu_selected.read());
-            }
-            continue;
-        }
+        let dash_pressed = MARIO_DASH_BUTTONS.iter().any(|button| pad.just_pressed(*button));
 
         match mario.iter_mut().find(|(existing, ..)| *existing == entity) {
             Some((_, _, mario_state)) if mario_state.alive => {
@@ -598,7 +745,7 @@ pub fn update_mario_physics(
                 // new swing fires, not on every tick it stays visible.
                 let jumps_used_before = mario_state.jumps_used;
                 let had_attack_effect = mario_state.attack_effect.is_some();
-                mario_state.step(dt, move_input, attack_stick_y, jump_pressed, jump_held, attack_pressed, heavy_held, crouch_held, body_height, body_width);
+                mario_state.step(dt, move_input, attack_stick_y, jump_pressed, jump_held, attack_pressed, heavy_held, crouch_held, dash_pressed, body_height, body_width);
                 if mario_state.jumps_used > jumps_used_before {
                     sfx::play(&mut commands, &sfx.jump);
                 }
@@ -614,8 +761,19 @@ pub fn update_mario_physics(
                     if *remaining <= 0.0 {
                         mario_state.respawn_remaining = None;
                         mario_state.alive = true;
-                        mario_state.x = 0.5;
-                        mario_state.y = MARIO_GROUND_Y;
+                        // On the platform, weighted toward its edges -- per direct user request,
+                        // same reasoning as the initial-spawn arm below (`weighted_edge_x`'s own
+                        // doc comment).
+                        let (side_random, position_random) = spawn_random_pair(&gamepad_candidate_id(pad));
+                        let (x0, y0, x1, _) = platform_slab_rect();
+                        mario_state.x = weighted_edge_x(x0, x1, side_random, position_random);
+                        mario_state.y = y0;
+                        // Stale otherwise: `prev_x`/`prev_y` still held wherever this player died,
+                        // which the very next tick's swept-collision check would sweep a straight
+                        // line from -- harmless when every respawn landed at the same fixed point,
+                        // but a real glitch risk now that respawns are scattered across the platform.
+                        mario_state.prev_x = mario_state.x;
+                        mario_state.prev_y = mario_state.y;
                         mario_state.vx = 0.0;
                         mario_state.vy = 0.0;
                         mario_state.jumps_used = 0;
@@ -628,27 +786,41 @@ pub fn update_mario_physics(
                     }
                 }
             }
-            None => mario.push((entity, gamepad_candidate_id(pad), MarioState::default())),
+            // `reconcile_gamepad_ownership` registers a fresh `MarioState` for every owned gamepad
+            // before this system ever runs -- a genuine `None` here would mean this gamepad wasn't
+            // owned yet this tick (a one-tick ownership-reconciliation race, not a bug in either
+            // system), so just skip it rather than spawn a second, possibly-inconsistent entry.
+            None => {}
         }
     }
+}
 
-    // Combat events a remote attacker landed on one of this instance's own local players (see
-    // `relay`'s own doc comment: combat is attacker-authoritative, so this instance is the only
-    // one with the standing to apply a death to a player it actually owns). Applied before local
-    // hit detection below purely for read order; the two never touch the same player in one tick
-    // since a dead player can't be found as anyone's local target anyway.
+/// Combat events a remote attacker landed on one of this instance's own local players (see
+/// `relay`'s own doc comment: combat is attacker-authoritative, so this instance is the only one
+/// with the standing to apply a death to a player it actually owns). Runs before `resolve_mario_
+/// hits` purely for read order; the two never touch the same player in one tick since a dead player
+/// can't be found as anyone's local target anyway.
+pub fn apply_incoming_combat_events(state: Res<GameState>, mut commands: Commands, sfx: Res<MarioSfx>) {
+    let mut mario = state.mario.write();
     for event in std::mem::take(&mut *state.incoming_combat_events.write()) {
         let Some((_, _, target)) = mario.iter_mut().find(|(_, candidate_id, _)| *candidate_id == event.target_candidate_id) else {
             continue; // Not one of this instance's own players; nothing to do.
         };
         apply_local_death(target, &event.target_candidate_id, -event.dx, -event.dy, &state, &mut commands, &sfx);
     }
+}
 
-    // Hit detection: any player whose swing is still live and hasn't already landed a hit checks
-    // every other player for contact, local first, then remote-tracked ones. A remote target's
-    // death can't be applied here directly, this instance has no authority over a player it
-    // doesn't own (see this loop's own remote branch, and `relay`'s doc comment) — instead it
-    // decides the hit and hands it off as a `CombatEvent` for the target's own instance to apply.
+/// Hit detection: any player whose swing is still live and hasn't already landed a hit checks every
+/// other player for contact, local first, then remote-tracked ones. A remote target's death can't
+/// be applied here directly, this instance has no authority over a player it doesn't own (see this
+/// function's own remote branch, and `relay`'s doc comment) — instead it decides the hit and hands
+/// it off as a `CombatEvent` for the target's own instance to apply. Runs on positions from this
+/// tick's `step_mario_physics`, *before* `resolve_mario_collisions_and_grounding` resolves them
+/// against any collider — unchanged from the original single-system code's own ordering (collision
+/// resolution was already its own trailing loop there too, not interleaved per-player with
+/// stepping), not a new behavior introduced by splitting this out.
+pub fn resolve_mario_hits(state: Res<GameState>, mut rumble: MessageWriter<bevy::input::gamepad::GamepadRumbleRequest>, mut commands: Commands, sfx: Res<MarioSfx>) {
+    let mut mario = state.mario.write();
     for attacker_index in 0..mario.len() {
         if !mario[attacker_index].2.alive {
             continue;
@@ -717,8 +889,19 @@ pub fn update_mario_physics(
             dy: effect.dy,
         });
     }
+}
 
-    for (_, _, mario_state) in mario.iter_mut() {
+/// Resolves this tick's movement against every static collider (the swept top/underside checks,
+/// see `resolve_mario_collisions`'s own doc comment), then recomputes `grounded`/`touching_wall`
+/// from wherever that resolution actually left each player. Landing (on the floor or a platform)
+/// refills both jumps. Runs after `resolve_mario_hits` — see that function's own doc comment for why
+/// that ordering (hit detection before collision resolution) isn't a new behavior this split
+/// introduced.
+pub fn resolve_mario_collisions_and_grounding(state: Res<GameState>, colliders: Query<&MarioCollider>) {
+    // `!passable` only -- see `MarioCollider`'s own doc comment on why physics never sees the flag
+    // itself, only ever a plain, pre-filtered rect slice.
+    let collider_rects: Vec<(f32, f32, f32, f32)> = colliders.iter().filter(|collider| !collider.passable).map(|collider| collider.rect).collect();
+    for (_, _, mario_state) in state.mario.write().iter_mut() {
         let (prev_x, prev_y) = (mario_state.prev_x, mario_state.prev_y);
         resolve_mario_collisions(mario_state, prev_x, prev_y, &collider_rects);
         mario_state.grounded = is_grounded(mario_state, &collider_rects);
@@ -728,11 +911,16 @@ pub fn update_mario_physics(
         }
         mario_state.touching_wall = touching_wall(mario_state, &collider_rects);
     }
+}
 
-    // Refreshed every tick regardless of whether anything moved: the relay's own send loop reads
-    // this on a fixed interval, and a future authoritative server needs a steady stream, not
-    // change-detection.
-    *state.local_mario_snapshot.write() = mario
+/// Refreshed every tick regardless of whether anything moved: the relay's own send loop reads this
+/// on a fixed interval, and a future authoritative server needs a steady stream, not
+/// change-detection. Runs last, after collision resolution, so it publishes each player's actually-
+/// resolved position, not the pre-collision one `resolve_mario_hits` used.
+pub fn publish_local_mario_snapshot(state: Res<GameState>) {
+    *state.local_mario_snapshot.write() = state
+        .mario
+        .read()
         .iter()
         .map(|(_, candidate_id, mario_state)| PositionPacket {
             candidate_id: candidate_id.clone(),
@@ -743,11 +931,12 @@ pub fn update_mario_physics(
             vy: mario_state.vy,
             grounded: mario_state.grounded,
             jumps_used: mario_state.jumps_used,
+            alive: mario_state.alive,
         })
         .collect();
 }
 
-/// The attack-cone check `update_mario_physics`'s hit detection runs against both a local target's
+/// The attack-cone check `resolve_mario_hits`'s hit detection runs against both a local target's
 /// live `MarioState` and a remote target's last-known `PositionPacket` — same geometry either way,
 /// only the position source differs, so both call this instead of duplicating it.
 fn attack_cone_hits(attacker_x: f32, attacker_y: f32, effect: MarioAttackEffect, target_x: f32, target_y: f32) -> bool {
@@ -812,15 +1001,124 @@ fn apply_local_death(target: &mut MarioState, target_candidate_id: &str, burst_d
 /// to reach, not harder. That's the opposite failure from a fixed offset that's too high to jump to.
 const MARIO_PLATFORM_REFERENCE_HEIGHT_ROWS: f32 = 40.0;
 const MARIO_PLATFORM_JUMP_HEIGHT_MARGIN: f32 = 0.85;
+/// A fixed 60 columns wide, centered, at the reference terminal width below — per direct user
+/// aesthetic direction ("a fixed 60 unit width"), replacing the previous "70% of whatever the
+/// terminal's actual width happens to be" rule. Still expressed as a fraction (scaling with the
+/// real terminal width the same way every other platform dimension in this file does, rather than
+/// hardcoding fractional bounds that'd only look like 60 columns at exactly this reference size);
+/// the *reference* is now the fixed point instead of the raw fraction. Was 40% (`0.3..0.7`), then a
+/// flat 70%.
+const MARIO_PLATFORM_REFERENCE_WIDTH_COLUMNS: f32 = 80.0;
+const MARIO_PLATFORM_WIDTH_COLUMNS: f32 = 60.0;
+const MARIO_PLATFORM_WIDTH_FRACTION: f32 = MARIO_PLATFORM_WIDTH_COLUMNS / MARIO_PLATFORM_REFERENCE_WIDTH_COLUMNS;
+/// The gap left between a solid slab's own `y1` and where its paired `passable` underside actually
+/// starts, in the same fractional space -- reserved for the slab's own visible "light" body (see
+/// `render.rs`'s own doc comment on why that body is painted one row *below* the slab's collision
+/// row, never on it). `0.03` comfortably clears one terminal row at the ~40-row reference height
+/// (`1/(40-1)` ≈ `0.0256`) with rounding margin, so the light band and the dark underside land on
+/// genuinely distinct rows rather than risking collapsing onto the same one at some terminal
+/// heights -- this session already hit exactly that class of row-rounding fragility twice before
+/// with fractional-position math, so the margin here is deliberate, not arbitrary.
+///
+/// **Real, live-reported bug this fixed**: an earlier version of this split painted the slab's own
+/// collision row directly (no gap, no light band) -- from the player's own physical point of view
+/// (gravity pulling everything down, viewed from the side), *any* row their own glyph shares with
+/// platform material, light or dark, reads as floating inside solid rock, full stop, independent of
+/// color. Compositing priority correctly shows the player's own glyph in that exact cell either way,
+/// but neighboring cells on the same row still show platform texture, and that's what actually reads
+/// wrong -- the fix isn't a color choice, it's leaving the whole row genuinely clear again, the same
+/// principle the original "player renders embedded in platform" fix established, that this session's
+/// intervening two-tone work briefly, mistakenly, moved away from.
+const MARIO_PLATFORM_LIGHT_BAND_GAP_FRACTION: f32 = 0.03;
+/// How tall the passable underside's own dark band is, once it starts (see
+/// `MARIO_PLATFORM_LIGHT_BAND_GAP_FRACTION` for where it starts). `0.025` reads as roughly one
+/// terminal row at the reference height, same reasoning as that constant. Kept in sync by value
+/// (not by import -- see `MarioCollider`'s own doc comment on why this file has no dependency on
+/// `mario-core`) with that crate's own `state::MARIO_PLATFORM_UNDERSIDE_HEIGHT_FRACTION`, which
+/// `mario-wasm` uses directly.
+const MARIO_PLATFORM_UNDERSIDE_HEIGHT_FRACTION: f32 = 0.025;
 
-pub fn spawn_platform(mut commands: Commands) {
+/// Marks the parent entity of a platform's collider set (currently just the one static platform's
+/// slab + underside). Per direct user request, purely so the two colliders are real Bevy children
+/// of a common parent, not two independent top-level entities that happen to share coordinates --
+/// queryable and despawnable as a unit (Bevy's own hierarchy already recursively despawns children
+/// when a parent despawns), and a real anchor for a future "move this whole platform" operation to
+/// hang off of. Not wired up yet: colliders store plain fractional `rect`s, not `Transform`s, so
+/// this parenting is organizational only for now -- it doesn't make moving the parent's (nonexistent)
+/// `Transform` reposition the children automatically. A real move operation still needs to update
+/// both `rect`s directly; the parent-child relationship is what makes finding "both colliders that
+/// belong to this platform" together a real query instead of an assumption about spawn order.
+#[derive(Component)]
+pub struct MarioPlatform;
+
+/// The solid slab's own `(x0, y0, x1, y1)`, pure and parameter-free -- every input is a file-level
+/// constant, so this needs no `Commands`/ECS access at all. Extracted so `spawn_platform` and the
+/// player-spawn-position logic (`step_mario_physics`'s own `None =>` arm, and the death-timer
+/// respawn branch) compute the *exact* same rect without duplicating the arithmetic, which the
+/// respawn/spawn positions need to place a player relative to the platform.
+fn platform_slab_rect() -> (f32, f32, f32, f32) {
     let jump_apex_rows =
         (MARIO_JUMP_VELOCITY_ROWS_PER_SEC * MARIO_JUMP_VELOCITY_ROWS_PER_SEC) / (2.0 * MARIO_GRAVITY_ROWS_PER_SEC2);
     let height_above_ground =
         (jump_apex_rows / MARIO_PLATFORM_REFERENCE_HEIGHT_ROWS) * MARIO_PLATFORM_JUMP_HEIGHT_MARGIN;
     let y1 = MARIO_GROUND_Y - height_above_ground;
     let y0 = y1 - 0.02;
-    commands.spawn(MarioCollider { rect: (0.3, y0, 0.7, y1) });
+    let x0 = (1.0 - MARIO_PLATFORM_WIDTH_FRACTION) / 2.0;
+    let x1 = x0 + MARIO_PLATFORM_WIDTH_FRACTION;
+    (x0, y0, x1, y1)
+}
+
+pub fn spawn_platform(mut commands: Commands) {
+    let (x0, y0, x1, y1) = platform_slab_rect();
+    let underside_y0 = y1 + MARIO_PLATFORM_LIGHT_BAND_GAP_FRACTION;
+
+    let platform = commands.spawn(MarioPlatform).id();
+    commands.spawn((MarioCollider { rect: (x0, y0, x1, y1), passable: false }, ChildOf(platform)));
+    commands.spawn((
+        MarioCollider { rect: (x0, underside_y0, x1, underside_y0 + MARIO_PLATFORM_UNDERSIDE_HEIGHT_FRACTION), passable: true },
+        ChildOf(platform),
+    ));
+}
+
+/// Two independent, cheap pseudo-random values in `[0.0, 1.0)` for `state::weighted_edge_x` --
+/// native has no existing RNG dependency in this workspace worth adding just for this (`mario-wasm`
+/// uses the browser's own `js_sys::Math::random()` instead, its own real entropy source), so this
+/// is a small xorshift64 seeded from real wall-clock time mixed with `salt` (each call site passes
+/// something that varies per spawn -- the joining player's own candidate id -- so two players
+/// joining within the same clock tick still land on different seeds, not identical ones). Not
+/// cryptographic, doesn't need to be: this only ever decides where a player's sprite starts, the
+/// same "cheap hash stands in for real randomness" tradeoff `render.rs`'s own stone texture makes.
+fn spawn_random_pair(salt: &str) -> (f32, f32) {
+    use std::hash::Hash;
+    use std::hash::Hasher;
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(0);
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    salt.hash(&mut hasher);
+    let mut seed = nanos ^ hasher.finish() ^ 0x9E3779B97F4A7C15;
+    let mut next_u64 = || {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        seed
+    };
+    let a = (next_u64() >> 11) as f32 / (1u64 << 53) as f32;
+    let b = (next_u64() >> 11) as f32 / (1u64 << 53) as f32;
+    (a, b)
+}
+
+/// Where a newly-spawned (or respawned) player lands along the platform's own width, per direct
+/// user request for a free-for-all brawl: "load at a semi-random location weighted heavier towards
+/// the edge, with an even split. The effect is that any number of players could join, and they
+/// would find a reasonable starting position." `side_random < 0.5` picks the left edge, otherwise
+/// the right -- an even split, not weighted either direction. `position_random` is squared before
+/// use, biasing it toward `0.0`, then scaled across just the near half of the platform's width
+/// (edge to center) -- so a spawn is always at least as close to its own edge as to the center.
+/// Kept in sync by value (not by import -- see `MarioCollider`'s own doc comment on why this file
+/// has no dependency on `mario-core`) with that crate's own `state::weighted_edge_x`.
+fn weighted_edge_x(platform_x0: f32, platform_x1: f32, side_random: f32, position_random: f32) -> f32 {
+    let half_width = (platform_x1 - platform_x0) / 2.0;
+    let edge_bias = position_random.clamp(0.0, 1.0).powi(2) * half_width;
+    if side_random < 0.5 { platform_x0 + edge_bias } else { platform_x1 - edge_bias }
 }
 
 #[cfg(test)]

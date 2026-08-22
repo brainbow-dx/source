@@ -14,7 +14,7 @@
 //! Combat authority is attacker-side: the instance whose local player's swing connects against a
 //! remote-tracked target's last-known position decides the hit happened and sends a `CombatEvent`
 //! naming the target; the target's own instance is what actually applies the death to its own
-//! locally-owned player (see `physics::update_mario_physics`) — the attacker's instance has no
+//! locally-owned player (see `physics::resolve_mario_hits`) — the attacker's instance has no
 //! authority to mutate a player it doesn't own.
 //!
 //! Negotiation follows one rule to avoid a two-sided offer race: whoever the relay's `Joined`
@@ -63,6 +63,7 @@ pub struct PositionPacket {
     pub vy: f32,
     pub grounded: bool,
     pub jumps_used: u8,
+    pub alive: bool,
 }
 
 /// Every remote peer's most recently received position, keyed by their `candidate_id`. Written
@@ -125,8 +126,14 @@ struct Context {
 
 type WsStream = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 /// An async mutex, not `parking_lot`'s. Sending through the relay socket has to hold this across an
-/// `.await`, which a sync lock can't do without risking blocking the runtime while held.
-type WsSink = Arc<tokio::sync::Mutex<futures_util::stream::SplitSink<WsStream, Message>>>;
+/// `.await`, which a sync lock can't do without risking blocking the runtime while held. `None`
+/// while there's no live relay connection (initial connect still in progress, or reconnecting after
+/// a drop) -- `send_client_message` just swallows a send attempted during that gap, the same
+/// "networking failures are logged and swallowed, local play keeps working" posture the rest of
+/// this module already has. Swapped in place (not replaced as a whole new `Arc`) on every
+/// (re)connect, so already-spawned tasks holding a clone of this `Arc` see a live socket again
+/// without needing to be respawned.
+type WsSink = Arc<tokio::sync::Mutex<Option<futures_util::stream::SplitSink<WsStream, Message>>>>;
 
 /// Forwards one gathered ICE candidate, or a freshly opened inbound data channel, back through the
 /// relay for one peer connection. One of these is built per peer connection, offerer and answerer
@@ -177,6 +184,16 @@ async fn send_client_message(sink: &WsSink, message: &ClientMessage) {
         return;
     };
     let mut sink = sink.lock().await;
+    let Some(sink) = sink.as_mut() else {
+        // No live relay connection right now (reconnecting after a drop, most likely) -- this
+        // message (a Join, an Offer, a gathered ICE candidate) is simply lost, matching this
+        // module's own "networking failures are swallowed" posture. Nothing here needs queuing:
+        // a fresh `Join` gets sent the moment the connection comes back (see `run`'s reconnect
+        // loop), and an in-flight offer/ICE exchange to a peer that was mid-handshake when the
+        // drop happened will just fail to complete -- acceptable, since that peer wasn't fully
+        // connected yet anyway.
+        return;
+    };
     if let Err(error) = sink.send(Message::Text(text.into())).await {
         tracing::warn!("mario relay: failed to send to the relay: {error}");
     }
@@ -281,6 +298,15 @@ async fn flush_pending_ice(peer_id: PeerId, context: &Arc<Context>) {
 /// answers. The data channel itself arrives later, asynchronously, via `RelayHandler::
 /// on_data_channel` once `peer_id`'s own `create_data_channel` call opens it.
 async fn accept_offer(peer_id: PeerId, sdp: String, context: Arc<Context>) {
+    // Reached if `peer_id` reconnected after a relay drop of *their own* and re-offered to us as
+    // part of rejoining (see `run`'s reconnect loop's own doc comment): from their side we look
+    // like a fresh "existing peer" to offer to, even though our own link to them never actually
+    // dropped. Blindly accepting would overwrite a perfectly working `PeerLink` with a fresh,
+    // not-yet-negotiated one and break it. The existing connection already works; nothing to do.
+    if context.peers.read().contains_key(&peer_id) {
+        return;
+    }
+
     let offer = match RTCSessionDescription::offer(sdp) {
         Ok(offer) => offer,
         Err(error) => {
@@ -408,7 +434,7 @@ fn spawn_send_loop(context: Arc<Context>, local_mario: Arc<RwLock<Vec<PositionPa
 /// short fixed interval just to batch up whatever landed since the last tick and drains the queue
 /// rather than resending a persistent snapshot every tick. Broadcasts every event to every
 /// currently open combat channel; each receiving instance decides for itself whether the named
-/// target is one of its own local players (see `physics::update_mario_physics`) — this loop has no
+/// target is one of its own local players (see `physics::resolve_mario_hits`) — this loop has no
 /// idea which peer owns which candidate, and doesn't need to.
 fn spawn_combat_send_loop(context: Arc<Context>, outgoing_combat: Arc<RwLock<Vec<CombatEvent>>>) {
     tokio::spawn(async move {
@@ -435,29 +461,123 @@ fn spawn_combat_send_loop(context: Arc<Context>, outgoing_combat: Arc<RwLock<Vec
     });
 }
 
-/// How many times, and how far apart, a fresh connection to the relay's WebSocket is retried
-/// before giving up. Covers two real cases, not just flakiness: a `--host` instance dialing its
-/// own just-spawned embedded relay server (`main.rs`'s `--host`) before that server has finished
-/// binding its listener, and a `--connect` peer starting up slightly before the host they're
-/// joining has. `3s` total is a generous grace period for either without making a genuinely
-/// unreachable relay hang around annoyingly long before falling back to local-only play.
-const CONNECT_RETRY_ATTEMPTS: u32 = 15;
-const CONNECT_RETRY_DELAY: Duration = Duration::from_millis(200);
-
-#[allow(clippy::type_complexity)]
-async fn connect_with_retry(
-    relay_url: &str,
-) -> Result<(WsStream, tokio_tungstenite::tungstenite::handshake::client::Response), tokio_tungstenite::tungstenite::Error> {
-    for attempt in 0..CONNECT_RETRY_ATTEMPTS {
-        match tokio_tungstenite::connect_async(relay_url).await {
-            Ok(connected) => return Ok(connected),
-            Err(error) if attempt + 1 == CONNECT_RETRY_ATTEMPTS => return Err(error),
-            Err(_) => tokio::time::sleep(CONNECT_RETRY_DELAY).await,
+/// One incoming relay message, applied against the persistent `context` (the peer table and
+/// everything hanging off it survives a relay reconnect untouched -- see `run`'s own doc comment).
+fn handle_server_message(message: ServerMessage, context: &Arc<Context>) {
+    match message {
+        ServerMessage::Joined { peer_id: _, peers: existing } => {
+            for peer_id in existing {
+                // Already connected -- reached after a reconnect, when rejoining hands back a
+                // peer we never actually lost (their own link to us kept working the whole time,
+                // only our signaling socket dropped). Re-offering would overwrite a working
+                // `PeerLink` with a fresh, unnegotiated one and break it.
+                if context.peers.read().contains_key(&peer_id) {
+                    continue;
+                }
+                tokio::spawn(open_offer(peer_id, context.clone()));
+            }
         }
+        // The newcomer offers to us, nothing to do until their offer arrives.
+        ServerMessage::PeerJoined { .. } => {}
+        ServerMessage::PeerLeft { peer_id } => {
+            if let Some(link) = context.peers.write().remove(&peer_id) {
+                tokio::spawn(async move {
+                    let _ = link.connection.close().await;
+                });
+            }
+        }
+        ServerMessage::Offer { from, sdp } => {
+            tokio::spawn(accept_offer(from, sdp, context.clone()));
+        }
+        ServerMessage::Answer { from, sdp } => {
+            let connection = context.peers.read().get(&from).map(|link| link.connection.clone());
+            let Some(connection) = connection else { return };
+            match RTCSessionDescription::answer(sdp) {
+                Ok(desc) => {
+                    let context = context.clone();
+                    tokio::spawn(async move {
+                        if let Err(error) = connection.set_remote_description(desc).await {
+                            tracing::warn!("mario relay: failed to accept {from:?}'s answer: {error}");
+                            return;
+                        }
+                        flush_pending_ice(from, &context).await;
+                    });
+                }
+                Err(error) => tracing::warn!("mario relay: {from:?} sent an unparseable answer: {error}"),
+            }
+        }
+        // Buffered instead of applied immediately if this connection's remote description
+        // hasn't landed yet.
+        ServerMessage::IceCandidate { from, candidate } => {
+            let init = RTCIceCandidateInit { candidate, ..Default::default() };
+            let peers = context.peers.read();
+            let Some(link) = peers.get(&from) else { return };
+
+            let connection = {
+                let mut gate = link.ice_gate.lock();
+                if gate.remote_description_set {
+                    Some(link.connection.clone())
+                } else {
+                    gate.pending.push(init.clone());
+                    None
+                }
+            };
+            drop(peers);
+
+            if let Some(connection) = connection {
+                tokio::spawn(async move {
+                    if let Err(error) = connection.add_ice_candidate(init).await {
+                        tracing::warn!("mario relay: failed to apply an ice candidate from {from:?}: {error}");
+                    }
+                });
+            }
+        }
+        ServerMessage::Error { message } => tracing::warn!("mario relay: relay reported an error: {message}"),
     }
-    unreachable!("the loop above always returns on its last attempt")
 }
 
+/// How long a dropped relay connection keeps retrying before giving up for good, per the user's
+/// own explicit "30 seconds with a countdown" ask. Applies uniformly to the very first connection
+/// attempt too, not just a post-drop reconnect -- one retry policy, not two, and 30s is still a
+/// perfectly reasonable one-time startup wait if the relay is slow to come up.
+const RECONNECT_WINDOW: Duration = Duration::from_secs(30);
+const RECONNECT_RETRY_DELAY: Duration = Duration::from_millis(500);
+
+/// Retries connecting to `relay_url` until it succeeds or `RECONNECT_WINDOW` elapses, updating
+/// `status` with a live countdown each attempt (`main.rs`'s header surfaces this) so a dropped
+/// connection reads as "reconnecting", not a silent hang. `None` once the deadline passes with no
+/// success.
+#[allow(clippy::type_complexity)]
+async fn connect_with_deadline(
+    relay_url: &str,
+    status: &Arc<RwLock<String>>,
+) -> Option<(WsStream, tokio_tungstenite::tungstenite::handshake::client::Response)> {
+    let deadline = std::time::Instant::now() + RECONNECT_WINDOW;
+    loop {
+        if let Ok(connected) = tokio_tungstenite::connect_async(relay_url).await {
+            return Some(connected);
+        }
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        if remaining.is_zero() {
+            return None;
+        }
+        *status.write() = format!("relay reconnecting… {}s", remaining.as_secs().max(1));
+        tokio::time::sleep(RECONNECT_RETRY_DELAY.min(remaining)).await;
+    }
+}
+
+/// Runs for the whole process lifetime: connects, joins `room`, and on any drop (a socket error or
+/// the relay simply closing the connection) retries for up to `RECONNECT_WINDOW` before giving up
+/// for good. `context` -- its peer table, and every already-established `RTCPeerConnection`/data
+/// channel hanging off it -- is created exactly once and survives every reconnect untouched:
+/// existing P2P links don't route through the relay's own signaling socket at all once negotiated
+/// (see this module's own top doc comment), so a dropped *signaling* connection never disturbs
+/// already-connected players. Only two things a drop actually costs: no *new* peer can join until
+/// this reconnects (nobody to hand them our current `PeerId`/offer through), and whatever
+/// Join/Offer/Answer/ICE message was in flight the instant it dropped is lost -- both `spawn_
+/// send_loop`/`spawn_combat_send_loop` (position/combat data, already a lossy 30Hz snapshot
+/// protocol with nothing to queue) and persistent state (ghosts, lives, kills -- `sqld`-backed,
+/// entirely separate from this relay) are unaffected either way.
 async fn run(
     relay_url: String,
     room: String,
@@ -465,106 +585,55 @@ async fn run(
     remote_mario: RemoteMarioTable,
     outgoing_combat: Arc<RwLock<Vec<CombatEvent>>>,
     incoming_combat: Arc<RwLock<Vec<CombatEvent>>>,
+    status: Arc<RwLock<String>>,
 ) {
-    let (stream, _) = match connect_with_retry(&relay_url).await {
-        Ok(connected) => connected,
-        Err(error) => {
-            tracing::warn!("mario relay: could not reach the relay at {relay_url} after retrying: {error}, continuing without remote sync");
+    let ws_sink: WsSink = Arc::new(tokio::sync::Mutex::new(None));
+    let context = Arc::new(Context { ws_sink: Arc::clone(&ws_sink), peers: RwLock::new(HashMap::new()), remote_mario, incoming_combat });
+
+    spawn_send_loop(Arc::clone(&context), local_mario);
+    spawn_combat_send_loop(Arc::clone(&context), outgoing_combat);
+
+    loop {
+        let Some((stream, _)) = connect_with_deadline(&relay_url, &status).await else {
+            tracing::warn!(
+                "mario relay: could not reach {relay_url} within {}s, giving up -- already-connected players keep working, but no new player can join",
+                RECONNECT_WINDOW.as_secs()
+            );
+            *status.write() = "relay unreachable".to_string();
             return;
-        }
-    };
-
-    let (sink, mut source) = stream.split();
-    let ws_sink: WsSink = Arc::new(tokio::sync::Mutex::new(sink));
-    let context = Arc::new(Context { ws_sink: ws_sink.clone(), peers: RwLock::new(HashMap::new()), remote_mario, incoming_combat });
-
-    send_client_message(&ws_sink, &ClientMessage::Join { room }).await;
-    spawn_send_loop(context.clone(), local_mario);
-    spawn_combat_send_loop(context.clone(), outgoing_combat);
-
-    while let Some(message) = source.next().await {
-        let text = match message {
-            Ok(Message::Text(text)) => text,
-            Ok(_) => continue,
-            Err(error) => {
-                tracing::warn!("mario relay: relay socket error: {error}");
-                break;
-            }
         };
-        let message: ServerMessage = match serde_json::from_str(&text) {
-            Ok(message) => message,
-            Err(error) => {
-                tracing::warn!("mario relay: relay sent an unparseable message: {error}");
-                continue;
-            }
-        };
+        status.write().clear();
+        tracing::info!("mario relay: connected to {relay_url}");
 
-        match message {
-            ServerMessage::Joined { peer_id: _, peers: existing } => {
-                for peer_id in existing {
-                    tokio::spawn(open_offer(peer_id, context.clone()));
-                }
-            }
-            // The newcomer offers to us, nothing to do until their offer arrives.
-            ServerMessage::PeerJoined { .. } => {}
-            ServerMessage::PeerLeft { peer_id } => {
-                if let Some(link) = context.peers.write().remove(&peer_id) {
-                    tokio::spawn(async move {
-                        let _ = link.connection.close().await;
-                    });
-                }
-            }
-            ServerMessage::Offer { from, sdp } => {
-                tokio::spawn(accept_offer(from, sdp, context.clone()));
-            }
-            ServerMessage::Answer { from, sdp } => {
-                let connection = context.peers.read().get(&from).map(|link| link.connection.clone());
-                let Some(connection) = connection else { continue };
-                match RTCSessionDescription::answer(sdp) {
-                    Ok(desc) => {
-                        let context = context.clone();
-                        tokio::spawn(async move {
-                            if let Err(error) = connection.set_remote_description(desc).await {
-                                tracing::warn!("mario relay: failed to accept {from:?}'s answer: {error}");
-                                return;
-                            }
-                            flush_pending_ice(from, &context).await;
-                        });
-                    }
-                    Err(error) => tracing::warn!("mario relay: {from:?} sent an unparseable answer: {error}"),
-                }
-            }
-            // Buffered instead of applied immediately if this connection's remote description
-            // hasn't landed yet.
-            ServerMessage::IceCandidate { from, candidate } => {
-                let init = RTCIceCandidateInit { candidate, ..Default::default() };
-                let peers = context.peers.read();
-                let Some(link) = peers.get(&from) else { continue };
+        let (sink, mut source) = stream.split();
+        *ws_sink.lock().await = Some(sink);
+        send_client_message(&ws_sink, &ClientMessage::Join { room: room.clone() }).await;
 
-                let connection = {
-                    let mut gate = link.ice_gate.lock();
-                    if gate.remote_description_set {
-                        Some(link.connection.clone())
-                    } else {
-                        gate.pending.push(init.clone());
-                        None
-                    }
-                };
-                drop(peers);
-
-                if let Some(connection) = connection {
-                    tokio::spawn(async move {
-                        if let Err(error) = connection.add_ice_candidate(init).await {
-                            tracing::warn!("mario relay: failed to apply an ice candidate from {from:?}: {error}");
-                        }
-                    });
+        while let Some(message) = source.next().await {
+            let text = match message {
+                Ok(Message::Text(text)) => text,
+                Ok(_) => continue,
+                Err(error) => {
+                    tracing::warn!("mario relay: relay socket error: {error}");
+                    break;
                 }
-            }
-            ServerMessage::Error { message } => tracing::warn!("mario relay: relay reported an error: {message}"),
+            };
+            let message: ServerMessage = match serde_json::from_str(&text) {
+                Ok(message) => message,
+                Err(error) => {
+                    tracing::warn!("mario relay: relay sent an unparseable message: {error}");
+                    continue;
+                }
+            };
+            handle_server_message(message, &context);
         }
+
+        *ws_sink.lock().await = None;
+        tracing::warn!(
+            "mario relay: relay connection dropped, retrying for up to {}s so new players can still join (already-connected players are unaffected)",
+            RECONNECT_WINDOW.as_secs()
+        );
     }
-
-    tracing::info!("mario relay: relay connection ended");
 }
 
 /// Starts a real `atlas_relay::serve` in-process, bound to every network interface (`0.0.0.0`)
@@ -596,6 +665,7 @@ pub fn spawn(
     remote_mario: RemoteMarioTable,
     outgoing_combat: Arc<RwLock<Vec<CombatEvent>>>,
     incoming_combat: Arc<RwLock<Vec<CombatEvent>>>,
+    status: Arc<RwLock<String>>,
 ) {
-    runtime.spawn(run(relay_url, room, local_mario, remote_mario, outgoing_combat, incoming_combat));
+    runtime.spawn(run(relay_url, room, local_mario, remote_mario, outgoing_combat, incoming_combat, status));
 }

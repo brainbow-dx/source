@@ -9,7 +9,7 @@ use bevy::window::{Window, WindowLevel, WindowMode};
 /// Builds a window from title/size/visibility — pulled out to a plain function, not a method on
 /// `EscherBevyPlugin`, so nothing about window shape is hidden inside the plugin: the config a
 /// caller already builds is the one place all of this lives.
-pub fn create_window(title: &str, width: f32, height: f32, visible: bool, window_level: WindowLevel) -> Window {
+pub fn create_window(title: &str, width: f32, height: f32, visible: bool, skip_taskbar: bool, window_level: WindowLevel) -> Window {
     Window {
         title: String::from(title),
         mode: WindowMode::Windowed,
@@ -18,6 +18,7 @@ pub fn create_window(title: &str, width: f32, height: f32, visible: bool, window
         decorations: true,
         resizable: true,
         visible,
+        skip_taskbar,
         position: bevy::window::WindowPosition::Centered(bevy::window::MonitorSelection::Current),
         composite_alpha_mode: bevy::window::CompositeAlphaMode::Opaque,
         window_level,

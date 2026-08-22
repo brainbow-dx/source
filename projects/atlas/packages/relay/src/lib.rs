@@ -7,30 +7,58 @@
 //! within a room is the `PeerId` this server assigns on join, not anything the client supplies.
 
 pub mod protocol;
+
+/// The server side (`serve`, `Rooms`, ...) is native-only -- built on `tokio`/`axum`, neither of
+/// which targets wasm32. `protocol`'s wire types (always available, above) and `client_wasm`
+/// (wasm32-only, below) are what a browser peer actually needs; nothing in this module is part of
+/// that surface.
+#[cfg(not(target_arch = "wasm32"))]
 pub mod room;
 
+/// A generic browser-side WebRTC-over-relay peer client, using `web-sys`'s browser-native
+/// `RtcPeerConnection` -- see this module's own doc comment. wasm32-only: on every other target
+/// this crate is the native server (`serve`, `room::Rooms`) instead.
+#[cfg(target_arch = "wasm32")]
+pub mod client_wasm;
+
+#[cfg(not(target_arch = "wasm32"))]
 use std::net::SocketAddr;
+#[cfg(not(target_arch = "wasm32"))]
 use std::sync::Arc;
 
+#[cfg(not(target_arch = "wasm32"))]
 use axum::extract::ws::Message;
+#[cfg(not(target_arch = "wasm32"))]
 use axum::extract::ws::WebSocket;
+#[cfg(not(target_arch = "wasm32"))]
 use axum::extract::ws::WebSocketUpgrade;
+#[cfg(not(target_arch = "wasm32"))]
 use axum::extract::State;
+#[cfg(not(target_arch = "wasm32"))]
 use axum::routing::get;
+#[cfg(not(target_arch = "wasm32"))]
 use axum::Router;
 
+#[cfg(not(target_arch = "wasm32"))]
 use futures_util::SinkExt;
+#[cfg(not(target_arch = "wasm32"))]
 use futures_util::StreamExt;
 
+#[cfg(not(target_arch = "wasm32"))]
 use uuid::Uuid;
 
+#[cfg(not(target_arch = "wasm32"))]
 use protocol::ClientMessage;
+#[cfg(not(target_arch = "wasm32"))]
 use protocol::ServerMessage;
+#[cfg(not(target_arch = "wasm32"))]
 use room::PeerId;
+#[cfg(not(target_arch = "wasm32"))]
 use room::Rooms;
 
 /// Starts the relay, listening on `addr` until the process is killed. `/ws` is the one real
 /// route, everything about this server happens over that single WebSocket connection per peer.
+#[cfg(not(target_arch = "wasm32"))]
 pub async fn serve(addr: SocketAddr) -> std::io::Result<()> {
     let rooms = Arc::new(Rooms::default());
     let router = Router::new().route("/ws", get(handle_upgrade)).with_state(rooms);
@@ -41,12 +69,14 @@ pub async fn serve(addr: SocketAddr) -> std::io::Result<()> {
     axum::serve(listener, router).await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 async fn handle_upgrade(ws: WebSocketUpgrade, State(rooms): State<Arc<Rooms>>) -> axum::response::Response {
     ws.on_upgrade(move |socket| handle_peer(socket, rooms))
 }
 
 /// One connected peer's whole lifetime: assign it an ID, relay messages until it disconnects,
 /// then clean up its room membership.
+#[cfg(not(target_arch = "wasm32"))]
 async fn handle_peer(socket: WebSocket, rooms: Arc<Rooms>) {
     let peer_id = PeerId(Uuid::new_v4());
     let (mut writer, mut reader) = socket.split();

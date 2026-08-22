@@ -65,6 +65,7 @@ impl EscherBevyPlugin {
                             self.config.window_width,
                             self.config.window_height,
                             self.config.window_visible,
+                            self.config.skip_taskbar,
                             WindowLevel::Normal,
                         )
                     }),
